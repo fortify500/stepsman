@@ -1,0 +1,14 @@
+name: "basic run"
+steps:
+  - description: >
+      change directory to ~/
+      then execute: echo "hello world" > stepshello.world
+  - description: >
+      check that stepshello.world was created
+    type: "evaluate"
+    action: "shell_execute"
+    configuration:
+      cmd: "test"
+      arguments:
+        - "-f"
+        - "stepshello.world"
