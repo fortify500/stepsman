@@ -15,7 +15,9 @@ limitations under the License.
 */
 package main
 
-import "github.com/fortify500/stepsman/cmd"
+import (
+	"github.com/fortify500/stepsman/cmd"
+)
 
 func main() {
 	cmd.Execute()

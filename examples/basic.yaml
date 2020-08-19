@@ -3,11 +3,12 @@ steps:
   - description: >
       change directory to ~/
       then execute: echo "hello world" > stepshello.world
+    #type: "markup" # This is not neccessary.
   - description: >
       check that stepshello.world was created
-    type: "evaluate"
-    action: "shell_execute"
-    configuration:
+    type: "evaluation"
+    method: "shell_execute"
+    options:
       cmd: "test"
       arguments:
         - "-f"

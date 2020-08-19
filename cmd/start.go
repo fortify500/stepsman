@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -30,18 +31,23 @@ var startCmd = &cobra.Command{
 	Long: `Start a run and move the cursor to the first step.
 You can specify either a file or stdin (stdin not implemented yet)`,
 	Run: func(cmd *cobra.Command, args []string) {
-		var r bl.Run
-		fmt.Println("start called")
+		var r bl.Template
 		if len(fileName) == 0 {
-			fmt.Println("you must specify a file name")
-			return
+			msg := "you must specify a file name"
+			fmt.Println(msg)
+			log.Fatal(msg)
 		}
 		err := r.Start(fileName)
-		if err!=nil {
-			fmt.Println("failed to start: %w", err)
-			return
+		if err == bl.ErrActiveRunsWithSameNameExists {
+			msg := "you must either stop runs with the same name or force an additional run (see --force-run)"
+			fmt.Println(msg + SeeLogMsg)
+			log.Fatal(fmt.Errorf(msg+": %w", err))
+		} else if err != nil {
+			msg:= "failed to start"
+			fmt.Println(msg + SeeLogMsg)
+			log.Fatal(fmt.Errorf(msg + ": %w", err))
 		}
-		fmt.Println("run: %#v", r)
+		log.Debug("run: %#v", r)
 	},
 }
 
