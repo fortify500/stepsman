@@ -4,17 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	"gopkg.in/yaml.v2"
-	"io/ioutil"
 )
 
-type Template struct {
-	Name  string
-	Steps []Step
-}
-
-type RunStatusType int
+var ErrActiveRunsWithSameNameExists = errors.New("active runs with the same name detected")
 
 const (
 	NotStarted RunStatusType = 0
@@ -22,53 +14,68 @@ const (
 	Stopped    RunStatusType = 2
 )
 
-var ErrActiveRunsWithSameNameExists = errors.New("active runs with the same name detected")
-
-func (t *Template) LoadFromFile(filename string) ([]byte, error) {
-	yamlFile, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
+func TranslateRunStatus(status RunStatusType) (string, error){
+	switch status {
+	case NotStarted:
+		return "Not Started", nil
+	case InProgress:
+		return "In Progress", nil
+	case Stopped:
+		return "Stopped", nil
+	default:
+		return "", fmt.Errorf("failed to translate run status: %d", status)
 	}
-	err = t.LoadFromBytes(err, yamlFile)
-	if err != nil {
-		return nil, err
-	}
-	return yamlFile, nil
 }
 
-func (t *Template) LoadFromBytes(err error, yamlFile []byte) error {
-	err = yaml.Unmarshal(yamlFile, t)
-	if err != nil {
-		return err
-	}
-	for i, _ := range t.Steps {
-		(&t.Steps[i]).AdjustUnmarshalOptions()
-	}
-	return nil
+type RunStatusType int
+
+type RunRow struct {
+	Id       int64
+	UUID     string
+	Name     string
+	Status   RunStatusType
+	Template string
 }
 
-func (t *Template) Start(fileName string) error {
-	yamlBytes, err := t.LoadFromFile(fileName)
+func ListRuns() ([]*RunRow, error) {
+	var result []*RunRow
+	rows, err := DB.Queryx("SELECT * FROM runs where status=?", InProgress)
 	if err != nil {
-		return fmt.Errorf("failed to read file %s: %w", fileName, err)
+		return nil, fmt.Errorf("failed to query database runs table: %w", err)
 	}
 
+	for rows.Next() {
+		var run RunRow
+		err = rows.StructScan(&run)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse database runs row: %w", err)
+		}
+		result = append(result, &run)
+	}
+	return result, nil
+}
+
+func (r *RunRow) Start(err error, t *Template, yamlBytes []byte) error {
 	tx, err := DB.Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to create database transaction: %w", err)
 	}
 
-	{
-		count := -1
-		err = tx.Get(&count, "SELECT count(*) FROM runs where status=? and name=?", InProgress, t.Name)
-		if err != nil {
-			err = Rollback(tx, err)
-			return fmt.Errorf("failed to query database runs table count: %w", err)
-		}
-		if count != 0 {
-			err = Rollback(tx, ErrActiveRunsWithSameNameExists)
-			return err
-		}
+	count := -1
+	err = tx.Get(&count, "SELECT count(*) FROM runs where status=? and name=?", InProgress, t.Name)
+	if err != nil {
+		err = Rollback(tx, err)
+		return fmt.Errorf("failed to query database runs table count: %w", err)
+	}
+	if count != 0 {
+		err = Rollback(tx, ErrActiveRunsWithSameNameExists)
+		return err
+	}
+	count = 0
+	err = tx.Get(&count, "SELECT count(*) FROM runs limit 1", InProgress, t.Name)
+	if err != nil {
+		err = Rollback(tx, err)
+		return fmt.Errorf("failed to query database runs table count: %w", err)
 	}
 
 	uuid, err := uuid.NewRandom()
@@ -79,62 +86,25 @@ func (t *Template) Start(fileName string) error {
 	runRow := RunRow{
 		UUID:     uuid.String(),
 		Name:     t.Name,
-		Status:   int(InProgress),
+		Status:   InProgress,
 		Template: string(yamlBytes),
 	}
-	_, err = tx.NamedExec("INSERT INTO runs(uuid, name, status, template) values(:uuid,:name,:status,:template)", &runRow)
+
+	exec, err := tx.NamedExec("INSERT INTO runs(uuid, name, status, template) values(:uuid,:name,:status,:template)", &runRow)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to insert database runs row: %w", err)
 	}
-	//rows, err := tx.Queryx("SELECT * FROM runs where status=? and name=?", InProgress, t.Name)
-	//if err != nil {
-	//	err2 := tx.Rollback()
-	//	if err2 != nil {
-	//		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	//	}
-	//	return fmt.Errorf("failed to query database runs table: %w", err)
-	//}
-	//
-	//for rows.Next() {
-	//	var run RunRow
-	//	err = rows.StructScan(&run)
-	//	if err != nil {
-	//		err2 := tx.Rollback()
-	//		if err2 != nil {
-	//			err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	//		}
-	//		return fmt.Errorf("failed to parse database runs row: %w", err)
-	//	}
-	//}
-	//if err != nil {
-	//	err2 := tx.Rollback()
-	//	if err2 != nil {
-	//		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	//	}
-	//}
+	runRow.Id, err = exec.LastInsertId()
+	if err != nil {
+		err = Rollback(tx, err)
+		return fmt.Errorf("failed to retrieve database runs row autoincremented id: %w", err)
+	}
+	*r = runRow
 
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("failed to commit database transaction: %w", err)
 	}
-	// we'll store the external logs for shell_execute
-	//_, err = os.Stat("runs")
-	//if os.IsNotExist(err) {
-	//	err = os.MkdirAll("runs", 0700)
-	//	if err != nil {
-	//		return fmt.Errorf("failed to create the runs diretory: %w", err)
-	//	}
-	//} else if err != nil {
-	//	return fmt.Errorf("failed to determine existance of runs directory: %w", err)
-	//}
 	return nil
-}
-
-func Rollback(tx *sqlx.Tx, err error) error {
-	err2 := tx.Rollback()
-	if err2 != nil {
-		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	}
-	return err
 }

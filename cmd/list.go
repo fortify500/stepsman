@@ -17,8 +17,11 @@ package cmd
 
 import (
 	"fmt"
-
+	"github.com/fortify500/stepsman/bl"
+	"github.com/jedib0t/go-pretty/table"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 // listCmd represents the list command
@@ -32,7 +35,40 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("list called")
+		MyStyle := table.Style{
+			Name:    "StyleDefault",
+			Box:     table.StyleBoxDefault,
+			Color:   table.ColorOptionsDefault,
+			Format:  table.FormatOptionsDefault,
+			HTML:    table.DefaultHTMLOptions,
+			Options: table.OptionsNoBordersAndSeparators,
+			Title:   table.TitleOptionsDefault,
+		}
+		t := table.NewWriter()
+		t.SetStyle(MyStyle)
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"#", "UUID", "Name", "Status"})
+		runs, err := bl.ListRuns()
+		if err!=nil{
+			msg := "failed to list runs"
+			fmt.Println(msg + SeeLogMsg)
+			log.Fatal(fmt.Errorf(msg+": %w", err))
+		}
+		for _, run := range runs {
+			status, err := bl.TranslateRunStatus(run.Status)
+			if err!=nil{
+				msg := "failed to list runs"
+				fmt.Println(msg + SeeLogMsg)
+				log.Fatal(fmt.Errorf(msg+": %w", err))
+			}
+			t.AppendRows([]table.Row{
+				{run.Id, run.UUID, run.Name, status},
+			})
+		}
+		//t.AppendSeparator()
+		//t.AppendRow([]interface{}{300, "Tyrion", "Lannister", 5000})
+		//t.AppendFooter(table.Row{"", "", "Total", 10000})
+		t.Render()
 	},
 }
 

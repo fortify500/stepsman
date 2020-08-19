@@ -31,13 +31,13 @@ var startCmd = &cobra.Command{
 	Long: `Start a run and move the cursor to the first step.
 You can specify either a file or stdin (stdin not implemented yet)`,
 	Run: func(cmd *cobra.Command, args []string) {
-		var r bl.Template
+		var t bl.Template
 		if len(fileName) == 0 {
 			msg := "you must specify a file name"
 			fmt.Println(msg)
 			log.Fatal(msg)
 		}
-		err := r.Start(fileName)
+		runRow, err := t.Start(fileName)
 		if err == bl.ErrActiveRunsWithSameNameExists {
 			msg := "you must either stop runs with the same name or force an additional run (see --force-run)"
 			fmt.Println(msg + SeeLogMsg)
@@ -47,7 +47,10 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 			fmt.Println(msg + SeeLogMsg)
 			log.Fatal(fmt.Errorf(msg + ": %w", err))
 		}
-		log.Debug("run: %#v", r)
+		msg:=fmt.Sprintf("run started with id: %d", runRow.Id)
+		fmt.Println(msg)
+		log.Info(msg)
+		log.Debug("run: %#v", t)
 	},
 }
 

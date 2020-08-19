@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"log"
 )
-const SeeLogMsg = " (see log file for more details)"
+const SeeLogMsg = " (see stepsman.log file for more details - usually resides in ~/.stepsman/stepsman.log)"
 
 var cfgFile string
 
@@ -44,7 +44,7 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(SeeLogMsg)
+		fmt.Println(err.Error() + SeeLogMsg)
 		log.Fatal(err)
 	}
 }
@@ -65,7 +65,11 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	bl.InitBL(cfgFile)
+	err := bl.InitBL(cfgFile)
+	if err!=nil{
+		fmt.Println(err)
+		log.Fatal(err)
+	}
 }
 
 
