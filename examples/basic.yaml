@@ -1,15 +1,16 @@
-name: "basic run"
+title: "install stepshello.world"
 steps:
-  - description: >
+  - heading: "starting" # mandatory
+    content: > # optional
       change directory to ~/
       then execute: echo "hello world" > stepshello.world
-    #type: "markup" # This is not neccessary.
-  - description: >
+  - heading: "execute test" # mandatory
+    content: > # optional
       check that stepshello.world was created
-    type: "evaluation"
-    method: "shell_execute"
-    options:
-      cmd: "test"
+    run: # optional
+      command: "test" # test is a command line program which returns exit values based on supplied parameters
       arguments:
         - "-f"
         - "stepshello.world"
+    expected: >
+      result["run"]["exit status"]=0

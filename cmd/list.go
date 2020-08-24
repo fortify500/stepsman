@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/jedib0t/go-pretty/table"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
 )
@@ -34,7 +33,7 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		MyStyle := table.Style{
 			Name:    "StyleDefault",
 			Box:     table.StyleBoxDefault,
@@ -47,19 +46,19 @@ to quickly create a Cobra application.`,
 		t := table.NewWriter()
 		t.SetStyle(MyStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "UUID", "Name", "Status"})
+		t.AppendHeader(table.Row{"#", "UUID", "Title", "Status"})
 		runs, err := bl.ListRuns()
 		if err!=nil{
 			msg := "failed to list runs"
 			fmt.Println(msg + SeeLogMsg)
-			log.Fatal(fmt.Errorf(msg+": %w", err))
+			return fmt.Errorf(msg+": %w", err)
 		}
 		for _, run := range runs {
 			status, err := bl.TranslateRunStatus(run.Status)
 			if err!=nil{
 				msg := "failed to list runs"
 				fmt.Println(msg + SeeLogMsg)
-				log.Fatal(fmt.Errorf(msg+": %w", err))
+				return fmt.Errorf(msg+": %w", err)
 			}
 			t.AppendRows([]table.Row{
 				{run.Id, run.UUID, run.Name, status},
@@ -69,6 +68,7 @@ to quickly create a Cobra application.`,
 		//t.AppendRow([]interface{}{300, "Tyrion", "Lannister", 5000})
 		//t.AppendFooter(table.Row{"", "", "Total", 10000})
 		t.Render()
+		return nil
 	},
 }
 

@@ -1,33 +1,49 @@
 package bl
 
-import "gopkg.in/yaml.v2"
+import (
+	"gopkg.in/yaml.v2"
+	"strings"
+)
 
 type Step struct {
-	Description string
-	Type        string
-	Method      string
-	Options     interface{}
+	Heading  string
+	Content  string
+	Expected string
+	Run      interface{}
+	runType  string
 }
 
-type ShellExecuteOptions struct {
-	Cmd       string
+type StepRun struct {
+	Type string
+}
+
+type StepRunShellExecute struct {
+	Command   string
 	Arguments []string
 }
 
 func (step *Step) AdjustUnmarshalOptions() error {
-	if step.Method != "" {
-		options := ShellExecuteOptions{}
-		optionsBytes, err := yaml.Marshal(step.Options)
+	if step.Run != nil {
+		stepRun := StepRun{}
+		stepRunBytes, err := yaml.Marshal(step.Run)
 		if err != nil {
 			return err
 		}
-		switch step.Method {
-		case "shell_execute":
-			err = yaml.Unmarshal(optionsBytes, &options)
+		err = yaml.Unmarshal(stepRunBytes, &stepRun)
+		if err != nil {
+			return err
+		}
+		runType := strings.ToLower(stepRun.Type)
+		switch runType {
+		case "":
+			fallthrough
+		case "shell execute":
+			run := StepRunShellExecute{}
+			err = yaml.Unmarshal(stepRunBytes, &run)
 			if err != nil {
 				return err
 			}
-			step.Options = options
+			step.Run = run
 		}
 	}
 	return nil

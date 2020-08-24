@@ -7,42 +7,42 @@ import (
 	"io/ioutil"
 )
 
-type Template struct {
-	Name  string
+type Script struct {
+	Title  string
 	Steps []Step
 }
 
-func (t *Template) LoadFromFile(filename string) ([]byte, error) {
+func (s *Script) LoadFromFile(filename string) ([]byte, error) {
 	yamlFile, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	err = t.LoadFromBytes(err, yamlFile)
+	err = s.LoadFromBytes(err, yamlFile)
 	if err != nil {
 		return nil, err
 	}
 	return yamlFile, nil
 }
 
-func (t *Template) LoadFromBytes(err error, yamlFile []byte) error {
-	err = yaml.Unmarshal(yamlFile, t)
+func (s *Script) LoadFromBytes(err error, yamlFile []byte) error {
+	err = yaml.Unmarshal(yamlFile, s)
 	if err != nil {
 		return err
 	}
-	for i, _ := range t.Steps {
-		(&t.Steps[i]).AdjustUnmarshalOptions()
+	for i, _ := range s.Steps {
+		(&s.Steps[i]).AdjustUnmarshalOptions()
 	}
 	return nil
 }
 
-func (t *Template) Start(fileName string) (*RunRow, error) {
-	yamlBytes, err := t.LoadFromFile(fileName)
+func (s *Script) Start(fileName string) (*RunRow, error) {
+	yamlBytes, err := s.LoadFromFile(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
 
 	runRow := RunRow{}
-	err = runRow.Start(err, t, yamlBytes)
+	err = runRow.Start(err, s, yamlBytes)
 
 	// we'll store the external logs for shell_execute
 	//_, err = os.Stat("runs")

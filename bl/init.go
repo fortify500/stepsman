@@ -125,7 +125,8 @@ func upgrade() error {
                                      uuid TEXT,
 	                                 name TEXT,
 	                                 status INTEGER,
-	                                 template TEXT
+	                                 checked INTEGER,
+	                                 script TEXT
                                      )`)
 		if err != nil {
 			err = Rollback(tx, err)

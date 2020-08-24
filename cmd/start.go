@@ -30,27 +30,34 @@ var startCmd = &cobra.Command{
 	Short: "Start a run and move the cursor to the first step",
 	Long: `Start a run and move the cursor to the first step.
 You can specify either a file or stdin (stdin not implemented yet)`,
-	Run: func(cmd *cobra.Command, args []string) {
-		var t bl.Template
+	RunE: func(cmd *cobra.Command, args []string) error{
+		var t bl.Script
+		//cmd2 := exec.Command("/sbin/ping", "-c","3","8.8.8.8")
+		//cmd2 := exec.Command("/usr/bin/top")
+		//cmd2.Stdin = os.Stdin
+		//cmd2.Stdout = os.Stdout
+		//cmd2.Stderr = os.Stderr
+		//cmd2.Run()
 		if len(fileName) == 0 {
 			msg := "you must specify a file name"
 			fmt.Println(msg)
-			log.Fatal(msg)
+			return fmt.Errorf(msg)
 		}
 		runRow, err := t.Start(fileName)
 		if err == bl.ErrActiveRunsWithSameNameExists {
 			msg := "you must either stop runs with the same name or force an additional run (see --force-run)"
 			fmt.Println(msg + SeeLogMsg)
-			log.Fatal(fmt.Errorf(msg+": %w", err))
+			return fmt.Errorf(msg+": %w", err)
 		} else if err != nil {
 			msg:= "failed to start"
 			fmt.Println(msg + SeeLogMsg)
-			log.Fatal(fmt.Errorf(msg + ": %w", err))
+			return fmt.Errorf(msg + ": %w", err)
 		}
 		msg:=fmt.Sprintf("run started with id: %d", runRow.Id)
 		fmt.Println(msg)
 		log.Info(msg)
 		log.Debug("run: %#v", t)
+		return nil
 	},
 }
 
