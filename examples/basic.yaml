@@ -7,10 +7,10 @@ steps:
   - heading: "execute test" # mandatory
     content: > # optional
       check that stepshello.world was created
-    run: # optional
+    do: # optional
       command: "test" # test is a command line program which returns exit values based on supplied parameters
       arguments:
         - "-f"
         - "stepshello.world"
-    expected: >
+    expect: >
       result["run"]["exit status"]=0

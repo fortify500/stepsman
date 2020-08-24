@@ -24,11 +24,12 @@ import (
 
 var fileName string
 
-// startCmd represents the start command
-var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start a run and move the cursor to the first step",
-	Long: `Start a run and move the cursor to the first step.
+// createRunCmd represents the createRun command
+var createRunCmd = &cobra.Command{
+	Use:   "run",
+	Args: cobra.MaximumNArgs(0),
+	Short: "Create a run and move the cursor to the first step",
+	Long: `Create a run and move the cursor to the first step.
 You can specify either a file or stdin (stdin not implemented yet)`,
 	RunE: func(cmd *cobra.Command, args []string) error{
 		var t bl.Script
@@ -37,23 +38,24 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 		//cmd2.Stdin = os.Stdin
 		//cmd2.Stdout = os.Stdout
 		//cmd2.Stderr = os.Stderr
-		//cmd2.Run()
+		//cmd2.Do()
 		if len(fileName) == 0 {
 			msg := "you must specify a file name"
 			fmt.Println(msg)
 			return fmt.Errorf(msg)
 		}
 		runRow, err := t.Start(fileName)
-		if err == bl.ErrActiveRunsWithSameNameExists {
-			msg := "you must either stop runs with the same name or force an additional run (see --force-run)"
+		if err == bl.ErrActiveRunsWithSameTitleExists {
+			msg := "you must stop runs with the same title before creating a new run"
+			//"you must either stop runs with the same title or force an additional run (see --force-run)"
 			fmt.Println(msg + SeeLogMsg)
 			return fmt.Errorf(msg+": %w", err)
 		} else if err != nil {
-			msg:= "failed to start"
+			msg:= "failed to create run"
 			fmt.Println(msg + SeeLogMsg)
 			return fmt.Errorf(msg + ": %w", err)
 		}
-		msg:=fmt.Sprintf("run started with id: %d", runRow.Id)
+		msg:=fmt.Sprintf("run created with id: %d", runRow.Id)
 		fmt.Println(msg)
 		log.Info(msg)
 		log.Debug("run: %#v", t)
@@ -62,16 +64,16 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 }
 
 func init() {
-	rootCmd.AddCommand(startCmd)
+	createCmd.AddCommand(createRunCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// startCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// createRunCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	startCmd.Flags().StringVarP(&fileName, "file", "f", "", "File to start run")
-	startCmd.MarkFlagRequired("file")
+	createRunCmd.Flags().StringVarP(&fileName, "file", "f", "", "File to create run")
+	createRunCmd.MarkFlagRequired("file")
 }

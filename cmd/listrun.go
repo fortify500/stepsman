@@ -19,13 +19,16 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/spf13/cobra"
 	"os"
+	"strconv"
+
+	"github.com/spf13/cobra"
 )
 
-// listCmd represents the list command
-var listCmd = &cobra.Command{
-	Use:   "list",
+// listRunCmd represents the listRun command
+var listRunCmd = &cobra.Command{
+	Use:   "run",
+	Args: cobra.MinimumNArgs(1),
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -37,28 +40,32 @@ to quickly create a Cobra application.`,
 		t := table.NewWriter()
 		t.SetStyle(MyStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "UUID", "Title", "Status", "Summary"})
-		runs, err := bl.ListRuns()
+		t.AppendHeader(table.Row{"", "#", "UUID", "Title", "Status"})
+		runId, err := strconv.ParseInt(args[0], 10, 64)
 		if err != nil {
-			msg := "failed to list runs"
+			msg := "failed to parse step id"
 			fmt.Println(msg + SeeLogMsg)
 			return fmt.Errorf(msg+": %w", err)
 		}
-		for _, run := range runs {
-			status, err := bl.TranslateRunStatus(run.Status)
+		steps, err := bl.ListSteps(runId)
+		if err != nil {
+			msg := "failed to list steps"
+			fmt.Println(msg + SeeLogMsg)
+			return fmt.Errorf(msg+": %w", err)
+		}
+		for _, step := range steps {
+			status, err := bl.TranslateStepStatus(step.Status)
 			if err != nil {
-				msg := "failed to list runs"
+				msg := "failed to list steps"
 				fmt.Println(msg + SeeLogMsg)
 				return fmt.Errorf(msg+": %w", err)
 			}
-			summary, err := bl.TranslateSummary(run.Summary)
-			if err != nil {
-				msg := "failed to list runs"
-				fmt.Println(msg + SeeLogMsg)
-				return fmt.Errorf(msg+": %w", err)
+			checked:="[ ]"
+			if step.Done==bl.DoneDone{
+				checked="[V]"
 			}
 			t.AppendRows([]table.Row{
-				{run.Id, run.UUID, run.Title, status, summary},
+				{checked, step.StepId, step.UUID, step.Heading, status},
 			})
 		}
 		//t.AppendSeparator()
@@ -69,26 +76,16 @@ to quickly create a Cobra application.`,
 	},
 }
 
-var MyStyle = table.Style{
-	Name:    "StyleDefault",
-	Box:     table.StyleBoxDefault,
-	Color:   table.ColorOptionsDefault,
-	Format:  table.FormatOptionsDefault,
-	HTML:    table.DefaultHTMLOptions,
-	Options: table.OptionsNoBordersAndSeparators,
-	Title:   table.TitleOptionsDefault,
-}
-
 func init() {
-	rootCmd.AddCommand(listCmd)
+	listCmd.AddCommand(listRunCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// listCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// listRunCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// listCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// listRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

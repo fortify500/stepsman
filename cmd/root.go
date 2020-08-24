@@ -48,6 +48,19 @@ func Execute() {
 	}
 }
 
+/*
+create run -f
+create run -f --set status=not-started
+start run 3 // shorthand moves the cursor to 1 and the status to in-progress
+delete run 3
+set run 3 status=stopped
+set run 3 checked=true
+set run 3 cursor=5
+do run 3 [--step 4]
+list
+list run 3
+*/
+
 func init() {
 	cobra.OnInitialize(initConfig)
 
@@ -59,7 +72,7 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 // initConfig reads in config file and ENV variables if set.
