@@ -37,7 +37,7 @@ to quickly create a Cobra application.`,
 		t := table.NewWriter()
 		t.SetStyle(MyStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "UUID", "Title", "Status", "Summary"})
+		t.AppendHeader(table.Row{"#", "UUID", "Title", "Status"})
 		runs, err := bl.ListRuns()
 		if err != nil {
 			msg := "failed to list runs"
@@ -51,14 +51,9 @@ to quickly create a Cobra application.`,
 				fmt.Println(msg + SeeLogMsg)
 				return fmt.Errorf(msg+": %w", err)
 			}
-			summary, err := bl.TranslateSummary(run.Summary)
-			if err != nil {
-				msg := "failed to list runs"
-				fmt.Println(msg + SeeLogMsg)
-				return fmt.Errorf(msg+": %w", err)
-			}
+
 			t.AppendRows([]table.Row{
-				{run.Id, run.UUID, run.Title, status, summary},
+				{run.Id, run.UUID, run.Title, status},
 			})
 		}
 		//t.AppendSeparator()

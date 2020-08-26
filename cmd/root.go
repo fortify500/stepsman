@@ -20,6 +20,7 @@ import (
 	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
 	"log"
+	"strconv"
 )
 const SeeLogMsg = " (see stepsman.log file for more details - usually resides in ~/.stepsman/stepsman.log)"
 
@@ -51,14 +52,14 @@ func Execute() {
 /*
 create run -f
 create run -f --set status=not-started
-start run 3 // shorthand moves the cursor to 1 and the status to in-progress
 delete run 3
-set run 3 status=stopped
-set run 3 checked=true
-set run 3 cursor=5
-do run 3 [--step 4]
+stop run 3
+skip run 3
+move-cursor run 3 --step 4
+do run 3
 list
 list run 3
+vet -f // will make all the pre create steps without creating the run
 */
 
 func init() {
@@ -84,4 +85,33 @@ func initConfig() {
 	}
 }
 
+func getStep(run *bl.RunRecord) (*bl.StepRecord, error) {
+	step, err := run.GetStep()
+	if err != nil {
+		msg := fmt.Sprintf("failed to get step with [run id,step id]: [%d,%d]", run.Id, run.Cursor)
+		fmt.Println(msg + SeeLogMsg)
+		return nil, fmt.Errorf(msg+": %w", err)
+	}
+	return step, nil
+}
+
+func getRun(runId int64) (*bl.RunRecord, error) {
+	run, err := bl.GetRun(runId)
+	if err != nil {
+		msg := fmt.Sprintf("failed to get run with id: %d", runId)
+		fmt.Println(msg + SeeLogMsg)
+		return nil, fmt.Errorf(msg+": %w", err)
+	}
+	return run, nil
+}
+
+func parseRunId(idStr string) (int64, error) {
+	runId, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		msg := "failed to parse run id"
+		fmt.Println(msg + SeeLogMsg)
+		return -1, fmt.Errorf(msg+": %w", err)
+	}
+	return runId, nil
+}
 

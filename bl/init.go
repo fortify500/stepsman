@@ -71,8 +71,13 @@ func InitBL(cfgFile string) error {
 	}
 
 	DB, err = sqlx.Open("sqlite3", path.Join(StoreDir, "stepsman.DB"))
+	_, err = DB.Exec("PRAGMA journal_mode = WAL")
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return fmt.Errorf("failed to set journal mode: %w", err)
+	}
+	_, err = DB.Exec("PRAGMA synchronous = NORMAL")
+	if err != nil {
+		return fmt.Errorf("failed to set synchronous mode: %w", err)
 	}
 	err = DB.Ping()
 	if err != nil {
@@ -124,8 +129,8 @@ func migrateDB() error {
                                      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                                      uuid TEXT NOT NULL,
 	                                 title TEXT,
+	                                 cursor INTEGER,
 	                                 status INTEGER NOT NULL,
-	                                 summary INTEGER NOT NULL,
 	                                 script TEXT
                                      )`)
 		if err != nil {
@@ -136,9 +141,9 @@ func migrateDB() error {
                                      run_id INTEGER NOT NULL,
                                      step_id INTEGER NOT NULL,
                                      uuid TEXT NOT NULL,
-	                                 heading TEXT,
+	                                 name TEXT,
 	                                 status INTEGER NOT NULL,
-	                                 done INTEGER NOT NULL,
+	                                 heartbeat INTEGER NOT NULL,
 	                                 script TEXT,
 	                                 PRIMARY KEY (run_id, step_id)
                                      )`)

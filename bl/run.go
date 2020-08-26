@@ -1,62 +1,35 @@
 package bl
 
 import (
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 )
 
-var ErrActiveRunsWithSameTitleExists = errors.New("active runs with the same title detected")
-
 type RunStatusType int64
-type SummaryType int64
 
 const (
-	RunNotStarted RunStatusType = 10
+	RunStopped    RunStatusType = 10
 	RunInProgress RunStatusType = 12
-	RunStopped    RunStatusType = 13
-)
-
-const (
-	SummaryNone                   = 20
-	SummaryInProgress SummaryType = 21
-	SummaryFailing    SummaryType = 22
-	SummaryDone       SummaryType = 23
+	RunDone       RunStatusType = 15
 )
 
 type RunRecord struct {
-	Id      int64
-	UUID    string
-	Title   string
-	Cursor  int64
-	Status  RunStatusType
-	Summary SummaryType
-	Script  string
-}
-
-func TranslateSummary(status SummaryType) (string, error) {
-	switch status {
-	case SummaryNone:
-		return "None", nil
-	case SummaryInProgress:
-		return "Steps In Progress", nil
-	case SummaryFailing:
-		return "Steps Failing", nil
-	case SummaryDone:
-		return "Done", nil
-	default:
-		return "", fmt.Errorf("failed to translate run status: %d", status)
-	}
+	Id     int64
+	UUID   string
+	Title  string
+	Cursor int64
+	Status RunStatusType
+	Script string
 }
 
 func TranslateRunStatus(status RunStatusType) (string, error) {
 	switch status {
-	case RunNotStarted:
-		return "Not Started", nil
+	case RunStopped:
+		return "Idle", nil
 	case RunInProgress:
 		return "In Progress", nil
-	case RunStopped:
-		return "Stopped", nil
+	case RunDone:
+		return "Done", nil
 	default:
 		return "", fmt.Errorf("failed to translate run status: %d", status)
 	}
@@ -80,6 +53,59 @@ func ListRuns() ([]*RunRecord, error) {
 	return result, nil
 }
 
+func GetRun(runId int64) (*RunRecord, error) {
+	var result *RunRecord
+	rows, err := DB.Queryx("SELECT * FROM runs where id=?", runId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
+	}
+
+	for rows.Next() {
+		var run RunRecord
+		err = rows.StructScan(&run)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse database runs row - get: %w", err)
+		}
+		result = &run
+	}
+	if result == nil {
+		return nil, ErrRecordNotFound
+	}
+	return result, nil
+}
+
+func (r *RunRecord) GetStep() (*StepRecord, error) {
+	step, err := getStep(nil, r.Id, r.Cursor)
+	return step, err
+}
+
+func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
+	tx, err := DB.Beginx()
+	if newStatus == RunStopped {
+		steps, err := listSteps(tx, r.Id)
+		if err != nil {
+			err = Rollback(tx, err)
+			return fmt.Errorf("failed to update database run status: %w", err)
+		}
+		for _, stepRecord := range steps {
+			if stepRecord.Status == StepInProgress {
+				err = Rollback(tx, err)
+				return fmt.Errorf("failed to update database run status: %w", err)
+			}
+		}
+
+	} else {
+		err = Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
+		return fmt.Errorf("failed to update database run status: %w", err)
+	}
+	_, err = DB.Exec("update runs set status = ? where id=?", newStatus, r.Id)
+	if err != nil {
+		err = Rollback(tx, err)
+		return fmt.Errorf("failed to update database run status: %w", err)
+	}
+	tx.Commit()
+	return err
+}
 func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
 	tx, err := DB.Beginx()
 	if err != nil {
@@ -111,12 +137,12 @@ func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
 	runRecord := RunRecord{
 		UUID:   uuid4.String(),
 		Title:  s.Title,
+		Cursor: 1,
 		Status: RunInProgress,
-		Summary: SummaryNone,
 		Script: string(yamlBytes),
 	}
 
-	exec, err := tx.NamedExec("INSERT INTO runs(uuid, title, status, summary, script) values(:uuid,:title,:status,:summary,:script)", &runRecord)
+	exec, err := tx.NamedExec("INSERT INTO runs(uuid, title, cursor, status, script) values(:uuid,:title,:cursor,:status,:script)", &runRecord)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to insert database runs row: %w", err)
@@ -130,15 +156,14 @@ func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
 	for i, step := range s.Steps {
 		uuid4, err := uuid.NewRandom()
 		stepRecord := StepRecord{
-			RunId:   runRecord.Id,
-			StepId:  int64(i) + 1,
-			UUID:    uuid4.String(),
-			Heading: step.Heading,
-			Status:  StepNotStarted,
-			Done:    DoneNotDone,
-			Script:  step.Script,
+			RunId:  runRecord.Id,
+			StepId: int64(i) + 1,
+			UUID:   uuid4.String(),
+			Name:   step.Name,
+			Status: StepNotStarted,
+			Script: step.Script,
 		}
-		_, err = tx.NamedExec("INSERT INTO steps(run_id, step_id, uuid, heading, status, done, script) values(:run_id,:step_id,:uuid,:heading,:status,:done,:script)", &stepRecord)
+		_, err = tx.NamedExec("INSERT INTO steps(run_id, step_id, uuid, name, status, heartbeat, script) values(:run_id,:step_id,:uuid,:name,:status,0,:script)", &stepRecord)
 		if err != nil {
 			err = Rollback(tx, err)
 			return fmt.Errorf("failed to insert database steps row: %w", err)

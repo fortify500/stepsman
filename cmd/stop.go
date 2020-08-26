@@ -19,9 +19,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// doCmd represents the do command
-var doCmd = &cobra.Command{
-	Use:   "do",
+// stopRunCmd represents the stopRun command
+var stopCmd = &cobra.Command{
+	Use:   "stop",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -32,15 +32,15 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	rootCmd.AddCommand(doCmd)
+	rootCmd.AddCommand(stopCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// doCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// stopRunCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	// Cobra supports local flags which will only do when this command
+	// Cobra supports local flags which will only stopRun when this command
 	// is called directly, e.g.:
-	// doCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// stopRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

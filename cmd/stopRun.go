@@ -16,12 +16,14 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
+	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
 )
 
-// doCmd represents the do command
-var doCmd = &cobra.Command{
-	Use:   "do",
+// stopRunCmd represents the stopRun command
+var stopRunCmd = &cobra.Command{
+	Use:   "run",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -29,18 +31,35 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
+	RunE: func(cmd *cobra.Command, args []string) error{
+		runId, err := parseRunId(args[0])
+		if err != nil {
+			return err
+		}
+		run, err := getRun(runId)
+		if err != nil {
+			return err
+		}
+		err = run.UpdateStatus(bl.RunStopped)
+		if err != nil {
+			msg := "failed to update run status"
+			fmt.Println(msg + SeeLogMsg)
+			return fmt.Errorf(msg+": %w", err)
+		}
+		return nil
+	},
 }
 
 func init() {
-	rootCmd.AddCommand(doCmd)
+	stopCmd.AddCommand(stopRunCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// doCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// stopRunCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	// Cobra supports local flags which will only do when this command
+	// Cobra supports local flags which will only stopRun when this command
 	// is called directly, e.g.:
-	// doCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// stopRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

@@ -8,22 +8,28 @@ import (
 	"strings"
 )
 
+type DoType string
+
+const (
+	DoTypeShellExecute DoType = "shell execute"
+)
+
 type Script struct {
 	Title string
 	Steps []Step
 }
 
 type Step struct {
-	Heading string
-	Content string
-	Expect  string
-	Do      interface{}
-	DoType  string
-	Script  string
+	Name        string
+	Description string
+	Do          interface{}
+	DoType      DoType
+	Script      string
+	stepRecord  *StepRecord
 }
 
 type StepDo struct {
-	Type string
+	Type DoType
 }
 
 type StepDoShellExecute struct {
@@ -49,7 +55,7 @@ func (s *Script) LoadFromBytes(err error, yamlFile []byte) error {
 		return err
 	}
 	for i, _ := range s.Steps {
-		(&s.Steps[i]).AdjustUnmarshalOptions()
+		(&s.Steps[i]).AdjustUnmarshalStep(false)
 	}
 	return nil
 }
@@ -63,16 +69,6 @@ func (s *Script) Start(fileName string) (*RunRecord, error) {
 	runRow := RunRecord{}
 	err = runRow.Create(err, s, yamlBytes)
 
-	// we'll store the external logs for shell_execute
-	//_, err = os.Stat("runs")
-	//if os.IsNotExist(err) {
-	//	err = os.MkdirAll("runs", 0700)
-	//	if err != nil {
-	//		return fmt.Errorf("failed to create the runs diretory: %w", err)
-	//	}
-	//} else if err != nil {
-	//	return fmt.Errorf("failed to determine existance of runs directory: %w", err)
-	//}
 	return &runRow, err
 }
 
@@ -84,11 +80,24 @@ func Rollback(tx *sqlx.Tx, err error) error {
 	return err
 }
 
-func (step *Step) AdjustUnmarshalOptions() error {
+func (step *Step) AdjustUnmarshalStep(fillStep bool) error {
+	if fillStep {
+		script := step.Script
+		err := yaml.Unmarshal([]byte(script), step)
+		if err != nil {
+			return err
+		}
+		step.Script = script
+	} else {
+		stepBytes, err := yaml.Marshal(step)
+		if err != nil {
+			return err
+		}
+		step.Script = string(stepBytes)
+	}
 	if step.Do != nil {
 		stepDo := StepDo{}
 		stepDoBytes, err := yaml.Marshal(step.Do)
-		step.Script = string(stepDoBytes)
 		if err != nil {
 			return err
 		}
@@ -96,18 +105,18 @@ func (step *Step) AdjustUnmarshalOptions() error {
 		if err != nil {
 			return err
 		}
-		doType := strings.ToLower(stepDo.Type)
-		switch doType {
+		doType := strings.ToLower(string(stepDo.Type))
+		switch DoType(doType) {
 		case "":
 			fallthrough
-		case "shell execute":
+		case DoTypeShellExecute:
 			do := StepDoShellExecute{}
 			err = yaml.Unmarshal(stepDoBytes, &do)
 			if err != nil {
 				return err
 			}
 			step.Do = do
-			step.DoType = "shell execute"
+			step.DoType = DoTypeShellExecute
 		}
 	}
 	return nil

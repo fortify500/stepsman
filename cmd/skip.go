@@ -19,9 +19,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// doCmd represents the do command
-var doCmd = &cobra.Command{
-	Use:   "do",
+// skipRunCmd represents the skipRun command
+var skipCmd = &cobra.Command{
+	Use:   "skip",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -32,15 +32,15 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	rootCmd.AddCommand(doCmd)
+	rootCmd.AddCommand(skipCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// doCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// skipRunCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	// Cobra supports local flags which will only do when this command
+	// Cobra supports local flags which will only skipRun when this command
 	// is called directly, e.g.:
-	// doCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// skipRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

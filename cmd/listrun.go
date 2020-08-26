@@ -19,16 +19,14 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/jedib0t/go-pretty/table"
-	"os"
-	"strconv"
-
 	"github.com/spf13/cobra"
+	"os"
 )
 
 // listRunCmd represents the listRun command
 var listRunCmd = &cobra.Command{
 	Use:   "run",
-	Args: cobra.MinimumNArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -40,14 +38,16 @@ to quickly create a Cobra application.`,
 		t := table.NewWriter()
 		t.SetStyle(MyStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"", "#", "UUID", "Title", "Status"})
-		runId, err := strconv.ParseInt(args[0], 10, 64)
+		t.AppendHeader(table.Row{"", "", "#", "UUID", "Title", "Status", "HeartBeat"})
+		runId, err := parseRunId(args[0])
 		if err != nil {
-			msg := "failed to parse step id"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return err
 		}
-		steps, err := bl.ListSteps(runId)
+		run, err := getRun(runId)
+		if err != nil {
+			return err
+		}
+		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
 			msg := "failed to list steps"
 			fmt.Println(msg + SeeLogMsg)
@@ -60,12 +60,23 @@ to quickly create a Cobra application.`,
 				fmt.Println(msg + SeeLogMsg)
 				return fmt.Errorf(msg+": %w", err)
 			}
-			checked:="[ ]"
-			if step.Done==bl.DoneDone{
-				checked="[V]"
+			cursor := " "
+			checked := "[ ]"
+			heartBeat := ""
+			switch step.Status {
+			case bl.StepDone:
+				checked = "[V]"
+			case bl.StepSkipped:
+				checked = "[V]"
+			}
+			if step.StepId == run.Cursor {
+				cursor = ">"
+			}
+			if step.Status == bl.StepInProgress {
+				heartBeat = string(step.HeartBeat)
 			}
 			t.AppendRows([]table.Row{
-				{checked, step.StepId, step.UUID, step.Heading, status},
+				{cursor, checked, step.StepId, step.UUID, step.Name, status, heartBeat},
 			})
 		}
 		//t.AppendSeparator()
