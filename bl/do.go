@@ -72,9 +72,12 @@ func do(doType DoType, doI interface{}, mkdir bool) (StepStatusType, error) {
 				var exitError *exec.ExitError
 				if errors.As(errRun, &exitError) && exitError.ExitCode() > 0 {
 					log.Debug(fmt.Sprintf("Exit error code: %d", exitError.ExitCode()))
+					if result == StepDone {
+						result = StepFailed
+					}
 				}
 				log.Debug(fmt.Errorf("command failed: %w", errRun))
-				if result== StepDone {
+				if result == StepDone {
 					result = StepFailed
 				}
 			} else {
