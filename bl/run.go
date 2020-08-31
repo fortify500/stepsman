@@ -52,7 +52,7 @@ func TranslateRunStatus(status RunStatusType) (string, error) {
 
 func ListRuns() ([]*RunRecord, error) {
 	var result []*RunRecord
-	rows, err := DB.Queryx("SELECT * FROM runs")
+	rows, err := DB.Queryx("SELECT * FROM runs ORDER BY id DESC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table: %w", err)
 	}

@@ -69,9 +69,10 @@ func Execute() {
 
 
 /*
+Plan:
 create run -f
 //create run -f --set status=not-started
-* delete run 3
+* delete run 3 [--no-trash]//will only set is_deleted=true
 stop run 3
 skip run 3
 * set run 3 cursor=4
