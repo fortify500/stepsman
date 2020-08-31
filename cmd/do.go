@@ -21,13 +21,8 @@ import (
 
 var doCmd = &cobra.Command{
 	Use:   "do",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Do can execute a command of a run step.",
+	Long: `Do can execute a command of a run step, currently only shell execute commands are supported.`,
 }
 
 func init() {

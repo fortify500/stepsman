@@ -28,9 +28,10 @@ import (
 var describeRunCmd = &cobra.Command{
 	Use:   "run",
 	Args:  cobra.RangeArgs(1,2),
-	Short: "describe a run and move the cursor to the first step",
-	Long: `describe a run and move the cursor to the first step.
-You can specify either a file or stdin (stdin not implemented yet)`,
+	Short: "Describe a run steps",
+	Long: `Enumerate the steps of a run in a verbose and friendly way. 
+Use run <run id>.
+You can also describe a single step by adding --step <step id>.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runId, err := parseRunId(args[0])
 		if err != nil {

@@ -130,6 +130,10 @@ OUT:
 				Description: flag.Usage,
 			})
 		})
+		s = append(s, prompt.Suggest{
+			Text:        "--help",
+			Description: "help for stepsman or a command",
+		})
 	}
 	for _, suggest := range s {
 		if strings.EqualFold(suggest.Text, currentWord) {

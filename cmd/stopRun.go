@@ -23,13 +23,10 @@ import (
 
 var stopRunCmd = &cobra.Command{
 	Use:   "run",
+	Args:  cobra.ExactArgs(1),
 	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Long: `Changes the status of a run to Stopped.
+Use run <run id>.`,
 	RunE: func(cmd *cobra.Command, args []string) error{
 		runId, err := parseRunId(args[0])
 		if err != nil {

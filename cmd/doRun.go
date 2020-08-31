@@ -23,13 +23,10 @@ import (
 
 var doRunCmd = &cobra.Command{
 	Use:   "run",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Args:  cobra.ExactArgs(1),
+	Short: "Do can execute a command of a run step.",
+	Long: `Do can execute a command of a run step, currently only shell execute commands are supported.
+Use run <run id>.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runId, err := parseRunId(args[0])
 		if err != nil {
