@@ -84,22 +84,6 @@ func Execute() {
 	}
 }
 
-/*
-Plan:
-create run -f
-//create run -f --set status=not-started
-* delete run 3 [--no-trash]//will only set is_deleted=true
-stop run 3
-skip run 3
-* set run 3 cursor=4
-do run 3
-describe run 3 [--step 4]
-* status run 3 [--step 4]
-list runs
-list run 35475
-//vet -f // will make all the pre create steps without creating the run
-*/
-
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	err := bl.InitBL(Parameters.CfgFile)

@@ -21,7 +21,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// doRunCmd represents the doRun command
 var doRunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "A brief description of your command",
@@ -67,29 +66,10 @@ to quickly create a Cobra application.`,
 				Friendly:  msg,
 			}
 		}
-		//switch newStatus {
-		//	StepNotStarted
-		//	StepInProgress
-		//	StepCanceled
-		//	StepFailed
-		//	StepDone
-		//	StepSkipped
-		//
-		//}
 		return nil
 	},
 }
 
 func init() {
 	doCmd.AddCommand(doRunCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// doRunCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only doRun when this command
-	// is called directly, e.g.:
-	// doRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

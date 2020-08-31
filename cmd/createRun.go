@@ -22,13 +22,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// createRunCmd represents the createRun command
 var createRunCmd = &cobra.Command{
 	Use:   "run",
 	Args: cobra.MaximumNArgs(0),
 	Short: "Create a run and move the cursor to the first step",
-	Long: `Create a run and move the cursor to the first step.
-You can specify either a file or stdin (stdin not implemented yet)`,
+	Long: `Create a run and move the cursor to the first step. You must specify a file.`,
 	RunE: func(cmd *cobra.Command, args []string) error{
 		var t bl.Script
 		if len(Parameters.CreateFileName) == 0 {
@@ -62,15 +60,6 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 
 func init() {
 	createCmd.AddCommand(createRunCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// createRunCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "File to create run")
+	createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
 	createRunCmd.MarkFlagRequired("file")
 }
