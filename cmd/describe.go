@@ -16,14 +16,12 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
-// setCmd represents the set command
-var setCmd = &cobra.Command{
-	Use:   "set",
+// describeCmd represents the describe command
+var describeCmd = &cobra.Command{
+	Use:   "describe",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -31,22 +29,18 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	RunE: func(cmd *cobra.Command, args []string) error{
-		fmt.Println("set called")
-		return nil
-	},
 }
 
 func init() {
-	rootCmd.AddCommand(setCmd)
+	RootCmd.AddCommand(describeCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// setCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// describeCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	// Cobra supports local flags which will only set when this command
+	// Cobra supports local flags which will only describe when this command
 	// is called directly, e.g.:
-	// setCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// describeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

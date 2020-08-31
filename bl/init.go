@@ -1,3 +1,18 @@
+/*
+Copyright © 2020 stepsman authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package bl
 
 import (
@@ -9,7 +24,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"io"
 	"os"
 	"path"
 )
@@ -17,7 +31,7 @@ import (
 var DB *sqlx.DB
 var StoreDir string
 var cfgFile string
-
+var Luberjack *lumberjack.Logger
 func InitBL(cfgFile string) error {
 	flag.Parse()
 	dir, err := homedir.Dir()
@@ -36,30 +50,32 @@ func InitBL(cfgFile string) error {
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
+	Luberjack = &lumberjack.Logger{
+		Filename:   path.Join(StoreDir, "stepsman.log"),
+		MaxSize:    100, // megabytes
+		MaxBackups: 2,
+		MaxAge:     1, // days
+		Compress:   true,
+	}
+	// use this later on
+	log.SetOutput(Luberjack)
+
+	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
+	//	Filename:   path.Join(StoreDir, "stepsman.log"),
+	//	MaxSize:    10, // megabytes
+	//	MaxBackups: 2,
+	//	MaxAge:     1, // days
+	//	Compress:   true,
+	//})
+	//log.SetOutput(mw)
+	log.SetLevel(log.TraceLevel)
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
 
-	// use this later on
-	//log.SetOutput(&lumberjack.Logger{
-	//	Filename:   path.Join(StoreDir, "stepsman.log"),
-	//	MaxSize:    100, // megabytes
-	//	MaxBackups: 2,
-	//	MaxAge:     1, // days
-	//	Compress:   true,
-	//})
 
-	mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
-		Filename:   path.Join(StoreDir, "stepsman.log"),
-		MaxSize:    10, // megabytes
-		MaxBackups: 2,
-		MaxAge:     1, // days
-		Compress:   true,
-	})
-	log.SetOutput(mw)
-	log.SetLevel(log.TraceLevel)
 
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(StoreDir, 0700)

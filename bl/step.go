@@ -1,9 +1,24 @@
+/*
+Copyright © 2020 stepsman authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package bl
 
 import (
 	fmt "fmt"
 	"github.com/jmoiron/sqlx"
-	"github.com/yeqown/log"
+	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
@@ -175,7 +190,7 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 			return fmt.Errorf("failed to update database step row: %w", err)
 		}
 		if run.Status != RunInProgress {
-			_, err = tx.Exec("update runs set status=? where run_id=?", RunInProgress, s.RunId)
+			_, err = tx.Exec("update runs set status=? where id=?", RunInProgress, s.RunId)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row: %w", err)
@@ -191,17 +206,34 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 			return fmt.Errorf("failed to list database run rows: %w", err)
 		}
 		allDoneOrSkipped := true
-		for _, stepRecord := range steps {
+		nextCursorPosition := -1
+		for i, stepRecord := range steps {
 			if stepRecord.Status != StepDone && stepRecord.Status != StepSkipped {
 				allDoneOrSkipped = false
-				break
+				if nextCursorPosition > 0 {
+					break
+				}
+			}
+			if stepRecord.StepId == s.RunId {
+				if i < len(steps) {
+					nextCursorPosition = i + 1
+				}
+				if !allDoneOrSkipped {
+					break
+				}
 			}
 		}
-		if allDoneOrSkipped{
-			_, err = tx.Exec("update runs set status=? where run_id=?", RunDone, s.RunId)
+		if allDoneOrSkipped {
+			_, err = tx.Exec("update runs set status=? where id=?", RunDone, s.RunId)
 			if err != nil {
 				err = Rollback(tx, err)
-				return fmt.Errorf("failed to update database run row: %w", err)
+				return fmt.Errorf("failed to update database run row status: %w", err)
+			}
+		} else if nextCursorPosition > 0 {
+			_, err = tx.Exec("update runs set cursor=? where id=?", nextCursorPosition, s.RunId)
+			if err != nil {
+				err = Rollback(tx, err)
+				return fmt.Errorf("failed to update database run row cursor: %w", err)
 			}
 		}
 	}
@@ -210,10 +242,10 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 	s.Status = newStatus
 	return nil
 }
-func (s *Step) StartDo() error {
+func (s *Step) StartDo() (StepStatusType, error) {
 	err := s.stepRecord.UpdateStatus(StepInProgress, false)
 	if err != nil {
-		return err
+		return StepFailed, err
 	}
 	var wg sync.WaitGroup
 	heartBeatDone1 := make(chan int)
@@ -240,10 +272,10 @@ func (s *Step) StartDo() error {
 	defer close(heartBeatDone1) //in case of a panic
 	newStatus, err := do(s.DoType, s.Do, true)
 	if err != nil {
-		return err
+		return StepFailed, err
 	}
 	close(heartBeatDone2)
 	wg.Wait()
 	err = s.stepRecord.UpdateStatus(newStatus, true)
-	return err
+	return newStatus, err
 }

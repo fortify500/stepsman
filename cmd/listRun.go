@@ -18,12 +18,15 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
+	"os"
 )
 
-// doRunCmd represents the doRun command
-var doRunCmd = &cobra.Command{
+// listRunCmd represents the listRun command
+var listRunCmd = &cobra.Command{
 	Use:   "run",
+	Args:  cobra.MinimumNArgs(1),
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -32,6 +35,10 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		t := table.NewWriter()
+		t.SetStyle(NoBordersStyle)
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"", "", "#", "UUID", "Title", "Status", "HeartBeat"})
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			return err
@@ -40,50 +47,53 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			return err
 		}
-		if run.Status==bl.RunDone{
-			msg := "run is already done"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg)
-		}
-		stepRecord, err := getCursorStep(run)
+		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
-			return err
-		}
-		step, err := stepRecord.ToStep()
-		if err != nil {
-			msg := "failed to convert step record to step"
+			msg := "failed to list steps"
 			fmt.Println(msg + SeeLogMsg)
 			return fmt.Errorf(msg+": %w", err)
 		}
-		_, err = step.StartDo()
-		if err != nil {
-			msg := "failed to start do"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+		for _, step := range steps {
+			status, err := bl.TranslateStepStatus(step.Status)
+			if err != nil {
+				msg := "failed to list steps"
+				fmt.Println(msg + SeeLogMsg)
+				return fmt.Errorf(msg+": %w", err)
+			}
+			cursor := " "
+			checked := "[ ]"
+			heartBeat := ""
+			switch step.Status {
+			case bl.StepDone:
+				checked = "[V]"
+			case bl.StepSkipped:
+				checked = "[V]"
+			}
+			if step.StepId == run.Cursor {
+				cursor = ">"
+			}
+			if step.Status == bl.StepInProgress {
+				heartBeat = string(step.HeartBeat)
+			}
+			t.AppendRows([]table.Row{
+				{cursor, checked, step.StepId, step.UUID, step.Name, status, heartBeat},
+			})
 		}
-		//switch newStatus {
-		//	StepNotStarted
-		//	StepInProgress
-		//	StepCanceled
-		//	StepFailed
-		//	StepDone
-		//	StepSkipped
-		//
-		//}
+		t.Render()
 		return nil
 	},
 }
 
 func init() {
-	doCmd.AddCommand(doRunCmd)
+	listCmd.AddCommand(listRunCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// doRunCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// listRunCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	// Cobra supports local flags which will only doRun when this command
+	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// doRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// listRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

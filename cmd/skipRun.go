@@ -41,7 +41,7 @@ to quickly create a Cobra application.`,
 			return err
 		}
 
-		stepRecord, err := getStep(run)
+		stepRecord, err := getCursorStep(run)
 		if err != nil {
 			return err
 		}

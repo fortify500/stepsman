@@ -22,8 +22,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var fileName string
-
 // createRunCmd represents the createRun command
 var createRunCmd = &cobra.Command{
 	Use:   "run",
@@ -33,18 +31,12 @@ var createRunCmd = &cobra.Command{
 You can specify either a file or stdin (stdin not implemented yet)`,
 	RunE: func(cmd *cobra.Command, args []string) error{
 		var t bl.Script
-		//cmd2 := exec.Command("/sbin/ping", "-c","3","8.8.8.8")
-		//cmd2 := exec.Command("/usr/bin/top")
-		//cmd2.Stdin = os.Stdin
-		//cmd2.Stdout = os.Stdout
-		//cmd2.Stderr = os.Stderr
-		//cmd2.Do()
-		if len(fileName) == 0 {
+		if len(Parameters.CreateFileName) == 0 {
 			msg := "you must specify a file name"
 			fmt.Println(msg)
 			return fmt.Errorf(msg)
 		}
-		runRow, err := t.Start(fileName)
+		runRow, err := t.Start(Parameters.CreateFileName)
 		if err == bl.ErrActiveRunsWithSameTitleExists {
 			msg := "you must stop runs with the same title before creating a new run"
 			//"you must either stop runs with the same title or force an additional run (see --force-run)"
@@ -74,6 +66,6 @@ func init() {
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	createRunCmd.Flags().StringVarP(&fileName, "file", "f", "", "File to create run")
+	createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "File to create run")
 	createRunCmd.MarkFlagRequired("file")
 }

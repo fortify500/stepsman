@@ -23,10 +23,9 @@ import (
 	"os"
 )
 
-// listRunCmd represents the listRun command
-var listRunCmd = &cobra.Command{
-	Use:   "run",
-	Args:  cobra.MinimumNArgs(1),
+// listRunsCmd represents the listRuns command
+var listRunsCmd = &cobra.Command{
+	Use:   "runs",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -36,47 +35,25 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		t := table.NewWriter()
-		t.SetStyle(MyStyle)
+		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"", "", "#", "UUID", "Title", "Status", "HeartBeat"})
-		runId, err := parseRunId(args[0])
+		t.AppendHeader(table.Row{"#", "UUID", "Title", "Status"})
+		runs, err := bl.ListRuns()
 		if err != nil {
-			return err
-		}
-		run, err := getRun(runId)
-		if err != nil {
-			return err
-		}
-		steps, err := bl.ListSteps(run.Id)
-		if err != nil {
-			msg := "failed to list steps"
+			msg := "failed to listRuns runs"
 			fmt.Println(msg + SeeLogMsg)
 			return fmt.Errorf(msg+": %w", err)
 		}
-		for _, step := range steps {
-			status, err := bl.TranslateStepStatus(step.Status)
+		for _, run := range runs {
+			status, err := bl.TranslateRunStatus(run.Status)
 			if err != nil {
-				msg := "failed to list steps"
+				msg := "failed to listRuns runs"
 				fmt.Println(msg + SeeLogMsg)
 				return fmt.Errorf(msg+": %w", err)
 			}
-			cursor := " "
-			checked := "[ ]"
-			heartBeat := ""
-			switch step.Status {
-			case bl.StepDone:
-				checked = "[V]"
-			case bl.StepSkipped:
-				checked = "[V]"
-			}
-			if step.StepId == run.Cursor {
-				cursor = ">"
-			}
-			if step.Status == bl.StepInProgress {
-				heartBeat = string(step.HeartBeat)
-			}
+
 			t.AppendRows([]table.Row{
-				{cursor, checked, step.StepId, step.UUID, step.Name, status, heartBeat},
+				{run.Id, run.UUID, run.Title, status},
 			})
 		}
 		//t.AppendSeparator()
@@ -87,16 +64,18 @@ to quickly create a Cobra application.`,
 	},
 }
 
+
+
 func init() {
-	listCmd.AddCommand(listRunCmd)
+	listCmd.AddCommand(listRunsCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// listRunCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// listRunsCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// listRunCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// listRunsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
