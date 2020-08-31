@@ -43,8 +43,10 @@ to quickly create a Cobra application.`,
 		err = run.UpdateStatus(bl.RunStopped)
 		if err != nil {
 			msg := "failed to update run status"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		return nil
 	},

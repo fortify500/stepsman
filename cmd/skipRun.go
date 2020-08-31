@@ -48,8 +48,10 @@ to quickly create a Cobra application.`,
 		err = stepRecord.UpdateStatus(bl.StepSkipped, false)
 		if err != nil {
 			msg := "failed to update step status"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		return nil
 	},

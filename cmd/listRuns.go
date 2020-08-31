@@ -41,15 +41,19 @@ to quickly create a Cobra application.`,
 		runs, err := bl.ListRuns()
 		if err != nil {
 			msg := "failed to listRuns runs"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		for _, run := range runs {
 			status, err := bl.TranslateRunStatus(run.Status)
 			if err != nil {
 				msg := "failed to listRuns runs"
-				fmt.Println(msg + SeeLogMsg)
-				return fmt.Errorf(msg+": %w", err)
+				return &CMDError{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
 			}
 
 			t.AppendRows([]table.Row{

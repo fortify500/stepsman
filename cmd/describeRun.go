@@ -44,8 +44,10 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
 			msg := "failed to describe steps"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		for i, stepRecord := range steps {
 			if Parameters.Step>0 && Parameters.Step!=int64(i)+1 {
@@ -54,8 +56,10 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 			status, err := bl.TranslateStepStatus(stepRecord.Status)
 			if err != nil {
 				msg := "failed to describe steps"
-				fmt.Println(msg + SeeLogMsg)
-				return fmt.Errorf(msg+": %w", err)
+				return &CMDError{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
 			}
 			cursor := ""
 			checked := "[ ]"
@@ -75,8 +79,10 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 			step, err := stepRecord.ToStep()
 			if err != nil {
 				msg := "failed to describe steps"
-				fmt.Println(msg + SeeLogMsg)
-				return fmt.Errorf(msg+": %w", err)
+				return &CMDError{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
 			}
 			{
 				description := step.Description

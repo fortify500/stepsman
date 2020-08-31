@@ -16,26 +16,28 @@ limitations under the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/jedib0t/go-pretty/table"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 )
+
 const SeeLogMsg = " (see stepsman.log file for more details ! \"tail ~/.stepsman/stepsman.log\")"
 
-type AllParameters struct{
-	CfgFile string
-	InPromptMode bool
+type AllParameters struct {
+	CfgFile        string
+	InPromptMode   bool
 	CreateFileName string
-	Step int64
+	Step           int64
 }
 
 var Parameters = AllParameters{
-	CfgFile: "",
-	InPromptMode: false,
+	CfgFile:        "",
+	InPromptMode:   false,
 	CreateFileName: "",
-	Step: -1,
+	Step:           -1,
 }
 
 var NoBordersStyle = table.Style{
@@ -57,16 +59,30 @@ var BordersStyle = table.Style{
 	Title:   table.TitleOptionsDefault,
 }
 
+type CMDError struct {
+	Technical error
+	Friendly  string
+}
+
+func (ce *CMDError) Error() string {
+	return ce.Friendly + SeeLogMsg
+}
+func (ce *CMDError) TechnicalError() error {
+	return ce.Technical
+}
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the RootCmd.
 func Execute() {
+	var cmdError *CMDError
 	if err := RootCmd.Execute(); err != nil {
-		log.Error(err)
+		if errors.As(err, &cmdError) {
+			log.Error(cmdError.TechnicalError())
+		} else {
+			log.Error(err)
+		}
 	}
 }
-
-
 
 /*
 Plan:
@@ -97,8 +113,10 @@ func getCursorStep(run *bl.RunRecord) (*bl.StepRecord, error) {
 	step, err := run.GetCursorStep()
 	if err != nil {
 		msg := fmt.Sprintf("failed to get step with [run id,step id]: [%d,%d]", run.Id, run.Cursor)
-		fmt.Println(msg + SeeLogMsg)
-		return nil, fmt.Errorf(msg+": %w", err)
+		return nil, &CMDError{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
 	}
 	return step, nil
 }
@@ -107,8 +125,10 @@ func getRun(runId int64) (*bl.RunRecord, error) {
 	run, err := bl.GetRun(runId)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %d", runId)
-		fmt.Println(msg + SeeLogMsg)
-		return nil, fmt.Errorf(msg+": %w", err)
+		return nil, &CMDError{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
 	}
 	return run, nil
 }
@@ -117,13 +137,15 @@ func parseRunId(idStr string) (int64, error) {
 	runId, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		msg := "failed to parse run id"
-		fmt.Println(msg + SeeLogMsg)
-		return -1, fmt.Errorf(msg+": %w", err)
+		return -1, &CMDError{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
 	}
 	return runId, nil
 }
 
-func init(){
+func init() {
 	initConfig()
 	// use this later on
 	log.SetOutput(bl.Luberjack)

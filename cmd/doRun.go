@@ -42,8 +42,10 @@ to quickly create a Cobra application.`,
 		}
 		if run.Status==bl.RunDone{
 			msg := "run is already done"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg)
+			return &CMDError{
+				Technical: fmt.Errorf(msg),
+				Friendly:  msg,
+			}
 		}
 		stepRecord, err := getCursorStep(run)
 		if err != nil {
@@ -52,14 +54,18 @@ to quickly create a Cobra application.`,
 		step, err := stepRecord.ToStep()
 		if err != nil {
 			msg := "failed to convert step record to step"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		_, err = step.StartDo()
 		if err != nil {
 			msg := "failed to start do"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		//switch newStatus {
 		//	StepNotStarted

@@ -33,24 +33,29 @@ You can specify either a file or stdin (stdin not implemented yet)`,
 		var t bl.Script
 		if len(Parameters.CreateFileName) == 0 {
 			msg := "you must specify a file name"
-			fmt.Println(msg)
-			return fmt.Errorf(msg)
+			return &CMDError{
+				Technical: fmt.Errorf(msg),
+				Friendly:  msg,
+			}
 		}
 		runRow, err := t.Start(Parameters.CreateFileName)
 		if err == bl.ErrActiveRunsWithSameTitleExists {
 			msg := "you must stop runs with the same title before creating a new run"
 			//"you must either stop runs with the same title or force an additional run (see --force-run)"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		} else if err != nil {
 			msg:= "failed to create run"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg + ": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		msg:=fmt.Sprintf("run created with id: %d", runRow.Id)
 		fmt.Println(msg)
 		log.Info(msg)
-		log.Debug("run: %#v", t)
 		return nil
 	},
 }

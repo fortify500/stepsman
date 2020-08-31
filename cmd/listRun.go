@@ -50,15 +50,19 @@ to quickly create a Cobra application.`,
 		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
 			msg := "failed to list steps"
-			fmt.Println(msg + SeeLogMsg)
-			return fmt.Errorf(msg+": %w", err)
+			return &CMDError{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
 		for _, step := range steps {
 			status, err := bl.TranslateStepStatus(step.Status)
 			if err != nil {
 				msg := "failed to list steps"
-				fmt.Println(msg + SeeLogMsg)
-				return fmt.Errorf(msg+": %w", err)
+				return &CMDError{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
 			}
 			cursor := " "
 			checked := "[ ]"
