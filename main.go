@@ -89,6 +89,8 @@ func executor(s string) {
 				resetParameters()
 				cmd.RootCmd.SetArgs(listRunsRunId)
 				cmd.Execute()
+			} else {
+				nextInitialInput = s
 			}
 		} else {
 			if runStatus == bl.RunDone {
@@ -105,6 +107,8 @@ func executor(s string) {
 				resetParameters()
 				cmd.RootCmd.SetArgs(listRunsRunId)
 				cmd.Execute()
+			} else {
+				nextInitialInput = s
 			}
 		} else {
 			if runStatus == bl.RunDone {
