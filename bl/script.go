@@ -77,8 +77,11 @@ func (s *Script) LoadFromBytes(err error, yamlFile []byte) error {
 	if err != nil {
 		return err
 	}
-	for i, _ := range s.Steps {
-		(&s.Steps[i]).AdjustUnmarshalStep(false)
+	for i := range s.Steps {
+		err = (&s.Steps[i]).AdjustUnmarshalStep(false)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -103,24 +106,24 @@ func Rollback(tx *sqlx.Tx, err error) error {
 	return err
 }
 
-func (step *Step) AdjustUnmarshalStep(fillStep bool) error {
+func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
 	if fillStep {
-		script := step.Script
-		err := yaml.Unmarshal([]byte(script), step)
+		script := s.Script
+		err := yaml.Unmarshal([]byte(script), s)
 		if err != nil {
 			return err
 		}
-		step.Script = script
+		s.Script = script
 	} else {
-		stepBytes, err := yaml.Marshal(step)
+		stepBytes, err := yaml.Marshal(s)
 		if err != nil {
 			return err
 		}
-		step.Script = string(stepBytes)
+		s.Script = string(stepBytes)
 	}
-	if step.Do != nil {
+	if s.Do != nil {
 		stepDo := StepDo{}
-		stepDoBytes, err := yaml.Marshal(step.Do)
+		stepDoBytes, err := yaml.Marshal(s.Do)
 		if err != nil {
 			return err
 		}
@@ -138,8 +141,8 @@ func (step *Step) AdjustUnmarshalStep(fillStep bool) error {
 			if err != nil {
 				return err
 			}
-			step.Do = do
-			step.DoType = DoTypeShellExecute
+			s.Do = do
+			s.DoType = DoTypeShellExecute
 		}
 	}
 	return nil

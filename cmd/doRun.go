@@ -42,7 +42,7 @@ Use run <run id>.`,
 		Parameters.CurrentRunId = run.Id
 		if run.Status == bl.RunDone {
 			msg := "run is already done"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg),
 				Friendly:  msg,
 			}
@@ -56,7 +56,7 @@ Use run <run id>.`,
 		step, err := stepRecord.ToStep()
 		if err != nil {
 			msg := "failed to convert step record to step"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
@@ -65,7 +65,7 @@ Use run <run id>.`,
 		_, err = step.StartDo()
 		if err != nil {
 			msg := "failed to start do"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}

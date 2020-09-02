@@ -43,7 +43,7 @@ Use run <run id>.`,
 		err = run.UpdateStatus(bl.RunStopped)
 		if err != nil {
 			msg := "failed to update run status"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}

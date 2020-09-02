@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
@@ -34,7 +35,15 @@ var bangCmd = &cobra.Command{
 		bangCmd.Stdin = os.Stdin
 		bangCmd.Stdout = os.Stdout
 		bangCmd.Stderr = os.Stderr
-		bangCmd.Run()
+		err := bangCmd.Run()
+		if err != nil {
+			msg := "failed to execute !"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
+			return
+		}
 	},
 }
 

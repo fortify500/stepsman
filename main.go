@@ -94,8 +94,8 @@ func executor(s string) {
 	cmd.Parameters.CurrentCommand = cmd.CommandUndetermined
 	cmd.Parameters.CurrentRunId = -1
 	cmd.Parameters.Err = nil
-	for _, flagsReinit := range cmd.Parameters.FlagsReInit {
-		flagsReinit()
+	for _, flagsReInit := range cmd.Parameters.FlagsReInit {
+		flagsReInit()
 	}
 }
 
@@ -111,7 +111,7 @@ func completer(d prompt.Document) []prompt.Suggest {
 		return []prompt.Suggest{}
 	}
 
-	s := []prompt.Suggest{}
+	var s []prompt.Suggest
 	currentWord := d.GetWordBeforeCursorUntilSeparator(" ")
 
 	words := args.GetArgs(d.TextBeforeCursor())

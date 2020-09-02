@@ -53,7 +53,7 @@ You can also describe a single step by adding --step <step id>.`,
 		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
 			msg := "failed to describe steps"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
@@ -69,7 +69,7 @@ You can also describe a single step by adding --step <step id>.`,
 				runStatus, err := bl.TranslateRunStatus(run.Status)
 				if err != nil {
 					msg := "failed to describe steps"
-					Parameters.Err = &CMDError{
+					Parameters.Err = &Error{
 						Technical: fmt.Errorf(msg+": %w", err),
 						Friendly:  msg,
 					}
@@ -102,7 +102,7 @@ You can also describe a single step by adding --step <step id>.`,
 			status, err := bl.TranslateStepStatus(stepRecord.Status)
 			if err != nil {
 				msg := "failed to describe steps"
-				Parameters.Err = &CMDError{
+				Parameters.Err = &Error{
 					Technical: fmt.Errorf(msg+": %w", err),
 					Friendly:  msg,
 				}
@@ -123,12 +123,12 @@ You can also describe a single step by adding --step <step id>.`,
 				cursor = "False"
 			}
 			if stepRecord.Status == bl.StepInProgress {
-				heartBeat = string(stepRecord.HeartBeat)
+				heartBeat = fmt.Sprintf("%d", stepRecord.HeartBeat)
 			}
 			step, err := stepRecord.ToStep()
 			if err != nil {
 				msg := "failed to describe steps"
-				Parameters.Err = &CMDError{
+				Parameters.Err = &Error{
 					Technical: fmt.Errorf(msg+": %w", err),
 					Friendly:  msg,
 				}

@@ -68,22 +68,22 @@ var Parameters = AllParameters{
 	FlagsReInit:        []func(){},
 }
 
-type CMDError struct {
+type Error struct {
 	Technical error
 	Friendly  string
 }
 
-func (ce *CMDError) Error() string {
+func (ce *Error) Error() string {
 	return ce.Friendly + SeeLogMsg
 }
-func (ce *CMDError) TechnicalError() error {
+func (ce *Error) TechnicalError() error {
 	return ce.Technical
 }
 
 // Returns true on error
 func Execute() bool {
-	var cmdError *CMDError
-	RootCmd.Execute()
+	var cmdError *Error
+	_ = RootCmd.Execute()
 	if Parameters.Err != nil {
 		fmt.Println(Parameters.Err)
 		if errors.As(Parameters.Err, &cmdError) {
@@ -108,7 +108,7 @@ func getCursorStep(run *bl.RunRecord) (*bl.StepRecord, error) {
 	step, err := run.GetCursorStep()
 	if err != nil {
 		msg := fmt.Sprintf("failed to get step with [run id,step id]: [%d,%d]", run.Id, run.Cursor)
-		return nil, &CMDError{
+		return nil, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
@@ -120,7 +120,7 @@ func getRun(runId int64) (*bl.RunRecord, error) {
 	run, err := bl.GetRun(runId)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %d", runId)
-		return nil, &CMDError{
+		return nil, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
@@ -132,7 +132,7 @@ func parseRunId(idStr string) (int64, error) {
 	runId, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		msg := "failed to parse run id"
-		return -1, &CMDError{
+		return -1, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
@@ -151,7 +151,7 @@ func parseStepId(runRecord *bl.RunRecord, idStr string) (int64, error) {
 	stepId, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		msg := "failed to parse step id"
-		return -1, &CMDError{
+		return -1, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}

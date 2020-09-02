@@ -56,7 +56,7 @@ var listRunsCmd = &cobra.Command{
 
 		if err != nil {
 			msg := "failed to listRuns runs"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
@@ -66,7 +66,7 @@ var listRunsCmd = &cobra.Command{
 			status, err := bl.TranslateRunStatus(run.Status)
 			if err != nil {
 				msg := "failed to listRuns runs"
-				Parameters.Err = &CMDError{
+				Parameters.Err = &Error{
 					Technical: fmt.Errorf(msg+": %w", err),
 					Friendly:  msg,
 				}

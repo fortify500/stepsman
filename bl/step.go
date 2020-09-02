@@ -16,7 +16,7 @@ limitations under the License.
 package bl
 
 import (
-	fmt "fmt"
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"sync"
@@ -164,8 +164,8 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 	// don't change done if the status did not change.
 	// must be after (because we want to raise StepInProgress=StepInProgress error
 	if newStatus == s.Status {
-		tx.Rollback()
-		return nil
+		err = tx.Rollback()
+		return err
 	}
 	heartBeat := step.HeartBeat
 	if newStatus == StepInProgress {
@@ -237,7 +237,10 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 		}
 	}
 
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit database transaction: %w", err)
+	}
 	s.Status = newStatus
 	return nil
 }
@@ -269,7 +272,7 @@ func (s *Step) StartDo() (StepStatusType, error) {
 	wg.Add(1)
 	go heartbeat()
 	defer close(heartBeatDone1) //in case of a panic
-	newStatus, err := do(s.DoType, s.Do, true)
+	newStatus, err := do(s.DoType, s.Do)
 	if err != nil {
 		return StepFailed, err
 	}

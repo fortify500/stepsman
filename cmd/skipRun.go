@@ -48,7 +48,7 @@ Use run <run id>.`,
 		err = stepRecord.UpdateStatus(bl.StepSkipped, false)
 		if err != nil {
 			msg := "failed to update step status"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}

@@ -118,7 +118,10 @@ func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit database transaction: %w", err)
+	}
 	return err
 }
 func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {

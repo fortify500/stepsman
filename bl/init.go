@@ -30,7 +30,6 @@ import (
 
 var DB *sqlx.DB
 var StoreDir string
-var cfgFile string
 var Luberjack *lumberjack.Logger
 
 func InitBL(cfgFile string) error {
@@ -86,6 +85,9 @@ func InitBL(cfgFile string) error {
 	}
 
 	DB, err = sqlx.Open("sqlite3", path.Join(StoreDir, "stepsman.DB"))
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
 	_, err = DB.Exec("PRAGMA journal_mode = WAL")
 	if err != nil {
 		return fmt.Errorf("failed to set journal mode: %w", err)

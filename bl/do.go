@@ -26,9 +26,9 @@ import (
 	"syscall"
 )
 
-var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
+//var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
 
-func do(doType DoType, doI interface{}, mkdir bool) (StepStatusType, error) {
+func do(doType DoType, doI interface{}) (StepStatusType, error) {
 	result := StepDone
 	//_, err := os.Stat("runs")
 	//if os.IsNotExist(err) {
@@ -37,10 +37,10 @@ func do(doType DoType, doI interface{}, mkdir bool) (StepStatusType, error) {
 	//	}
 	//	err = os.MkdirAll("runs", 0700)
 	//	if err != nil {
-	//		return fmt.Errorf("failed to create the runs diretory: %w", err)
+	//		return fmt.Errorf("failed to create the runs directory: %w", err)
 	//	}
 	//} else if err != nil {
-	//	return fmt.Errorf("failed to determine existance of runs directory: %w", err)
+	//	return fmt.Errorf("failed to determine existence of runs directory: %w", err)
 	//}
 	if doI != nil {
 		switch doType {

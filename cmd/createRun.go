@@ -32,7 +32,7 @@ var createRunCmd = &cobra.Command{
 		Parameters.CurrentCommand = CommandCreateRun
 		if len(Parameters.CreateFileName) == 0 {
 			msg := "you must specify a file name"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg),
 				Friendly:  msg,
 			}
@@ -42,14 +42,14 @@ var createRunCmd = &cobra.Command{
 		if err == bl.ErrActiveRunsWithSameTitleExists {
 			msg := "you must stop runs with the same title before creating a new run"
 			//"you must either stop runs with the same title or force an additional run (see --force-run)"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
 			return
 		} else if err != nil {
 			msg := "failed to create run"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
@@ -67,7 +67,10 @@ func init() {
 	initFlags := func() {
 		createRunCmd.ResetFlags()
 		createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
-		createRunCmd.MarkFlagRequired("file")
+		err := createRunCmd.MarkFlagRequired("file")
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

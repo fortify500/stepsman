@@ -51,7 +51,7 @@ Use run <run id>.`,
 		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
 			msg := "failed to list steps"
-			Parameters.Err = &CMDError{
+			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
@@ -61,7 +61,7 @@ Use run <run id>.`,
 			status, err := bl.TranslateStepStatus(step.Status)
 			if err != nil {
 				msg := "failed to list steps"
-				Parameters.Err = &CMDError{
+				Parameters.Err = &Error{
 					Technical: fmt.Errorf(msg+": %w", err),
 					Friendly:  msg,
 				}
@@ -80,7 +80,7 @@ Use run <run id>.`,
 				cursor = ">"
 			}
 			if step.Status == bl.StepInProgress {
-				heartBeat = string(step.HeartBeat)
+				heartBeat = fmt.Sprintf("%d", step.HeartBeat)
 			}
 			t.AppendRows([]table.Row{
 				{cursor, checked, step.StepId, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 70)), status, heartBeat},
