@@ -28,9 +28,11 @@ import (
 )
 
 func main() {
+	resetParameters()
 	if len(os.Args) > 1 {
 		cmd.Execute()
 	} else {
+		var history []string
 		fmt.Println("Usage:")
 		fmt.Println("* `exit` to exit this program.")
 		fmt.Println("* `Tab` to enable suggestions or `Esc` to stop suggesting.")
@@ -43,7 +45,9 @@ func main() {
 				prompt.OptionShowCompletionAtStart(),
 				prompt.OptionInitialBufferText(cmd.Parameters.InitialInput),
 				prompt.OptionInputTextColor(prompt.Yellow),
+				prompt.OptionHistory(history),
 			)
+			history = append(history, s)
 			executor(s)
 		}
 	}
@@ -86,7 +90,6 @@ func executor(s string) {
 				cmd.RootCmd.SetArgs(listRunsRunId)
 				cmd.Execute()
 			}
-			nextInitialInput = s
 		} else {
 			if runStatus == bl.RunDone {
 				nextInitialInput = strings.Join(listRunsRunId, " ")
@@ -103,7 +106,6 @@ func executor(s string) {
 				cmd.RootCmd.SetArgs(listRunsRunId)
 				cmd.Execute()
 			}
-			nextInitialInput = s
 		} else {
 			if runStatus == bl.RunDone {
 				nextInitialInput = strings.Join(listRunsRunId, " ")
