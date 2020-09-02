@@ -40,6 +40,7 @@ Use run <run id>.`,
 			return
 		}
 		Parameters.CurrentRunId = run.Id
+		Parameters.CurrentRun = run
 		if run.Status == bl.RunDone {
 			msg := "run is already done"
 			Parameters.Err = &Error{
@@ -69,6 +70,11 @@ Use run <run id>.`,
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
+		}
+		Parameters.CurrentRun, err = getRun(runId)
+		if err != nil {
+			Parameters.Err = err
 			return
 		}
 	},

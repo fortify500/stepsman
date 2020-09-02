@@ -1,15 +1,23 @@
-title: "install stepshello.world"
+title: "STEPSMAN Hello World"
 steps:
-  - name: "starting" # mandatory
+  - name: "Starting" # mandatory
     description: > # optional
-      change directory to ~/
-      then execute: echo "hello world" > stepshello.world
+      Execute: echo "hello world" > stepsman_hello.world
+    do: # optional
+      command: "echo" # test is a command line program which returns exit values based on supplied parameters
+      arguments:
+        - >
+          Hello World
+        - ">"
+        - "stepsman_hello.world"
   - name: "execute test" # mandatory
     description: > # optional
       check that stepshello.world was created
     do: # optional
       command: "test" # test is a command line program which returns exit values based on supplied parameters
       arguments:
-        - "2"
-        - "-lt"
-        - "3"
+        - "-f"
+        - "stepsman_hello.world"
+        - "&&"
+        - "echo"
+        - "$?"

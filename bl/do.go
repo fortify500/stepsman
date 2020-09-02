@@ -17,6 +17,7 @@ package bl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -83,17 +84,17 @@ func do(doType DoType, doI interface{}) (StepStatusType, error) {
 			cancel()
 			wg.Wait()
 			if errRun != nil {
-				//var exitError *exec.ExitError
-				//if errors.As(errRun, &exitError) && exitError.ExitCode() > 0 {
-				//	log.Debug(fmt.Sprintf("Exit error code: %d", exitError.ExitCode()))
-				//	if result == StepDone {
-				//		result = StepFailed
-				//	}
-				//}
-				log.Debug(fmt.Errorf("command failed: %w", errRun))
-				if result == StepDone {
+				var exitError *exec.ExitError
+				if errors.As(errRun, &exitError) && exitError.ExitCode() > 0 {
+					log.Debug(fmt.Sprintf("Exit error code: %d", exitError.ExitCode()))
+					if result == StepDone {
+						result = StepDone // We don't want to fail like this
+					}
+				} else if result == StepDone {
 					result = StepFailed
 				}
+				log.Debug(fmt.Errorf("command failed: %w", errRun))
+
 			} else {
 				log.Debug(fmt.Sprintf("Exit error code: %d", 0))
 			}

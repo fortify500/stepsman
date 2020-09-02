@@ -213,7 +213,7 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 					break
 				}
 			}
-			if stepRecord.StepId == s.RunId {
+			if stepRecord.StepId == s.StepId {
 				if i < len(steps) {
 					nextCursorPosition = i + 1
 				}
@@ -229,7 +229,7 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 				return fmt.Errorf("failed to update database run row status: %w", err)
 			}
 		} else if nextCursorPosition > 0 {
-			_, err = tx.Exec("update runs set cursor=? where id=?", nextCursorPosition, s.RunId)
+			_, err = tx.Exec("update runs set cursor=? where id=?", steps[nextCursorPosition].StepId, s.RunId)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row cursor: %w", err)

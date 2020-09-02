@@ -52,6 +52,7 @@ type AllParameters struct {
 	InitialInput   string
 	CurrentCommand CommandType
 	CurrentRunId   int64
+	CurrentRun     *bl.RunRecord
 	FlagsReInit    []func()
 	Err            error
 }

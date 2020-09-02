@@ -32,9 +32,9 @@ func main() {
 		cmd.Execute()
 	} else {
 		fmt.Println("Usage:")
-		fmt.Println("* `exit` or `Ctrl-D` to exit this program.")
+		fmt.Println("* `exit` to exit this program.")
 		fmt.Println("* `Tab` to enable suggestions or `Esc` to stop suggesting.")
-		fmt.Println("* Examples: \"help\", \"list runs\", \"list run 1\", \"do run 1\"")
+		fmt.Println("* Examples: \"help\", \"list runs\", \"list run 1\", \"do run 1\", \"create run -f examples/basic.yaml\"")
 		fmt.Println("* Note: `Enter` key will also execute from a suggestion so type normally after a selection to continue without execution.")
 		for {
 			s := prompt.Input("[stepsman]: ", completer, prompt.OptionTitle("stepsman: step by step managed script"),
@@ -42,7 +42,8 @@ func main() {
 				prompt.OptionCompletionOnDown(),
 				prompt.OptionShowCompletionAtStart(),
 				prompt.OptionInitialBufferText(cmd.Parameters.InitialInput),
-				prompt.OptionInputTextColor(prompt.Yellow))
+				prompt.OptionInputTextColor(prompt.Yellow),
+			)
 			executor(s)
 		}
 	}
@@ -52,16 +53,25 @@ func executor(s string) {
 	if s == "" {
 		return
 	} else if strings.EqualFold(s, "quit") || strings.EqualFold(s, "exit") {
-		fmt.Println("So Long, and Thanks for All the Fish! (https://en.wikipedia.org/wiki/The_Hitchhiker%27s_Guide_to_the_Galaxy)")
+		fmt.Println("So Long, and Thanks for All the Fish!")
 		os.Exit(0)
 	}
 	cmd.RootCmd.SetArgs(args.GetArgs(s))
 	wasError := cmd.Execute()
 	var describeRunCursorStep []string
+	currentRunIdStr := fmt.Sprintf("%d", cmd.Parameters.CurrentRunId)
 	if cmd.Parameters.CurrentRunId > 0 {
-		describeRunCursorStep = []string{"describe", "run", fmt.Sprintf("%d", cmd.Parameters.CurrentRunId), "--step"}
+		describeRunCursorStep = []string{"describe", "run", currentRunIdStr, "--step"}
 	}
-	switch cmd.Parameters.CurrentCommand {
+	runStatus := bl.RunInProgress
+	if cmd.Parameters.CurrentRun != nil {
+		runStatus = cmd.Parameters.CurrentRun.Status
+	}
+	currentCommand := cmd.Parameters.CurrentCommand
+	nextInitialInput := ""
+	listRunsRunId := []string{"list", "runs", "--run", currentRunIdStr}
+	resetParameters()
+	switch currentCommand {
 	case cmd.CommandCreateRun:
 		if !wasError {
 			cmd.RootCmd.SetArgs(describeRunCursorStep)
@@ -71,26 +81,49 @@ func executor(s string) {
 		if !wasError {
 			cmd.RootCmd.SetArgs(describeRunCursorStep)
 			cmd.Execute()
-			cmd.Parameters.InitialInput = s
+			if runStatus == bl.RunDone {
+				resetParameters()
+				cmd.RootCmd.SetArgs(listRunsRunId)
+				cmd.Execute()
+			}
+			nextInitialInput = s
 		} else {
-			cmd.Parameters.InitialInput = strings.Join(describeRunCursorStep, " ")
+			if runStatus == bl.RunDone {
+				nextInitialInput = strings.Join(listRunsRunId, " ")
+			} else {
+				nextInitialInput = strings.Join(describeRunCursorStep, " ")
+			}
 		}
 	case cmd.CommandSkipRun:
 		if !wasError {
 			cmd.RootCmd.SetArgs(describeRunCursorStep)
 			cmd.Execute()
-			cmd.Parameters.InitialInput = s
+			if runStatus == bl.RunDone {
+				resetParameters()
+				cmd.RootCmd.SetArgs(listRunsRunId)
+				cmd.Execute()
+			}
+			nextInitialInput = s
 		} else {
-			cmd.Parameters.InitialInput = strings.Join(describeRunCursorStep, " ")
+			if runStatus == bl.RunDone {
+				nextInitialInput = strings.Join(listRunsRunId, " ")
+			} else {
+				nextInitialInput = strings.Join(describeRunCursorStep, " ")
+			}
 		}
 	case cmd.CommandStopRun:
 		if !wasError {
-			cmd.RootCmd.SetArgs([]string{"list", "runs", "--run", fmt.Sprintf("%d", cmd.Parameters.CurrentRunId)})
+			cmd.RootCmd.SetArgs(listRunsRunId)
 			cmd.Execute()
 		}
 	default:
-		cmd.Parameters.InitialInput = ""
+		nextInitialInput = ""
 	}
+	resetParameters()
+	cmd.Parameters.InitialInput = nextInitialInput
+}
+
+func resetParameters() {
 	cmd.Parameters.CurrentCommand = cmd.CommandUndetermined
 	cmd.Parameters.CurrentRunId = -1
 	cmd.Parameters.Err = nil

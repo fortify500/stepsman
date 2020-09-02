@@ -20,6 +20,7 @@ import (
 	"github.com/fortify500/stepsman/bl"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"strings"
 )
 
 var createRunCmd = &cobra.Command{
@@ -30,6 +31,9 @@ var createRunCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var t bl.Script
 		Parameters.CurrentCommand = CommandCreateRun
+		Parameters.CreateFileName = strings.TrimSpace(Parameters.CreateFileName)
+		strings.TrimPrefix(Parameters.CreateFileName, "\"")
+		strings.TrimSuffix(Parameters.CreateFileName, "\"")
 		if len(Parameters.CreateFileName) == 0 {
 			msg := "you must specify a file name"
 			Parameters.Err = &Error{

@@ -57,7 +57,9 @@ type StepDoShellExecute struct {
 }
 
 func (do StepDoShellExecute) Describe() string {
-	return fmt.Sprintf("%s%s", do.Command, strings.Join(do.Arguments, " "))
+	strs := []string{do.Command}
+	strs = append(strs, do.Arguments...)
+	return fmt.Sprintf("%s", strings.Join(strs, " "))
 }
 
 func (s *Script) LoadFromFile(filename string) ([]byte, error) {
