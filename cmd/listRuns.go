@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/text"
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
@@ -33,7 +34,7 @@ var listRunsCmd = &cobra.Command{
 		var err error
 		Parameters.CurrentCommand = CommandListRuns
 		t := table.NewWriter()
-		t.SetStyle(NoBordersStyle)
+		t.SetStyle(bl.NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"#", "UUID", "Title", "Cursor", "Status"})
 		var runs []*bl.RunRecord
@@ -73,7 +74,7 @@ var listRunsCmd = &cobra.Command{
 			}
 
 			t.AppendRows([]table.Row{
-				{run.Id, run.UUID, run.Title, run.Cursor, status},
+				{run.Id, run.UUID, strings.TrimSpace(text.WrapText(run.Title, 70)), run.Cursor, status},
 			})
 		}
 		t.Render()

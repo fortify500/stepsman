@@ -17,6 +17,7 @@ package bl
 
 import (
 	"fmt"
+	"github.com/jedib0t/go-pretty/table"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -47,9 +48,16 @@ type StepDo struct {
 	Type DoType
 }
 
+type DO interface {
+	Describe() string
+}
 type StepDoShellExecute struct {
 	Command   string
 	Arguments []string
+}
+
+func (do StepDoShellExecute) Describe() string {
+	return fmt.Sprintf("%s%s", do.Command, strings.Join(do.Arguments, " "))
 }
 
 func (s *Script) LoadFromFile(filename string) ([]byte, error) {
@@ -135,4 +143,14 @@ func (step *Step) AdjustUnmarshalStep(fillStep bool) error {
 		}
 	}
 	return nil
+}
+
+var NoBordersStyle = table.Style{
+	Name:    "StyleDefault",
+	Box:     table.StyleBoxDefault,
+	Color:   table.ColorOptionsDefault,
+	Format:  table.FormatOptionsDefault,
+	HTML:    table.DefaultHTMLOptions,
+	Options: table.OptionsNoBordersAndSeparators,
+	Title:   table.TitleOptionsDefault,
 }

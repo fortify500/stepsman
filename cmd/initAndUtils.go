@@ -19,13 +19,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/jedib0t/go-pretty/table"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 )
 
 const SeeLogMsg = " (use with \"--help\" or see stepsman.log file for more details ! \"tail ~/.stepsman/stepsman.log\")"
+const TableWrapLen = 70
 
 type CommandType int
 
@@ -66,25 +66,6 @@ var Parameters = AllParameters{
 	CurrentCommand:     CommandUndetermined,
 	CurrentRunId:       -1,
 	FlagsReInit:        []func(){},
-}
-
-var NoBordersStyle = table.Style{
-	Name:    "StyleDefault",
-	Box:     table.StyleBoxDefault,
-	Color:   table.ColorOptionsDefault,
-	Format:  table.FormatOptionsDefault,
-	HTML:    table.DefaultHTMLOptions,
-	Options: table.OptionsNoBordersAndSeparators,
-	Title:   table.TitleOptionsDefault,
-}
-var BordersStyle = table.Style{
-	Name:    "StyleDefault",
-	Box:     table.StyleBoxDefault,
-	Color:   table.ColorOptionsDefault,
-	Format:  table.FormatOptionsDefault,
-	HTML:    table.DefaultHTMLOptions,
-	Options: table.OptionsDefault,
-	Title:   table.TitleOptionsDefault,
 }
 
 type CMDError struct {

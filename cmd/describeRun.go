@@ -60,7 +60,7 @@ You can also describe a single step by adding --step <step id>.`,
 			return
 		}
 		mainT := table.NewWriter()
-		mainT.SetStyle(NoBordersStyle)
+		mainT.SetStyle(bl.NoBordersStyle)
 		mainT.SetOutputMirror(os.Stdout)
 		if stepId == -1 {
 			mainT.AppendRow(table.Row{"Description"})
@@ -78,12 +78,12 @@ You can also describe a single step by adding --step <step id>.`,
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
 				//t.SetTitle(cursor + checked + " " + text.WrapText(stepRecord.Name, 70))
-				t.SetStyle(NoBordersStyle)
+				t.SetStyle(bl.NoBordersStyle)
 				t.AppendRows([]table.Row{
 					//{cursor, checked, stepRecord.StepId, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", run.Id},
 					{"Cursor:", run.Cursor},
-					{"Title:", run.Title},
+					{"Title:", strings.TrimSpace(text.WrapText(run.Title, 70))},
 					{"UUID:", run.UUID},
 					{"Status:", runStatus},
 				})
@@ -135,24 +135,28 @@ You can also describe a single step by adding --step <step id>.`,
 				return
 			}
 			{
-				description := step.Description
-				description = strings.TrimSuffix(description, "\r")
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
 				//t.SetTitle(cursor + checked + " " + text.WrapText(stepRecord.Name, 70))
-				t.SetStyle(NoBordersStyle)
+				t.SetStyle(bl.NoBordersStyle)
 				t.AppendRows([]table.Row{
 					//{cursor, checked, stepRecord.StepId, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", stepRecord.StepId},
 					{"Cursor:", cursor},
-					{"Name:", stepRecord.Name},
+					{"Name:", strings.TrimSpace(text.WrapText(stepRecord.Name, TableWrapLen))},
 					{"UUID:", stepRecord.UUID},
 					{"Status:", status},
 					{"Heartbeat:", heartBeat},
 					{"Done:", checked},
-					{"Description:", text.WrapText(step.Description, 70)},
+					{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
 				})
-				//t.Render()
+				if step.Do != nil {
+					do, ok := step.Do.(bl.DO)
+					if ok {
+						t.AppendRow(table.Row{"Do:", strings.TrimSpace(text.WrapText(do.Describe(), 70))})
+					}
+				}
+				t.AppendRow(table.Row{"", ""})
 				mainT.AppendRow(table.Row{t.Render()})
 			}
 		}

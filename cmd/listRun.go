@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/text"
 	"github.com/spf13/cobra"
 	"os"
+	"strings"
 )
 
 var listRunCmd = &cobra.Command{
@@ -32,7 +34,7 @@ Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListRun
 		t := table.NewWriter()
-		t.SetStyle(NoBordersStyle)
+		t.SetStyle(bl.NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"", "", "#", "UUID", "Title", "Status", "HeartBeat"})
 		runId, err := parseRunId(args[0])
@@ -81,7 +83,7 @@ Use run <run id>.`,
 				heartBeat = string(step.HeartBeat)
 			}
 			t.AppendRows([]table.Row{
-				{cursor, checked, step.StepId, step.UUID, step.Name, status, heartBeat},
+				{cursor, checked, step.StepId, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 70)), status, heartBeat},
 			})
 		}
 		t.Render()
