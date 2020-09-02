@@ -3,30 +3,44 @@ Manage a scripted process step by step
 Built to save the day
 > If you think so, support us with a `star` and a `follow` 😘 
 
-STEPSMAN is a command line utility which manages processes such as migrations, installations
-, configurations, tests and anything which can be performed in steps.
-Each step in the process is added a status and a position.
+[![demo](https://github.com/fortify500/assets/raw/master/stepsman.gif)](https://github.com/c-bata/kube-prompt)
 
-For example, suppose we have to:
-1. Run an sql script.
-2. Call rest api via curl.
-3. Check that the sql entry was added.
+STEPSMAN is a command line utility which manages processes such as migrations, installations, configurations, tests and anything which can be performed in steps. Each step in the process is added a status and a position.
 
 STEPSMAN can manage this process as a script "run".
 
-stepsman create -f 
-created run id 1 (1 in this example)
+stepsman create -f <file name> 
 
 run stepsman (will open in interactive mode)
+```
+help
 
-* do run 1
-* describe run 1 -> status done
-* do run 1
-* describe run 1 -> status failed because the rest server was down.
-* -> we started the rest server
-* do run 1
-* describe run 1 ->status done
-* do run 1
-* describe run 1 -> status done
+[stepsman]: help
+Stepsman is a command line utility to manage processes such as:
+* Installations
+* Upgrades
+* Migrations
+* Tests
+* Anything that looks like a list of steps to complete
 
-finished.
+"stepsman" with no commands and parameters will enter interactive mode
+
+Usage:
+  stepsman [command]
+
+Available Commands:
+  !           ! will execute a shell command.
+  create      Create run
+  describe    Describe a run steps
+  do          Do can execute a command of a run step.
+  help        Help about any command
+  list        Runs summary or a list of a run steps.
+  skip        Skip a step of a run.
+  stop        Stop a run.
+
+Flags:
+      --config string   config file (default is $HOME/.stepsman.yaml)
+  -h, --help            help for stepsman
+
+Use "stepsman [command] --help" for more information about a command.
+```
