@@ -32,8 +32,6 @@ var RootCmd = &cobra.Command{
 "stepsman" with no commands and parameters will enter interactive mode`,
 }
 
-
 func init() {
 	RootCmd.PersistentFlags().StringVar(&Parameters.CfgFile, "config", "", "config file (default is $HOME/.stepsman.yaml)")
 }
-

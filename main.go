@@ -27,8 +27,6 @@ import (
 	"strings"
 )
 
-var untilSpace = false
-
 func main() {
 	if len(os.Args) > 1 {
 		cmd.Execute()
@@ -39,11 +37,11 @@ func main() {
 		fmt.Println("* Examples: \"help\", \"list runs\", \"list run 1\", \"do run 1\"")
 		fmt.Println("* Note: `Enter` key will also execute from a suggestion so type normally after a selection to continue without execution.")
 		for {
-			s := prompt.Input(">>> ", completer, prompt.OptionTitle("stepsman: step by step managed script"),
-				prompt.OptionPrefix(">>> "),
+			s := prompt.Input("[stepsman]: ", completer, prompt.OptionTitle("stepsman: step by step managed script"),
+				prompt.OptionPrefix("[stepsman]: "),
 				prompt.OptionCompletionOnDown(),
 				prompt.OptionShowCompletionAtStart(),
-				//prompt.OptionInitialBufferText("list"),
+				prompt.OptionInitialBufferText(cmd.Parameters.InitialInput),
 				prompt.OptionInputTextColor(prompt.Yellow))
 			executor(s)
 		}
@@ -57,32 +55,69 @@ func executor(s string) {
 		fmt.Println("So Long, and Thanks for All the Fish! (https://en.wikipedia.org/wiki/The_Hitchhiker%27s_Guide_to_the_Galaxy)")
 		os.Exit(0)
 	}
-	prev := cmd.Parameters.InPromptMode
-	cmd.Parameters.InPromptMode = true
 	cmd.RootCmd.SetArgs(args.GetArgs(s))
-	cmd.Execute()
-	cmd.Parameters.InPromptMode = prev
+	wasError := cmd.Execute()
+	var describeRunCursorStep []string
+	if cmd.Parameters.CurrentRunId > 0 {
+		describeRunCursorStep = []string{"describe", "run", fmt.Sprintf("%d", cmd.Parameters.CurrentRunId), "--step"}
+	}
+	switch cmd.Parameters.CurrentCommand {
+	case cmd.CommandCreateRun:
+		if !wasError {
+			cmd.RootCmd.SetArgs(describeRunCursorStep)
+			cmd.Execute()
+		}
+	case cmd.CommandDoRun:
+		if !wasError {
+			cmd.RootCmd.SetArgs(describeRunCursorStep)
+			cmd.Execute()
+			cmd.Parameters.InitialInput = s
+		} else {
+			cmd.Parameters.InitialInput = strings.Join(describeRunCursorStep, " ")
+		}
+	case cmd.CommandSkipRun:
+		if !wasError {
+			cmd.RootCmd.SetArgs(describeRunCursorStep)
+			cmd.Execute()
+			cmd.Parameters.InitialInput = s
+		} else {
+			cmd.Parameters.InitialInput = strings.Join(describeRunCursorStep, " ")
+		}
+	case cmd.CommandStopRun:
+		if !wasError {
+			cmd.RootCmd.SetArgs([]string{"list", "runs", "--run", fmt.Sprintf("%d", cmd.Parameters.CurrentRunId)})
+			cmd.Execute()
+		}
+	default:
+		cmd.Parameters.InitialInput = ""
+	}
+	cmd.Parameters.CurrentCommand = cmd.CommandUndetermined
+	cmd.Parameters.CurrentRunId = -1
+	cmd.Parameters.Err = nil
+	for _, flagsReinit := range cmd.Parameters.FlagsReInit {
+		flagsReinit()
+	}
 }
 
 func completer(d prompt.Document) []prompt.Suggest {
 	if d.LastKeyStroke() == prompt.Escape {
-		untilSpace = true
+		cmd.Parameters.DisableSuggestions = true
 		return []prompt.Suggest{}
 
 	}
-	if untilSpace && d.LastKeyStroke() == prompt.Tab {
-		untilSpace = false
-	} else if untilSpace {
+	if cmd.Parameters.DisableSuggestions && d.LastKeyStroke() == prompt.Tab {
+		cmd.Parameters.DisableSuggestions = false
+	} else if cmd.Parameters.DisableSuggestions {
 		return []prompt.Suggest{}
 	}
 
-	s := []prompt.Suggest{
-	}
+	s := []prompt.Suggest{}
 	currentWord := d.GetWordBeforeCursorUntilSeparator(" ")
 
 	words := args.GetArgs(d.TextBeforeCursor())
 	relevantCommand := cmd.RootCmd
 
+	//Determine the existence of the potential command and subcommands
 OUT:
 	for i, word1 := range words {
 		for _, command := range cmd.RootCmd.Commands() {
@@ -101,6 +136,8 @@ OUT:
 		}
 	}
 
+	// get the previous word before the space. we want to know if it is run because we want to
+	// pull out the suggestions of possible run ids.
 	runWord := d.GetWordBeforeCursorUntilSeparatorIgnoreNextToCursor(" ")
 	if strings.EqualFold(relevantCommand.Use, "run") &&
 		len(runWord) > len("run") &&

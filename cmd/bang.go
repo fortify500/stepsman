@@ -24,9 +24,10 @@ import (
 var bangCmd = &cobra.Command{
 	Use:   "!",
 	Short: "! will execute a shell command.",
-	Long: `! will execute a shell command and will not be logged.`,
-	Run: func(cmd *cobra.Command, args []string){
+	Long:  `! will execute a shell command and will not be logged.`,
+	Run: func(cmd *cobra.Command, args []string) {
 		var newArgs []string
+		Parameters.CurrentCommand = CommandBang
 		newArgs = append(newArgs, "-c")
 		newArgs = append(newArgs, args...)
 		bangCmd := exec.Command("/bin/sh", newArgs...)
@@ -36,8 +37,6 @@ var bangCmd = &cobra.Command{
 		bangCmd.Run()
 	},
 }
-
-
 
 func init() {
 	RootCmd.AddCommand(bangCmd)

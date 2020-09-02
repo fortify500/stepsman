@@ -22,7 +22,7 @@ import (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Runs summary or a list of a run steps.",
-	Long: `A succinct list of runs or a succinct list of steps of a run.`,
+	Long:  `A succinct list of runs or a succinct list of steps of a run.`,
 }
 
 func init() {

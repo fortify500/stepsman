@@ -22,7 +22,7 @@ import (
 var stopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop a run.",
-	Long: `Changes the status of a run to Stopped.`,
+	Long:  `Changes the status of a run to Stopped.`,
 }
 
 func init() {

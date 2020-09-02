@@ -27,24 +27,28 @@ var stopRunCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	Long: `Changes the status of a run to Stopped.
 Use run <run id>.`,
-	RunE: func(cmd *cobra.Command, args []string) error{
+	Run: func(cmd *cobra.Command, args []string) {
+		Parameters.CurrentCommand = CommandStopRun
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
+		Parameters.CurrentRunId = run.Id
 		err = run.UpdateStatus(bl.RunStopped)
 		if err != nil {
 			msg := "failed to update run status"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
-		return nil
 	},
 }
 

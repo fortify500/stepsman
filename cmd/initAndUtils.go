@@ -22,22 +22,50 @@ import (
 	"github.com/jedib0t/go-pretty/table"
 	log "github.com/sirupsen/logrus"
 	"strconv"
+	"strings"
 )
 
-const SeeLogMsg = " (see stepsman.log file for more details ! \"tail ~/.stepsman/stepsman.log\")"
+const SeeLogMsg = " (use with \"--help\" or see stepsman.log file for more details ! \"tail ~/.stepsman/stepsman.log\")"
+
+type CommandType int
+
+const (
+	CommandUndetermined CommandType = iota
+	CommandBang
+	CommandCreateRun
+	CommandDescribeRun
+	CommandDoRun
+	CommandListRun
+	CommandListRuns
+	CommandSkipRun
+	CommandStopRun
+)
 
 type AllParameters struct {
-	CfgFile        string
-	InPromptMode   bool
-	CreateFileName string
-	Step           int64
+	// Flags
+	CfgFile            string
+	CreateFileName     string
+	Step               string
+	Run                string
+	DisableSuggestions bool
+	// Others
+	InitialInput   string
+	CurrentCommand CommandType
+	CurrentRunId   int64
+	FlagsReInit    []func()
+	Err            error
 }
 
 var Parameters = AllParameters{
-	CfgFile:        "",
-	InPromptMode:   false,
-	CreateFileName: "",
-	Step:           -1,
+	CfgFile:            "",
+	CreateFileName:     "",
+	Step:               "",
+	Run:                "",
+	DisableSuggestions: true,
+	InitialInput:       "",
+	CurrentCommand:     CommandUndetermined,
+	CurrentRunId:       -1,
+	FlagsReInit:        []func(){},
 }
 
 var NoBordersStyle = table.Style{
@@ -71,20 +99,22 @@ func (ce *CMDError) TechnicalError() error {
 	return ce.Technical
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the RootCmd.
-func Execute() {
+// Returns true on error
+func Execute() bool {
 	var cmdError *CMDError
-	if err := RootCmd.Execute(); err != nil {
-		if errors.As(err, &cmdError) {
+	RootCmd.Execute()
+	if Parameters.Err != nil {
+		fmt.Println(Parameters.Err)
+		if errors.As(Parameters.Err, &cmdError) {
 			log.Error(cmdError.TechnicalError())
 		} else {
-			log.Error(err)
+			log.Error(Parameters.Err)
 		}
+		return true
 	}
+	return false
 }
 
-// initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	err := bl.InitBL(Parameters.CfgFile)
 	if err != nil {
@@ -127,6 +157,25 @@ func parseRunId(idStr string) (int64, error) {
 		}
 	}
 	return runId, nil
+}
+
+func parseStepId(runRecord *bl.RunRecord, idStr string) (int64, error) {
+	idStr = strings.TrimSpace(idStr)
+	if idStr == "" {
+		return -1, nil
+	}
+	if strings.EqualFold(idStr, "cursor") {
+		return runRecord.Cursor, nil
+	}
+	stepId, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		msg := "failed to parse step id"
+		return -1, &CMDError{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
+	}
+	return stepId, nil
 }
 
 func init() {

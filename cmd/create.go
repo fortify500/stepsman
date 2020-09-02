@@ -22,7 +22,7 @@ import (
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create run",
-	Long: `Creates a run from a supplied yaml template file.`,
+	Long:  `Creates a run from a supplied yaml template file.`,
 }
 
 func init() {

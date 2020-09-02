@@ -22,7 +22,7 @@ import (
 var skipCmd = &cobra.Command{
 	Use:   "skip",
 	Short: "Skip a step of a run.",
-	Long: `Skip a step of a run. The step is the one of the cursor.`,
+	Long:  `Skip a step of a run. The step is the one of the cursor.`,
 }
 
 func init() {

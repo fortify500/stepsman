@@ -22,7 +22,7 @@ import (
 var doCmd = &cobra.Command{
 	Use:   "do",
 	Short: "Do can execute a command of a run step.",
-	Long: `Do can execute a command of a run step, currently only shell execute commands are supported.`,
+	Long:  `Do can execute a command of a run step, currently only shell execute commands are supported.`,
 }
 
 func init() {

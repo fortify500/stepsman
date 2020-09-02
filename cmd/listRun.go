@@ -29,35 +29,41 @@ var listRunCmd = &cobra.Command{
 	Short: "List the steps of a run.",
 	Long: `List the steps of a run and their status.
 Use run <run id>.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
+		Parameters.CurrentCommand = CommandListRun
 		t := table.NewWriter()
 		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"", "", "#", "UUID", "Title", "Status", "HeartBeat"})
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
+		Parameters.CurrentRunId = run.Id
 		steps, err := bl.ListSteps(run.Id)
 		if err != nil {
 			msg := "failed to list steps"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
 		for _, step := range steps {
 			status, err := bl.TranslateStepStatus(step.Status)
 			if err != nil {
 				msg := "failed to list steps"
-				return &CMDError{
+				Parameters.Err = &CMDError{
 					Technical: fmt.Errorf(msg+": %w", err),
 					Friendly:  msg,
 				}
+				return
 			}
 			cursor := " "
 			checked := "[ ]"
@@ -79,7 +85,6 @@ Use run <run id>.`,
 			})
 		}
 		t.Render()
-		return nil
 	},
 }
 

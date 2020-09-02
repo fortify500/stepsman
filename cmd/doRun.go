@@ -27,43 +27,50 @@ var doRunCmd = &cobra.Command{
 	Short: "Do can execute a command of a run step.",
 	Long: `Do can execute a command of a run step, currently only shell execute commands are supported.
 Use run <run id>.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
+		Parameters.CurrentCommand = CommandDoRun
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
-		if run.Status==bl.RunDone{
+		Parameters.CurrentRunId = run.Id
+		if run.Status == bl.RunDone {
 			msg := "run is already done"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg),
 				Friendly:  msg,
 			}
+			return
 		}
 		stepRecord, err := getCursorStep(run)
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
 		step, err := stepRecord.ToStep()
 		if err != nil {
 			msg := "failed to convert step record to step"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
 		_, err = step.StartDo()
 		if err != nil {
 			msg := "failed to start do"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
-		return nil
 	},
 }
 

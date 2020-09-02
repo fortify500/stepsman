@@ -21,47 +21,70 @@ import (
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/spf13/cobra"
 	"os"
+	"strings"
 )
 
 var listRunsCmd = &cobra.Command{
 	Use:   "runs",
 	Args:  cobra.MaximumNArgs(0),
 	Short: "Runs summary.",
-	Long: `A succinct list of runs and their status.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Long:  `A succinct list of runs and their status.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		var err error
+		Parameters.CurrentCommand = CommandListRuns
 		t := table.NewWriter()
 		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "UUID", "Title", "Status"})
-		runs, err := bl.ListRuns()
+		t.AppendHeader(table.Row{"#", "UUID", "Title", "Cursor", "Status"})
+		var runs []*bl.RunRecord
+		if strings.TrimSpace(Parameters.Run) != "" {
+			runId, err := parseRunId(Parameters.Run)
+			if err != nil {
+				Parameters.Err = err
+				return
+			}
+			run, err := getRun(runId)
+			if err != nil {
+				Parameters.Err = err
+				return
+			}
+			runs = append(runs, run)
+		} else {
+			runs, err = bl.ListRuns()
+		}
+
 		if err != nil {
 			msg := "failed to listRuns runs"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
 		for _, run := range runs {
 			status, err := bl.TranslateRunStatus(run.Status)
 			if err != nil {
 				msg := "failed to listRuns runs"
-				return &CMDError{
+				Parameters.Err = &CMDError{
 					Technical: fmt.Errorf(msg+": %w", err),
 					Friendly:  msg,
 				}
+				return
 			}
 
 			t.AppendRows([]table.Row{
-				{run.Id, run.UUID, run.Title, status},
+				{run.Id, run.UUID, run.Title, run.Cursor, status},
 			})
 		}
 		t.Render()
-		return nil
 	},
 }
 
-
-
 func init() {
 	listCmd.AddCommand(listRunsCmd)
+	initFlags := func() {
+		listRunsCmd.ResetFlags()
+		listRunsCmd.Flags().StringVarP(&Parameters.Run, "run", "r", "", "Run Id")
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

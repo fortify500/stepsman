@@ -27,29 +27,33 @@ var skipRunCmd = &cobra.Command{
 	Short: "Skip a step of a run.",
 	Long: `Skip a step of a run. The step is the one of the cursor. After skipping the cursor will advance.
 Use run <run id>.`,
-	RunE: func(cmd *cobra.Command, args []string) error{
+	Run: func(cmd *cobra.Command, args []string) {
+		Parameters.CurrentCommand = CommandSkipRun
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
-
+		Parameters.CurrentRunId = run.Id
 		stepRecord, err := getCursorStep(run)
 		if err != nil {
-			return err
+			Parameters.Err = err
+			return
 		}
 		err = stepRecord.UpdateStatus(bl.StepSkipped, false)
 		if err != nil {
 			msg := "failed to update step status"
-			return &CMDError{
+			Parameters.Err = &CMDError{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
-		return nil
 	},
 }
 

@@ -24,7 +24,6 @@ import (
 )
 
 type StepStatusType int64
-type DoneType int64
 
 const HeartBeatInterval = 10
 

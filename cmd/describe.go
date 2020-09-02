@@ -22,7 +22,7 @@ import (
 var describeCmd = &cobra.Command{
 	Use:   "describe",
 	Short: "Describe a run steps",
-	Long: `Enumerate the steps of a run in a verbose and friendly way. You can also describe a single step.`,
+	Long:  `Enumerate the steps of a run in a verbose and friendly way. You can also describe a single step.`,
 }
 
 func init() {

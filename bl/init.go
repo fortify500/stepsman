@@ -32,6 +32,7 @@ var DB *sqlx.DB
 var StoreDir string
 var cfgFile string
 var Luberjack *lumberjack.Logger
+
 func InitBL(cfgFile string) error {
 	flag.Parse()
 	dir, err := homedir.Dir()
@@ -74,8 +75,6 @@ func InitBL(cfgFile string) error {
 	if err := viper.ReadInConfig(); err == nil {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
-
-
 
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(StoreDir, 0700)
