@@ -36,7 +36,7 @@ var listRunsCmd = &cobra.Command{
 		t := table.NewWriter()
 		t.SetStyle(bl.NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "UUID", "Title", "Cursor", "Status"})
+		t.AppendHeader(table.Row{"ID", "UUID", "Title", "Cursor", "Status"})
 		var runs []*bl.RunRecord
 		if strings.TrimSpace(Parameters.Run) != "" {
 			runId, err := parseRunId(Parameters.Run)

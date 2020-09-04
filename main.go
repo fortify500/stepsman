@@ -27,6 +27,8 @@ import (
 	"strings"
 )
 
+const prefix = "[stepsman]: "
+
 func main() {
 	resetParameters()
 	if len(os.Args) > 1 {
@@ -40,8 +42,8 @@ func main() {
 		fmt.Println("* Note: `Enter` key will also execute from a suggestion so type normally after a selection to continue without execution.")
 		for {
 			wasEnter := false
-			s := prompt.Input("[stepsman]: ", completer, prompt.OptionTitle("stepsman: step by step managed script"),
-				prompt.OptionPrefix("[stepsman]: "),
+			s := prompt.Input(prefix, completer, prompt.OptionTitle("stepsman: step by step managed script"),
+				prompt.OptionPrefix(prefix),
 				prompt.OptionCompletionOnDown(),
 				prompt.OptionShowCompletionAtStart(),
 				prompt.OptionInitialBufferText(cmd.Parameters.InitialInput),
@@ -87,15 +89,22 @@ func executor(s string, wasEnter bool) {
 	switch currentCommand {
 	case cmd.CommandCreateRun:
 		if !wasError {
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
+			cmd.RootCmd.SetArgs(listRunsRunId)
+			cmd.Execute()
+			resetParameters()
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
 			cmd.RootCmd.SetArgs(describeRunCursorStep)
 			cmd.Execute()
 		}
 	case cmd.CommandDoRun:
 		if !wasError {
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
 			cmd.RootCmd.SetArgs(describeRunCursorStep)
 			cmd.Execute()
 			if runStatus == bl.RunDone {
 				resetParameters()
+				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
 				cmd.RootCmd.SetArgs(listRunsRunId)
 				cmd.Execute()
 			} else {
@@ -110,10 +119,12 @@ func executor(s string, wasEnter bool) {
 		}
 	case cmd.CommandSkipRun:
 		if !wasError {
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
 			cmd.RootCmd.SetArgs(describeRunCursorStep)
 			cmd.Execute()
 			if runStatus == bl.RunDone {
 				resetParameters()
+				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
 				cmd.RootCmd.SetArgs(listRunsRunId)
 				cmd.Execute()
 			} else {
@@ -128,6 +139,7 @@ func executor(s string, wasEnter bool) {
 		}
 	case cmd.CommandStopRun:
 		if !wasError {
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
 			cmd.RootCmd.SetArgs(listRunsRunId)
 			cmd.Execute()
 		}

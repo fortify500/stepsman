@@ -40,7 +40,7 @@ type RunRecord struct {
 func TranslateRunStatus(status RunStatusType) (string, error) {
 	switch status {
 	case RunStopped:
-		return "Idle", nil
+		return "Stopped", nil
 	case RunInProgress:
 		return "In Progress", nil
 	case RunDone:

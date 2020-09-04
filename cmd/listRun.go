@@ -36,7 +36,7 @@ Use run <run id>.`,
 		t := table.NewWriter()
 		t.SetStyle(bl.NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"", "", "#", "UUID", "Title", "Status", "HeartBeat"})
+		t.AppendHeader(table.Row{"", "", "ID", "UUID", "Title", "Status", "HeartBeat"})
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = err
