@@ -34,7 +34,7 @@ func main() {
 	} else {
 		var history []string
 		fmt.Println("Usage:")
-		fmt.Println("* `exit` to exit this program.")
+		fmt.Println("* `exit` or CTRL-D to exit this program.")
 		fmt.Println("* `Tab` to enable suggestions or `Esc` to stop suggesting.")
 		fmt.Println("* Examples: \"help\", \"list runs\", \"list run 1\", \"do run 1\", \"create run -f examples/basic.yaml\"")
 		fmt.Println("* Note: `Enter` key will also execute from a suggestion so type normally after a selection to continue without execution.")
