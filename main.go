@@ -39,6 +39,7 @@ func main() {
 		fmt.Println("* Examples: \"help\", \"list runs\", \"list run 1\", \"do run 1\", \"create run -f examples/basic.yaml\"")
 		fmt.Println("* Note: `Enter` key will also execute from a suggestion so type normally after a selection to continue without execution.")
 		for {
+			wasEnter := false
 			s := prompt.Input("[stepsman]: ", completer, prompt.OptionTitle("stepsman: step by step managed script"),
 				prompt.OptionPrefix("[stepsman]: "),
 				prompt.OptionCompletionOnDown(),
@@ -46,17 +47,25 @@ func main() {
 				prompt.OptionInitialBufferText(cmd.Parameters.InitialInput),
 				prompt.OptionInputTextColor(prompt.Yellow),
 				prompt.OptionHistory(history),
+				prompt.OptionAddKeyBind(prompt.KeyBind{
+					Key: prompt.ControlM,
+					Fn: func(buffer *prompt.Buffer) {
+						wasEnter = true
+					},
+				}),
 			)
-			history = append(history, s)
-			executor(s)
+			if strings.TrimSpace(s) != "" {
+				history = append(history, s)
+			}
+			executor(s, wasEnter)
 		}
 	}
 }
-func executor(s string) {
+func executor(s string, wasEnter bool) {
 	s = strings.TrimSpace(s)
-	if s == "" {
+	if s == "" && wasEnter {
 		return
-	} else if strings.EqualFold(s, "quit") || strings.EqualFold(s, "exit") {
+	} else if strings.EqualFold(s, "quit") || strings.EqualFold(s, "exit") || (s == "" && !wasEnter) {
 		fmt.Println("So Long, and Thanks for All the Fish!")
 		os.Exit(0)
 	}
