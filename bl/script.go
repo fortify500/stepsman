@@ -52,13 +52,16 @@ type DO interface {
 	Describe() string
 }
 type StepDoShellExecute struct {
+	Options StepDoShellExecuteOptions
+}
+type StepDoShellExecuteOptions struct {
 	Command   string
 	Arguments []string
 }
 
 func (do StepDoShellExecute) Describe() string {
-	strs := []string{do.Command}
-	strs = append(strs, do.Arguments...)
+	strs := []string{do.Options.Command}
+	strs = append(strs, do.Options.Arguments...)
 	return fmt.Sprintf("%s", strings.Join(strs, " "))
 }
 

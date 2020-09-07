@@ -53,7 +53,7 @@ func do(doType DoType, doI interface{}) (StepStatusType, error) {
 			defer signal.Stop(termination)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			cmd := exec.CommandContext(ctx, do.Command, do.Arguments...)
+			cmd := exec.CommandContext(ctx, do.Options.Command, do.Options.Arguments...)
 			cmd.Env = os.Environ()
 			// if we want that the terminal will not send to the group and close both us and the child
 			//if cmd.SysProcAttr != nil {

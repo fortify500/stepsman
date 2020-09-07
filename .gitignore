@@ -16,5 +16,6 @@
 
 
 .idea/
+.excludes/
 stepsman
 /stepsman_hello.world

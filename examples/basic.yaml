@@ -4,15 +4,18 @@ steps:
     description: > # optional
       Execute: echo "hello world" > stepsman_hello.world
     do: # optional
-      command: "/bin/sh" # test is a command line program which returns exit values based on supplied parameters
-      arguments:
-        - "-c"
-        - "echo \"Hello World\" > stepsman_hello.world"
+      options:
+        command: "/bin/sh" # test is a command line program which returns exit values based on supplied parameters
+        arguments:
+          - "-c"
+          - 'echo "Hello World" > stepsman_hello.world'
   - name: "execute test" # mandatory
     description: > # optional
       check that stepshello.world was created
     do: # optional
-      command: "/bin/sh" # test is a command line program which returns exit values based on supplied parameters
-      arguments:
-        - "-c"
-        - "test -f stepsman_hello.world ; echo \"Exit Code: $?\""
+      type: "shell execute"
+      options:
+        command: "/bin/sh" # test is a command line program which returns exit values based on supplied parameters
+        arguments:
+          - "-c"
+          - 'test -f stepsman_hello.world ; echo "Exit Code: $?"'
