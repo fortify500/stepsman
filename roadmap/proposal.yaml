@@ -1,0 +1,106 @@
+title: "STEPSMAN Hello World"
+steps:
+  - name: Starting
+    description: >
+      Execute: echo "hello world" > stepsman_hello.world
+    label: hello #unique identifier for the step.
+    do:
+      options:
+        command: "/bin/sh"
+        arguments:
+          - "-c"
+          - 'echo "Hello World" > stepsman_hello.world'
+  - name: "Call REST API"
+    description: >
+      check that stepshello.world was created via rest
+    label: call_rest
+    do:
+      type:
+        REST # 200 is asynchronous done, 201 means asynchronous process(InProgress)
+        # the callee is supposed to perform heartbeats (reset InProgress) and set resolution: Done, Failed
+      # any other http status is an automatic fail.
+      timeout: 180 # seconds. default 60. if the callee
+      options:
+        method: POST
+        body: >
+          {}
+        headers:
+          authorization: >
+            base64.encode(concat("privilegedUser:", "{{ vault["privilegedUser"] }}"))
+    on-done:
+      decision: "check label success and do another step"
+      rules:
+        - if: >
+            decision["result"]=="rollback"
+          then:
+            - do: end
+        - then:
+            - set-run-status: failed
+  - name: "end of run"
+    label: end
+
+#---------------------------------------------------------
+decisions:
+  # example input for a decision
+  #{
+  #"input": {
+  #  "labels": {
+  #      "hello": {
+  #          "exit-code": 0
+  #          }
+  #      }
+  #  }
+  #}
+  - name: "check label success and do another step"
+    label: decision_1 # label must be unique
+    attributes:
+      - exit:
+          # the current label content is available in input
+          _: >
+            input["exit-code"]
+          type: int64 #one of the built-in types.
+      - degrees:
+          # all the labels are available in inputs
+          _: >
+            inputs["labels"]["call_rest"]["result"]["body"]["degrees"]
+          type: degree # a concept allows for validation before deciding. validation fail, means the attribute will be evaluated as undefined internally.
+    #rules-options: #optional
+    #  order: "first" # default is first. However, it can be "all" which means all "if"s will be evaluated.
+    rules:
+      - if: # "_" is a short for expression, "_s" is a short for multiple expressions (like multi-value, depends on the op). op is a short for operator.
+          # the list expressions are "ANDed"
+          - _: "result{exit>-3;exit<1}"
+          - _: "exit>-3 && exit==0"
+            op: "js-es5" # javascript operator - evalues the expression in a simple es5 interpreter
+          - _: "0" # alternative notation
+            attribute: exit
+            op: =
+          - attribute: degrees #a convinience, same as: degree=="bsc" || degree=="msc"
+            op: =
+            _s: # example for multi expression. In this case, multi-value evaluation.
+              - bsc
+              - msc
+            # custom functions are memoized by default
+          - _: >
+              mlinference("0", exit)>3
+        then:
+          result: rollback #simply assigns to an attribute called do the value "rollback"
+      - then: #fallback/default rule, "if" is defaulted to true if unspecified
+          result: next
+concepts: # int64, float64 and string, bool are reserved and need not specified.
+  - name: degree #unique name
+    type: string
+    validations:
+      - >
+        result{degree=="bsc"}else{degree=="msc"}
+functions:
+  - name: mlinference
+    type: externa-ml # can be plugged-in
+    #memoized: true by default
+
+# notes: cyclic calls are not allowed.
+# you can call to do a step as many times as you need even if it is done. the last status will be recorded. E.g. if it was done and you failed the next do then it will be failed.
+# future: it is possible to generate a streaming process providing a multi-line. essentially simulating many calls to the process. E.g. If a command line process prints a ndjson
+# or a json list we can read it line by line and make the do on-done run for each such line. we can also make an EOF action to close a step for further runs and discard old ones.
+#
+# as a convinience a response body is first attempted to be converted to a json. if it does not succeed it is stored as a string in the ["result"]["body"]

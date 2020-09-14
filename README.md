@@ -1,5 +1,6 @@
 # STEPSMAN
-Manage a scripted process step by step
+STEPSMAN is a step by step event driven business process and workflow manager.
+
 Built to save the day
 > If you think so, support us with a `star` and a `follow` 😘 
 
