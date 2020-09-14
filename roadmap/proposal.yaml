@@ -6,6 +6,13 @@ tags:
 # when a run is created, they can be provided as overrides to the existing context or updated or per call when calling a step directly.
 context: >
   {"app_id": 2 }
+# validations are tested before and after each step calls do. before any other event (like on-done).
+validations:
+  - if: >
+      time.now_ns()-(24*60*1000000000)>run["created_at"]
+    then:
+      - set-run-result: '{"status":"failed"}'
+      - set-run-status: failed
 steps:
   - name: Starting
     description: >
