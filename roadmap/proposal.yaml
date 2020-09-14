@@ -1,4 +1,7 @@
 title: "STEPSMAN Hello World"
+# searchable tags. if you want to locate a template by an external key.
+tags:
+  uuid: e09d86c4-b907-4674-af4f-8aceeb2b7ef1
 # a free form json which can contain additional information such as identifying or other info.
 # when a run is created, they can be provided as overrides to the existing context or updated or per call when calling a step directly.
 context: >
