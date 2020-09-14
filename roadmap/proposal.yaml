@@ -1,8 +1,17 @@
 title: "STEPSMAN Hello World"
+# a free form json which can contain additional information such as identifying or other info.
+# when a run is created, they can be provided as overrides to the existing context or updated or per call when calling a step directly.
+context: >
+  {"app_id": 2 }
 steps:
   - name: Starting
     description: >
       Execute: echo "hello world" > stepsman_hello.world
+    # overrides the template/run level context
+    # a free form json which can contain additional information such as identifying or other info.
+    # when a run is created, they can be provided as overrides to the existing context or updated or per call when calling a step directly.
+    context: >
+      {"step_id": 2 }
     label: hello #unique identifier for the step.
     do:
       options:
