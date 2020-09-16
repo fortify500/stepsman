@@ -36,7 +36,7 @@ steps:
     do:
       type:
         REST # 200 is asynchronous done, 201 means asynchronous process(InProgress)
-      # the callee is supposed to perform heartbeats (reset InProgress) and set resolution: Done, Failed
+      # the callee is supposed to perform heartbeats (PUT InProgress) and set resolution: Done, Failed
       # any other http status is an automatic fail.
       timeout: 180 # seconds. default 60. if the callee
       options:
@@ -120,6 +120,7 @@ functions:
 
 # notes: 
 # * cyclic calls are not allowed.
+# * The cursor is a helpful aid but is not mandatory. Interactive mode usually benefits from it.
 # * A run and its steps state is stored in a database so it is important not to strain it by storing huge amounts of data.
 # * run state: not started, stopping, stopped, in progress, done (done must be specified by a step and is not automatic)
 # * You can only "do" a step from a stopped position unless done. So, if it was done or in-progress, it stays done and returns conflict (409), 
