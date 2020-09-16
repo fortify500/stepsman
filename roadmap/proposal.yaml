@@ -121,7 +121,7 @@ functions:
 # notes: 
 # * cyclic calls are not allowed.
 # * The cursor is a helpful aid but is not mandatory. Interactive mode usually benefits from it.
-# * A run and its steps state is stored in a database so it is important not to strain it by storing huge amounts of data.
+# * A run and its steps state is stored in a database so it is important not to strain it by storing huge amounts of data since it is loaded for each step.
 # * run state: not started, stopping, stopped, in progress, done (done must be specified by a step and is not automatic)
 # * You can only "do" a step from a stopped position unless done. So, if it was done or in-progress, it stays done and returns conflict (409), 
 #   if it is canceled/stopped, failed, skipped, not started it can be restarted and its state is erased and returns 201.
@@ -140,7 +140,8 @@ functions:
 # * Quite obviously you will be able to query the state and all information via a REST API.
 # * Future: A security system to guard the APIs will be in place. Quite possibly connected to an external or internal OPA.
 #   Every step should be contained in an Audit trail so a history mechanism will be in place. Quite possibly a syslog audit log or file.
-#
-# * To have an ability for a kind of atomic operations. A run with a name cannot be created with the same name (of the run not the title of the template). So that 
-#   when a run can be run only one concurrently then this will throw an error if the run is created. You can cancel the run by making a stop request on it. 
+# * To have an ability for a kind of atomic operations. A run with a name and inprogress status cannot be created with the same name (of the run not the title of the template). 
+#   So that when a run can be run only one concurrently then this will throw an error if the run is created. You can cancel the run by making a stop request on it. 
 #   Once stopped, you can reset all or a specific step and start the run.
+# * A run contains a reference to a specific version of a template so that once created a modification to the actual template has no effect on the run.
+# * Tags can be set also when creating a run which will override existing tag names (from the template)
