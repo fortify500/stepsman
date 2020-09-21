@@ -18,8 +18,10 @@ package bl
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/dao"
+	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"os"
 	"strings"
 )
 
@@ -29,6 +31,7 @@ type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation() error
 	Migrate0(tx *sqlx.Tx) error
+	CreateRun(tx *sqlx.Tx, run interface{}) (int64, error)
 }
 
 func InitBL(driverName string, dataSourceName string) error {
@@ -42,25 +45,32 @@ func InitBL(driverName string, dataSourceName string) error {
 func migrateDB(driverName string, dataSourceName string) error {
 	var version = -1
 	var err error
-	driverName = strings.TrimSpace(driverName)
-	switch driverName {
-	case "sqlite3":
-	//case "postgres":
+	var internalDriverName string
+	switch strings.TrimSpace(driverName) {
+	case "sqlite":
+		internalDriverName = "sqlite3"
+		_, err = os.Stat(dataSourceName)
+		if err != nil {
+			return fmt.Errorf("failed to verify sqlite file existance: %s", dataSourceName)
+		}
+	case "postgresql":
+		internalDriverName = "pgx"
 	default:
 		return fmt.Errorf("unsupported driver name: %s", driverName)
 	}
 	{
-		dbOpen, err := sqlx.Open(driverName, dataSourceName)
+		dbOpen, err := sqlx.Open(internalDriverName, dataSourceName)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
-		switch driverName {
+		switch internalDriverName {
 		case "sqlite3":
-		//case "postgres":
+			DB = (*dao.Sqlite3SqlxDB)(dbOpen)
+		case "pgx":
+			DB = (*dao.PostgreSQLSqlxDB)(dbOpen)
 		default:
-			return fmt.Errorf("unsupported driver name: %s", driverName)
+			return fmt.Errorf("unsupported internal driver name: %s", internalDriverName)
 		}
-		DB = (*dao.Sqlite3SqlxDB)(dbOpen)
 	}
 
 	err = DB.VerifyDBCreation()
@@ -109,4 +119,12 @@ func migrateDB(driverName string, dataSourceName string) error {
 		return fmt.Errorf("failed to commit migration transaction: %w", err)
 	}
 	return nil
+}
+
+func Rollback(tx *sqlx.Tx, err error) error {
+	err2 := tx.Rollback()
+	if err2 != nil {
+		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
+	}
+	return err
 }

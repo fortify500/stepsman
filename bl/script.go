@@ -18,7 +18,6 @@ package bl
 import (
 	"fmt"
 	"github.com/jedib0t/go-pretty/table"
-	"github.com/jmoiron/sqlx"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"strings"
@@ -101,14 +100,6 @@ func (s *Script) Start(fileName string) (*RunRecord, error) {
 	err = runRow.Create(err, s, yamlBytes)
 
 	return &runRow, err
-}
-
-func Rollback(tx *sqlx.Tx, err error) error {
-	err2 := tx.Rollback()
-	if err2 != nil {
-		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	}
-	return err
 }
 
 func (s *Step) AdjustUnmarshalStep(fillStep bool) error {

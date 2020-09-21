@@ -20,6 +20,7 @@ import (
 	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
 	"path"
+	"strings"
 )
 
 var RootCmd = &cobra.Command{
@@ -38,6 +39,21 @@ hint: "stepsman prompt" will enter interactive mode`,
 			msg := "you must specify a supported driver (-d/--driver) or set in config file"
 			return fmt.Errorf(msg)
 		}
+		switch strings.TrimSpace(Parameters.DriverName) {
+		case "postgresql":
+			sslmode := "disable"
+			if Parameters.DatabaseSSLMode {
+				sslmode = "enable"
+			}
+			Parameters.DataSourceName = fmt.Sprintf("host=%s port=%d user=%s "+
+				"password=%s dbname=%s sslmode=%s",
+				Parameters.DatabaseHost,
+				Parameters.DatabasePort,
+				Parameters.DatabaseUserName,
+				Parameters.DatabasePassword,
+				Parameters.DatabaseName,
+				sslmode)
+		}
 		err := bl.InitBL(Parameters.DriverName, Parameters.DataSourceName)
 		if err != nil {
 			return err
@@ -47,7 +63,13 @@ hint: "stepsman prompt" will enter interactive mode`,
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringVarP(&Parameters.DriverName, "driver", "d", "", "supported storage drivers: sqlite3")
-	RootCmd.PersistentFlags().StringVarP(&Parameters.DataSourceName, "datasource", "o", path.Join(StoreDir, "stepsman.db"), "specify a datasource configuration for the driver selected")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DriverName, "driver", "d", "", "supported storage drivers: sqlite, postgresql")
+	RootCmd.PersistentFlags().StringVar(&Parameters.DataSourceName, "db-file-name", path.Join(StoreDir, "stepsman.db"), "sqlite file location")
 	RootCmd.PersistentFlags().StringVarP(&Parameters.CfgFile, "config", "c", "", "config file (default is $HOME/.stepsman.yaml)")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseHost, "db-host", "t", "localhost", "database host address")
+	RootCmd.PersistentFlags().Int64VarP(&Parameters.DatabasePort, "db-port", "p", 5432, "database port address")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseName, "db-name", "n", "stepsman", "database name")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseUserName, "db-user-name", "u", "stepsman", "database user name")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabasePassword, "db-password", "w", "stepsman", "database password")
+	RootCmd.PersistentFlags().BoolVarP(&Parameters.DatabaseSSLMode, "db-enable-ssl", "e", false, "database ssl on database port")
 }

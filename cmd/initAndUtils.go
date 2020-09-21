@@ -52,6 +52,12 @@ type AllParameters struct {
 	CfgFile            string
 	DriverName         string
 	DataSourceName     string
+	DatabaseHost       string
+	DatabasePort       int64
+	DatabaseName       string
+	DatabaseSSLMode    bool
+	DatabaseUserName   string
+	DatabasePassword   string
 	CreateFileName     string
 	Step               string
 	Run                string
@@ -117,7 +123,6 @@ func initConfig() {
 		log.Fatal(err)
 	}
 	StoreDir = path.Join(dir, ".stepsman")
-	_, err = os.Stat(StoreDir)
 
 	if Parameters.CfgFile != "" {
 		// Use config file from the flag.
@@ -157,7 +162,29 @@ func initConfig() {
 	if viper.IsSet("driver") {
 		Parameters.DriverName = viper.GetString("driver")
 	}
+	if viper.IsSet("db-file-name") {
+		Parameters.DataSourceName = viper.GetString("db-file-name")
+	}
+	if viper.IsSet("db-host") {
+		Parameters.DatabaseHost = viper.GetString("db-host")
+	}
+	if viper.IsSet("db-port") {
+		Parameters.DatabasePort = viper.GetInt64("db-port")
+	}
+	if viper.IsSet("db-name") {
+		Parameters.DatabaseName = viper.GetString("db-name")
+	}
+	if viper.IsSet("db-user-name") {
+		Parameters.DatabaseUserName = viper.GetString("db-user-name")
+	}
+	if viper.IsSet("db-password") {
+		Parameters.DatabasePassword = viper.GetString("db-password")
+	}
+	if viper.IsSet("db-enable-ssl") {
+		Parameters.DatabaseSSLMode = viper.GetBool("db-enable-ssl")
+	}
 
+	_, err = os.Stat(StoreDir)
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(StoreDir, 0700)
 		if err != nil {

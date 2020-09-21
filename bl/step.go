@@ -71,7 +71,7 @@ func listSteps(tx *sqlx.Tx, runId int64) ([]*StepRecord, error) {
 	var result []*StepRecord
 	var rows *sqlx.Rows
 	var err error
-	const query = "SELECT * FROM steps WHERE run_id=?"
+	const query = "SELECT * FROM steps WHERE run_id=$1"
 	if tx == nil {
 		rows, err = DB.SQL().Queryx(query, runId)
 	} else {
@@ -95,7 +95,7 @@ func listSteps(tx *sqlx.Tx, runId int64) ([]*StepRecord, error) {
 func getStep(tx *sqlx.Tx, runId int64, stepId int64) (*StepRecord, error) {
 	var result *StepRecord
 
-	const query = "SELECT * FROM steps where run_id=? and step_id=?"
+	const query = "SELECT * FROM steps where run_id=$1 and step_id=$2"
 	var rows *sqlx.Rows
 	var err error
 	if tx == nil {
@@ -133,7 +133,7 @@ func (s *StepRecord) ToStep() (*Step, error) {
 	return &step, nil
 }
 func (s *StepRecord) UpdateHeartBeat() error {
-	_, err := DB.SQL().Exec("update steps set UpdateHeheartbeat=? where run_id=? and step_id=?", time.Now().Unix(), s.RunId, s.StepId)
+	_, err := DB.SQL().Exec("update steps set UpdateHeheartbeat=$1 where run_id=$2 and step_id=$3", time.Now().Unix(), s.RunId, s.StepId)
 	if err != nil {
 		return fmt.Errorf("failed to update database step heartbeat: %w", err)
 	}
@@ -175,7 +175,7 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 			heartBeat = time.Now().Unix()
 		}
 	}
-	_, err = tx.Exec("update steps set status=?, heartbeat=? where run_id=? and step_id=?", newStatus, heartBeat, s.RunId, s.StepId)
+	_, err = tx.Exec("update steps set status=$1, heartbeat=$2 where run_id=$3 and step_id=$4", newStatus, heartBeat, s.RunId, s.StepId)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
@@ -189,7 +189,7 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 			return fmt.Errorf("failed to update database step row: %w", err)
 		}
 		if run.Status != RunInProgress {
-			_, err = tx.Exec("update runs set status=? where id=?", RunInProgress, s.RunId)
+			_, err = tx.Exec("update runs set status=$1 where id=$2", RunInProgress, s.RunId)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row: %w", err)
@@ -223,13 +223,13 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 			}
 		}
 		if allDoneOrSkipped {
-			_, err = tx.Exec("update runs set status=? where id=?", RunDone, s.RunId)
+			_, err = tx.Exec("update runs set status=$1 where id=$2", RunDone, s.RunId)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row status: %w", err)
 			}
 		} else if nextCursorPosition > 0 {
-			_, err = tx.Exec("update runs set cursor=? where id=?", steps[nextCursorPosition].StepId, s.RunId)
+			_, err = tx.Exec("update runs set cursor=$1 where id=$2", steps[nextCursorPosition].StepId, s.RunId)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row cursor: %w", err)

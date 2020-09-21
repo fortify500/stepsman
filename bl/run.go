@@ -70,7 +70,7 @@ func ListRuns() ([]*RunRecord, error) {
 
 func GetRun(runId int64) (*RunRecord, error) {
 	var result *RunRecord
-	rows, err := DB.SQL().Queryx("SELECT * FROM runs where id=?", runId)
+	rows, err := DB.SQL().Queryx("SELECT * FROM runs where id=$1", runId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
 	}
@@ -113,7 +113,7 @@ func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
 		err = Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
-	_, err = DB.SQL().Exec("update runs set status = ? where id=?", newStatus, r.Id)
+	_, err = DB.SQL().Exec("update runs set status=$1 where id=$2", newStatus, r.Id)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
@@ -131,7 +131,7 @@ func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
 	}
 
 	count := -1
-	err = tx.Get(&count, "SELECT count(*) FROM runs where status=? and title=?", RunInProgress, s.Title)
+	err = tx.Get(&count, "SELECT count(*) FROM runs where status=$1 and title=$2", RunInProgress, s.Title)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to query database runs table count for in progress rows: %w", err)
@@ -160,15 +160,10 @@ func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
 		Script: string(yamlBytes),
 	}
 
-	exec, err := tx.NamedExec("INSERT INTO runs(uuid, title, cursor, status, script) values(:uuid,:title,:cursor,:status,:script)", &runRecord)
+	runRecord.Id, err = DB.CreateRun(tx, &runRecord)
 	if err != nil {
 		err = Rollback(tx, err)
-		return fmt.Errorf("failed to insert database runs row: %w", err)
-	}
-	runRecord.Id, err = exec.LastInsertId()
-	if err != nil {
-		err = Rollback(tx, err)
-		return fmt.Errorf("failed to retrieve database runs row autoincremented id: %w", err)
+		return fmt.Errorf("failed to create runs row: %w", err)
 	}
 
 	for i, step := range s.Steps {
