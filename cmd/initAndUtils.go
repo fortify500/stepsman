@@ -17,9 +17,15 @@ package cmd
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"os"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -69,6 +75,9 @@ var Parameters = AllParameters{
 	FlagsReInit:        []func(){},
 }
 
+var StoreDir string
+var Luberjack *lumberjack.Logger
+
 type Error struct {
 	Technical error
 	Friendly  string
@@ -98,7 +107,65 @@ func Execute() bool {
 }
 
 func initConfig() {
-	err := bl.InitBL(Parameters.CfgFile)
+	flag.Parse()
+	dir, err := homedir.Dir()
+	if err != nil {
+		err = fmt.Errorf("failed to detect home directory: %w", err)
+		fmt.Println(err)
+		log.Fatal(err)
+	}
+	StoreDir = path.Join(dir, ".stepsman")
+	_, err = os.Stat(StoreDir)
+
+	if Parameters.CfgFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(Parameters.CfgFile)
+	} else {
+		viper.AddConfigPath(StoreDir)
+		viper.SetConfigName(".stepsman")
+	}
+
+	viper.AutomaticEnv() // read in environment variables that match
+	Luberjack = &lumberjack.Logger{
+		Filename:   path.Join(StoreDir, "stepsman.log"),
+		MaxSize:    100, // megabytes
+		MaxBackups: 2,
+		MaxAge:     1, // days
+		Compress:   true,
+	}
+	log.SetFormatter(&log.JSONFormatter{})
+	// use this later on
+	log.SetOutput(Luberjack)
+
+	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
+	//	Filename:   path.Join(StoreDir, "stepsman.log"),
+	//	MaxSize:    10, // megabytes
+	//	MaxBackups: 2,
+	//	MaxAge:     1, // days
+	//	Compress:   true,
+	//})
+	//log.SetOutput(mw)
+	log.SetLevel(log.TraceLevel)
+
+	// If a config file is found, read it in.
+	if err := viper.ReadInConfig(); err == nil {
+		log.Info("Using config file:", viper.ConfigFileUsed())
+	}
+
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(StoreDir, 0700)
+		if err != nil {
+			err = fmt.Errorf("failed to create the .stepsman diretory: %w", err)
+			fmt.Println(err)
+			log.Fatal(err)
+		}
+	} else if err != nil {
+		err = fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
+		fmt.Println(err)
+		log.Fatal(err)
+	}
+
+	err = bl.InitBL(path.Join(StoreDir, "stepsman.DB"))
 	if err != nil {
 		fmt.Println(err)
 		log.Fatal(err)
@@ -162,8 +229,7 @@ func parseStepId(runRecord *bl.RunRecord, idStr string) (int64, error) {
 
 func init() {
 	initConfig()
-	// use this later on
-	log.SetOutput(bl.Luberjack)
+	log.SetOutput(Luberjack)
 
 	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
 	//	Filename:   path.Join(StoreDir, "stepsman.log"),

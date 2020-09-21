@@ -16,75 +16,25 @@ limitations under the License.
 package bl
 
 import (
-	"flag"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/mitchellh/go-homedir"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-	"gopkg.in/natefinch/lumberjack.v2"
-	"os"
-	"path"
 )
 
 var DB *sqlx.DB
-var StoreDir string
-var Luberjack *lumberjack.Logger
 
-func InitBL(cfgFile string) error {
-	flag.Parse()
-	dir, err := homedir.Dir()
+func InitBL(dataSourceName string) error {
+	err := migrateDB(dataSourceName)
 	if err != nil {
-		return fmt.Errorf("failed to detect home directory: %w", err)
+		return err
 	}
-	StoreDir = path.Join(dir, ".stepsman")
-	_, err = os.Stat(StoreDir)
+	return nil
+}
 
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.AddConfigPath(StoreDir)
-		viper.SetConfigName(".stepsman")
-	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-	Luberjack = &lumberjack.Logger{
-		Filename:   path.Join(StoreDir, "stepsman.log"),
-		MaxSize:    100, // megabytes
-		MaxBackups: 2,
-		MaxAge:     1, // days
-		Compress:   true,
-	}
-	// use this later on
-	log.SetOutput(Luberjack)
-
-	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
-	//	Filename:   path.Join(StoreDir, "stepsman.log"),
-	//	MaxSize:    10, // megabytes
-	//	MaxBackups: 2,
-	//	MaxAge:     1, // days
-	//	Compress:   true,
-	//})
-	//log.SetOutput(mw)
-	log.SetLevel(log.TraceLevel)
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		log.Info("Using config file:", viper.ConfigFileUsed())
-	}
-
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(StoreDir, 0700)
-		if err != nil {
-			return fmt.Errorf("failed to create the .stepsman diretory: %w", err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
-	}
-
-	DB, err = sqlx.Open("sqlite3", path.Join(StoreDir, "stepsman.DB"))
+func migrateDB(dataSourceName string) error {
+	var version = -1
+	var err error
+	DB, err = sqlx.Open("sqlite3", dataSourceName)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -100,16 +50,7 @@ func InitBL(cfgFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open a database connection: %w", err)
 	}
-	err = migrateDB()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func migrateDB() error {
-	var version = -1
-	_, err := DB.Exec(`CREATE TABLE IF NOT EXISTS migration (
+	_, err = DB.Exec(`CREATE TABLE IF NOT EXISTS migration (
     id INTEGER PRIMARY KEY NOT NULL,
 	version INTEGER NOT NULL
     );`)
