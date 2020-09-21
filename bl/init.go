@@ -34,19 +34,19 @@ type DBI interface {
 	CreateRun(tx *sqlx.Tx, run interface{}) (int64, error)
 }
 
-func InitBL(driverName string, dataSourceName string) error {
-	err := migrateDB(driverName, dataSourceName)
+func InitBL(databaseVendor string, dataSourceName string) error {
+	err := migrateDB(databaseVendor, dataSourceName)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func migrateDB(driverName string, dataSourceName string) error {
+func migrateDB(databaseVendor string, dataSourceName string) error {
 	var version = -1
 	var err error
 	var internalDriverName string
-	switch strings.TrimSpace(driverName) {
+	switch strings.TrimSpace(databaseVendor) {
 	case "sqlite":
 		internalDriverName = "sqlite3"
 		_, err = os.Stat(dataSourceName)
@@ -56,7 +56,7 @@ func migrateDB(driverName string, dataSourceName string) error {
 	case "postgresql":
 		internalDriverName = "pgx"
 	default:
-		return fmt.Errorf("unsupported driver name: %s", driverName)
+		return fmt.Errorf("unsupported database vendor name: %s", databaseVendor)
 	}
 	{
 		dbOpen, err := sqlx.Open(internalDriverName, dataSourceName)
@@ -69,7 +69,7 @@ func migrateDB(driverName string, dataSourceName string) error {
 		case "pgx":
 			DB = (*dao.PostgreSQLSqlxDB)(dbOpen)
 		default:
-			return fmt.Errorf("unsupported internal driver name: %s", internalDriverName)
+			return fmt.Errorf("unsupported internal database driver name: %s", internalDriverName)
 		}
 	}
 

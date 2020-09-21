@@ -50,7 +50,7 @@ const (
 type AllParameters struct {
 	// Flags
 	CfgFile            string
-	DriverName         string
+	DatabaseVendor     string
 	DataSourceName     string
 	DatabaseHost       string
 	DatabasePort       int64
@@ -159,8 +159,8 @@ func initConfig() {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
 
-	if viper.IsSet("driver") {
-		Parameters.DriverName = viper.GetString("driver")
+	if viper.IsSet("db-vendor") {
+		Parameters.DatabaseVendor = viper.GetString("db-vendor")
 	}
 	if viper.IsSet("db-file-name") {
 		Parameters.DataSourceName = viper.GetString("db-file-name")
