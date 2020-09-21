@@ -50,6 +50,8 @@ const (
 type AllParameters struct {
 	// Flags
 	CfgFile            string
+	DriverName         string
+	DataSourceName     string
 	CreateFileName     string
 	Step               string
 	Run                string
@@ -152,6 +154,10 @@ func initConfig() {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
 
+	if viper.IsSet("driver") {
+		Parameters.DriverName = viper.GetString("driver")
+	}
+
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(StoreDir, 0700)
 		if err != nil {
@@ -161,12 +167,6 @@ func initConfig() {
 		}
 	} else if err != nil {
 		err = fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
-		fmt.Println(err)
-		log.Fatal(err)
-	}
-
-	err = bl.InitBL(path.Join(StoreDir, "stepsman.DB"))
-	if err != nil {
 		fmt.Println(err)
 		log.Fatal(err)
 	}

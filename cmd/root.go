@@ -16,7 +16,10 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
+	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
+	"path"
 )
 
 var RootCmd = &cobra.Command{
@@ -29,9 +32,22 @@ var RootCmd = &cobra.Command{
 * Tests
 * Anything that looks like a list of steps to complete
 
-"stepsman" with no commands and parameters will enter interactive mode`,
+hint: "stepsman prompt" will enter interactive mode`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if Parameters.DriverName == "" {
+			msg := "you must specify a supported driver (-d/--driver) or set in config file"
+			return fmt.Errorf(msg)
+		}
+		err := bl.InitBL(Parameters.DriverName, Parameters.DataSourceName)
+		if err != nil {
+			return err
+		}
+		return nil
+	},
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringVar(&Parameters.CfgFile, "config", "", "config file (default is $HOME/.stepsman.yaml)")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DriverName, "driver", "d", "", "supported storage drivers: sqlite3")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DataSourceName, "datasource", "o", path.Join(StoreDir, "stepsman.db"), "specify a datasource configuration for the driver selected")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.CfgFile, "config", "c", "", "config file (default is $HOME/.stepsman.yaml)")
 }

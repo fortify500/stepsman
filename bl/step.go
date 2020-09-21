@@ -73,7 +73,7 @@ func listSteps(tx *sqlx.Tx, runId int64) ([]*StepRecord, error) {
 	var err error
 	const query = "SELECT * FROM steps WHERE run_id=?"
 	if tx == nil {
-		rows, err = DB.Queryx(query, runId)
+		rows, err = DB.SQL().Queryx(query, runId)
 	} else {
 		rows, err = tx.Queryx(query, runId)
 	}
@@ -99,7 +99,7 @@ func getStep(tx *sqlx.Tx, runId int64, stepId int64) (*StepRecord, error) {
 	var rows *sqlx.Rows
 	var err error
 	if tx == nil {
-		rows, err = DB.Queryx(query, runId, stepId)
+		rows, err = DB.SQL().Queryx(query, runId, stepId)
 	} else {
 		rows, err = tx.Queryx(query, runId, stepId)
 	}
@@ -133,14 +133,14 @@ func (s *StepRecord) ToStep() (*Step, error) {
 	return &step, nil
 }
 func (s *StepRecord) UpdateHeartBeat() error {
-	_, err := DB.Exec("update steps set UpdateHeheartbeat=? where run_id=? and step_id=?", time.Now().Unix(), s.RunId, s.StepId)
+	_, err := DB.SQL().Exec("update steps set UpdateHeheartbeat=? where run_id=? and step_id=?", time.Now().Unix(), s.RunId, s.StepId)
 	if err != nil {
 		return fmt.Errorf("failed to update database step heartbeat: %w", err)
 	}
 	return nil
 }
 func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error {
-	tx, err := DB.Beginx()
+	tx, err := DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}

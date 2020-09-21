@@ -52,7 +52,7 @@ func TranslateRunStatus(status RunStatusType) (string, error) {
 
 func ListRuns() ([]*RunRecord, error) {
 	var result []*RunRecord
-	rows, err := DB.Queryx("SELECT * FROM runs ORDER BY id DESC")
+	rows, err := DB.SQL().Queryx("SELECT * FROM runs ORDER BY id DESC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table: %w", err)
 	}
@@ -70,7 +70,7 @@ func ListRuns() ([]*RunRecord, error) {
 
 func GetRun(runId int64) (*RunRecord, error) {
 	var result *RunRecord
-	rows, err := DB.Queryx("SELECT * FROM runs where id=?", runId)
+	rows, err := DB.SQL().Queryx("SELECT * FROM runs where id=?", runId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
 	}
@@ -95,7 +95,7 @@ func (r *RunRecord) GetCursorStep() (*StepRecord, error) {
 }
 
 func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
-	tx, err := DB.Beginx()
+	tx, err := DB.SQL().Beginx()
 	if newStatus == RunStopped {
 		steps, err := listSteps(tx, r.Id)
 		if err != nil {
@@ -113,7 +113,7 @@ func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
 		err = Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
-	_, err = DB.Exec("update runs set status = ? where id=?", newStatus, r.Id)
+	_, err = DB.SQL().Exec("update runs set status = ? where id=?", newStatus, r.Id)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
@@ -125,7 +125,7 @@ func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
 	return err
 }
 func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
-	tx, err := DB.Beginx()
+	tx, err := DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to create database transaction: %w", err)
 	}

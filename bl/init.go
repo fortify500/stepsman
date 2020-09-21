@@ -17,47 +17,57 @@ package bl
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"strings"
 )
 
-var DB *sqlx.DB
+var DB DBI
 
-func InitBL(dataSourceName string) error {
-	err := migrateDB(dataSourceName)
+type DBI interface {
+	SQL() *sqlx.DB
+	VerifyDBCreation() error
+	Migrate0(tx *sqlx.Tx) error
+}
+
+func InitBL(driverName string, dataSourceName string) error {
+	err := migrateDB(driverName, dataSourceName)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func migrateDB(dataSourceName string) error {
+func migrateDB(driverName string, dataSourceName string) error {
 	var version = -1
 	var err error
-	DB, err = sqlx.Open("sqlite3", dataSourceName)
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+	driverName = strings.TrimSpace(driverName)
+	switch driverName {
+	case "sqlite3":
+	//case "postgres":
+	default:
+		return fmt.Errorf("unsupported driver name: %s", driverName)
 	}
-	_, err = DB.Exec("PRAGMA journal_mode = WAL")
-	if err != nil {
-		return fmt.Errorf("failed to set journal mode: %w", err)
+	{
+		dbOpen, err := sqlx.Open(driverName, dataSourceName)
+		if err != nil {
+			return fmt.Errorf("failed to open database: %w", err)
+		}
+		switch driverName {
+		case "sqlite3":
+		//case "postgres":
+		default:
+			return fmt.Errorf("unsupported driver name: %s", driverName)
+		}
+		DB = (*dao.Sqlite3SqlxDB)(dbOpen)
 	}
-	_, err = DB.Exec("PRAGMA synchronous = NORMAL")
+
+	err = DB.VerifyDBCreation()
 	if err != nil {
-		return fmt.Errorf("failed to set synchronous mode: %w", err)
+		return fmt.Errorf("failed to verify database table creation: %w", err)
 	}
-	err = DB.Ping()
-	if err != nil {
-		return fmt.Errorf("failed to open a database connection: %w", err)
-	}
-	_, err = DB.Exec(`CREATE TABLE IF NOT EXISTS migration (
-    id INTEGER PRIMARY KEY NOT NULL,
-	version INTEGER NOT NULL
-    );`)
-	if err != nil {
-		return fmt.Errorf("failed to verify database migration table creation: %w", err)
-	}
-	tx, err := DB.Beginx()
+	tx, err := DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}
@@ -83,50 +93,11 @@ func migrateDB(dataSourceName string) error {
 	}
 	switch version {
 	case 0:
-		_, err := tx.Exec(`CREATE TABLE runs (
-                                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                                     uuid TEXT NOT NULL,
-	                                 title TEXT,
-	                                 cursor INTEGER,
-	                                 status INTEGER NOT NULL,
-	                                 script TEXT
-                                     )`)
+		DB.Migrate0(tx)
 		if err != nil {
 			err = Rollback(tx, err)
-			return fmt.Errorf("failed to create database runs table: %w", err)
+			return err
 		}
-		_, err = tx.Exec(`CREATE TABLE steps (
-                                     run_id INTEGER NOT NULL,
-                                     step_id INTEGER NOT NULL,
-                                     uuid TEXT NOT NULL,
-	                                 name TEXT,
-	                                 status INTEGER NOT NULL,
-	                                 heartbeat INTEGER NOT NULL,
-	                                 script TEXT,
-	                                 PRIMARY KEY (run_id, step_id)
-                                     )`)
-		if err != nil {
-			err = Rollback(tx, err)
-			return fmt.Errorf("failed to create database steps table: %w", err)
-		}
-		_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_uuid ON runs (uuid)`)
-		if err != nil {
-			err = Rollback(tx, err)
-			return fmt.Errorf("failed to create index idx_runs_title_status: %w", err)
-		}
-		_, err = tx.Exec(`CREATE INDEX idx_runs_title_status ON runs (title, status)`)
-		if err != nil {
-			err = Rollback(tx, err)
-			return fmt.Errorf("failed to create index idx_runs_title_status: %w", err)
-		}
-
-		_, err = tx.Exec(`CREATE INDEX idx_runs_status ON runs (status)`)
-		if err != nil {
-			err = Rollback(tx, err)
-			return fmt.Errorf("failed to create index idx_runs_status: %w", err)
-		}
-		//CREATE INDEX idx_contacts_title
-		//ON contacts (first_name, last_name);
 		_, err = tx.Exec("update migration set version=1 where id=1")
 		if err != nil {
 			err = Rollback(tx, err)
