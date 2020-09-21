@@ -11,8 +11,8 @@ validations:
   - if: >
       time.now_ns()-(24*60*1000000000)>run["created_at"]
     then:
-      - set-run-result: '{"status":"failed"}'
-      - set-run-status: failed
+      set-run-result: '{"status":"failed"}'
+      set-run-status: failed
 steps:
   - name: Starting
     description: >
@@ -34,12 +34,14 @@ steps:
       check that stepshello.world was created via rest
     label: call_rest
     do:
-      type:
-        REST # 200 is asynchronous done, 201 means asynchronous process(InProgress)
+      type: REST # 200 is synchronous done, 201 means asynchronous process(InProgress)
       # the callee is supposed to perform heartbeats (PUT InProgress) and set resolution: Done, Failed
       # any other http status is an automatic fail.
       timeout: 180 # seconds. default 60. if the callee
       options:
+        map-response-status:
+          - 201: done # when you want to override the default.
+          - _: done # example of how all http statuses are translated to done so it will always succeed.
         method: POST
         body: >
           {}
@@ -53,9 +55,21 @@ steps:
           - if: >
               decision["result"]=="rollback"
             then:
-              - do: end
+              do:
+                - end
           - then:
-              - set-run-status: failed
+              set-run-status: failed
+              #optional: just for demonstration of return error code if this was a rest call
+              return-error:
+                code: 1
+                message: "return to the previous state"
+                data: >
+                  {{ decision["result" ]}}
+          - if: >
+              decision["result"]=="next"
+            then:
+              #optional: just for demonstration of return a successful result if this was a rest call
+              return-result: "success"
   - name: "end of run"
     label: end
 
@@ -118,12 +132,12 @@ functions:
     type: externa-ml # can be plugged-in
     #memoized: true by default
 
-# notes: 
+# notes:
 # * cyclic calls are not allowed.
 # * The cursor is a helpful aid but is not mandatory. Interactive mode usually benefits from it.
 # * A run and its steps state is stored in a database so it is important not to strain it by storing huge amounts of data since it is loaded for each step.
 # * run state: not started, stopping, stopped, in progress, done (done must be specified by a step and is not automatic)
-# * You can only "do" a step from a stopped position unless done. So, if it was done or in-progress, it stays done and returns conflict (409), 
+# * You can only "do" a step from a stopped position unless done. So, if it was done or in-progress, it stays done and returns conflict (409),
 #   if it is canceled/stopped, failed, skipped, not started it can be restarted and its state is erased and returns 201.
 #   You can also change a step from a running state to a stopped state and then restart it.
 #   step states: not started, stopping, stopped, failed, in progress, skipped, done.
@@ -140,8 +154,9 @@ functions:
 # * Quite obviously you will be able to query the state and all information via a REST API.
 # * Future: A security system to guard the APIs will be in place. Quite possibly connected to an external or internal OPA.
 #   Every step should be contained in an Audit trail so a history mechanism will be in place. Quite possibly a syslog audit log or file.
-# * To have an ability for a kind of atomic operations. A run with a name and inprogress status cannot be created with the same name (of the run not the title of the template). 
-#   So that when a run can be run only one concurrently then this will throw an error if the run is created. You can cancel the run by making a stop request on it. 
+# * To have an ability for a kind of atomic operations. A run with a name and inprogress status cannot be created with the same name (of the run not the title of the template).
+#   So that when a run can be run only one concurrently then this will throw an error if the run is created. You can cancel the run by making a stop request on it.
 #   Once stopped, you can reset all or a specific step and start the run.
 # * A run contains a reference to a specific version of a template so that once created a modification to the actual template has no effect on the run.
 # * Tags can be set also when creating a run which will override existing tag names (from the template)
+# * The server restapi will be a json-rpc style with 1 endpoint. /v0/json-rpc
