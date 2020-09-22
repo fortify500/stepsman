@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
@@ -57,20 +56,17 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 	}
 	runs, err := bl.ListRuns()
 	if err != nil {
-		msg := "failed to list runs"
-
 		return nil, &jsonrpc.Error{
-			Code:    1,
-			Message: fmt.Errorf(msg+": %w", err).Error(),
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
 			Data:    nil,
 		}
 	}
 	runRpcRecords, err := RunRecordToRunRPCRecord(runs)
 	if err != nil {
-		msg := "failed to translate run status"
 		return nil, &jsonrpc.Error{
-			Code:    1,
-			Message: fmt.Errorf(msg+": %w", err).Error(),
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
 			Data:    nil,
 		}
 	}

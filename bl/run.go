@@ -46,7 +46,11 @@ func TranslateRunStatus(status RunStatusType) (string, error) {
 	case RunDone:
 		return "Done", nil
 	default:
-		return "", fmt.Errorf("failed to translate run status: %d", status)
+		return "", &Error{
+			code: 0,
+			err:  fmt.Errorf("failed to translate run status: %d", status),
+		}
+
 	}
 }
 

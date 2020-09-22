@@ -27,6 +27,35 @@ import (
 
 var DB DBI
 
+type Error struct {
+	msg  string
+	code int64
+	err  error
+}
+
+func WrapBLError(msg string, code int64, err error, args []interface{}) error {
+	var errMsg string
+	if err != nil {
+		errMsg = fmt.Errorf(msg, args...).Error()
+	} else {
+		errMsg = fmt.Sprintf(msg, args)
+	}
+	return &Error{
+		msg:  errMsg,
+		code: code,
+		err:  err,
+	}
+}
+func (e *Error) Error() string {
+	return e.msg
+}
+func (e *Error) Code() int64 {
+	return e.code
+}
+func (e *Error) Unwrap() error {
+	return e.err
+}
+
 type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation() error
