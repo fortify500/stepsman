@@ -59,7 +59,6 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
-			Data:    nil,
 		}
 	}
 	runRpcRecords, err := RunRecordToRunRPCRecord(runs)
@@ -67,7 +66,6 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
-			Data:    nil,
 		}
 	}
 	return runRpcRecords, nil
