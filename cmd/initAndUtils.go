@@ -59,6 +59,7 @@ type AllParameters struct {
 	DatabaseUserName   string
 	DatabasePassword   string
 	CreateFileName     string
+	ServerPort         int64
 	Step               string
 	Run                string
 	DisableSuggestions bool
@@ -256,16 +257,4 @@ func parseStepId(runRecord *bl.RunRecord, idStr string) (int64, error) {
 
 func init() {
 	initConfig()
-	log.SetOutput(Luberjack)
-
-	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
-	//	Filename:   path.Join(StoreDir, "stepsman.log"),
-	//	MaxSize:    10, // megabytes
-	//	MaxBackups: 2,
-	//	MaxAge:     1, // days
-	//	Compress:   true,
-	//})
-	//log.SetOutput(mw)
-	log.SetLevel(log.TraceLevel)
-
 }
