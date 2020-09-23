@@ -34,7 +34,7 @@ Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListRun
 		t := table.NewWriter()
-		t.SetStyle(bl.NoBordersStyle)
+		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"", "", "ID", "UUID", "Title", "Status", "HeartBeat"})
 		runId, err := parseRunId(args[0])

@@ -17,7 +17,6 @@ package bl
 
 import (
 	"fmt"
-	"github.com/fortify500/stepsman/dao"
 	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -26,6 +25,7 @@ import (
 )
 
 var DB DBI
+var IsRemote = false
 
 type Error struct {
 	msg  string
@@ -64,9 +64,14 @@ type DBI interface {
 }
 
 func InitBL(databaseVendor string, dataSourceName string) error {
-	err := migrateDB(databaseVendor, dataSourceName)
-	if err != nil {
-		return err
+	if databaseVendor != "remote" {
+		IsRemote = false
+		err := migrateDB(databaseVendor, dataSourceName)
+		if err != nil {
+			return err
+		}
+	} else {
+		IsRemote = true
 	}
 	return nil
 }
@@ -94,9 +99,9 @@ func migrateDB(databaseVendor string, dataSourceName string) error {
 		}
 		switch internalDriverName {
 		case "sqlite3":
-			DB = (*dao.Sqlite3SqlxDB)(dbOpen)
+			DB = (*Sqlite3SqlxDB)(dbOpen)
 		case "pgx":
-			DB = (*dao.PostgreSQLSqlxDB)(dbOpen)
+			DB = (*PostgreSQLSqlxDB)(dbOpen)
 		default:
 			return fmt.Errorf("unsupported internal database driver name: %s", internalDriverName)
 		}

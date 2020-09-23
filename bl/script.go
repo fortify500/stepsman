@@ -17,7 +17,6 @@ package bl
 
 import (
 	"fmt"
-	"github.com/jedib0t/go-pretty/table"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"strings"
@@ -142,14 +141,4 @@ func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
 		}
 	}
 	return nil
-}
-
-var NoBordersStyle = table.Style{
-	Name:    "StyleDefault",
-	Box:     table.StyleBoxDefault,
-	Color:   table.ColorOptionsDefault,
-	Format:  table.FormatOptionsDefault,
-	HTML:    table.DefaultHTMLOptions,
-	Options: table.OptionsNoBordersAndSeparators,
-	Title:   table.TitleOptionsDefault,
 }

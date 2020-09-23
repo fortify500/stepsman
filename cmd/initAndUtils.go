@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/jedib0t/go-pretty/table"
 	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -257,4 +258,14 @@ func parseStepId(runRecord *bl.RunRecord, idStr string) (int64, error) {
 
 func init() {
 	initConfig()
+}
+
+var NoBordersStyle = table.Style{
+	Name:    "StyleDefault",
+	Box:     table.StyleBoxDefault,
+	Color:   table.ColorOptionsDefault,
+	Format:  table.FormatOptionsDefault,
+	HTML:    table.DefaultHTMLOptions,
+	Options: table.OptionsNoBordersAndSeparators,
+	Title:   table.TitleOptionsDefault,
 }

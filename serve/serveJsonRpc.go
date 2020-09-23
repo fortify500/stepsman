@@ -28,29 +28,18 @@ import (
 )
 
 type (
-	RunRPCRecord struct {
-		Id     int64
-		UUID   string
-		Title  string
-		Cursor int64
-		Status string
-		Script string
-	}
-)
-
-type (
-	ListRunsHandler struct{}
-	ListRunsParams  struct {
+	GetRunsHandler struct{}
+	GetRunsParams  struct {
 		Name  string      `json:"name"`
 		Extra interface{} `json:"extra"`
 	}
-	ListRunsResult []RunRPCRecord
+	GetRunsResult []bl.RunRPCRecord
 )
 
-func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	valve.Lever(c).Open()
 	defer valve.Lever(c).Close()
-	var p ListRunsParams
+	var p GetRunsParams
 	if errResult := JSONRPCUnmarshal(params, &p); errResult != nil {
 		return nil, errResult
 	}
@@ -71,14 +60,14 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 	return runRpcRecords, nil
 }
 
-func RunRecordToRunRPCRecord(runs []*bl.RunRecord) ([]RunRPCRecord, error) {
-	var runRpcRecords []RunRPCRecord
+func RunRecordToRunRPCRecord(runs []*bl.RunRecord) ([]bl.RunRPCRecord, error) {
+	var runRpcRecords []bl.RunRPCRecord
 	for _, run := range runs {
 		status, err := bl.TranslateRunStatus(run.Status)
 		if err != nil {
 			return nil, err
 		}
-		runRpcRecords = append(runRpcRecords, RunRPCRecord{
+		runRpcRecords = append(runRpcRecords, bl.RunRPCRecord{
 			Id:     run.Id,
 			UUID:   run.UUID,
 			Title:  run.Title,
@@ -101,12 +90,11 @@ func JSONRPCUnmarshal(params *fastjson.RawMessage, dst interface{}) *jsonrpc.Err
 	}
 	return nil
 }
-
 func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 
 	mr := jsonrpc.NewMethodRepository()
 
-	if err := mr.RegisterMethod("getRuns", ListRunsHandler{}, ListRunsParams{}, ListRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(bl.GET_RUNS, GetRunsHandler{}, GetRunsParams{}, GetRunsResult{}); err != nil {
 		log.Error(err)
 	}
 	return mr

@@ -60,7 +60,7 @@ You can also describe a single step by adding --step <step id>.`,
 			return
 		}
 		mainT := table.NewWriter()
-		mainT.SetStyle(bl.NoBordersStyle)
+		mainT.SetStyle(NoBordersStyle)
 		mainT.SetOutputMirror(os.Stdout)
 		if stepId == -1 {
 			mainT.AppendRow(table.Row{"Description"})
@@ -78,7 +78,7 @@ You can also describe a single step by adding --step <step id>.`,
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
 				//t.SetTitle(cursor + checked + " " + text.WrapText(stepRecord.Name, 70))
-				t.SetStyle(bl.NoBordersStyle)
+				t.SetStyle(NoBordersStyle)
 				t.AppendRows([]table.Row{
 					//{cursor, checked, stepRecord.StepId, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", run.Id},
@@ -138,7 +138,7 @@ You can also describe a single step by adding --step <step id>.`,
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
 				//t.SetTitle(cursor + checked + " " + text.WrapText(stepRecord.Name, 70))
-				t.SetStyle(bl.NoBordersStyle)
+				t.SetStyle(NoBordersStyle)
 				t.AppendRows([]table.Row{
 					//{cursor, checked, stepRecord.StepId, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", stepRecord.StepId},

@@ -63,7 +63,7 @@ hint: "stepsman prompt" will enter interactive mode`,
 }
 
 func init() {
-	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseVendor, "db-vendor", "V", "", "supported database vendors: sqlite, postgresql")
+	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseVendor, "db-vendor", "V", "", "supported database vendors: sqlite, postgresql, remote")
 	RootCmd.PersistentFlags().StringVar(&Parameters.DataSourceName, "db-file-name", path.Join(StoreDir, "stepsman.db"), "sqlite file location")
 	RootCmd.PersistentFlags().StringVarP(&Parameters.CfgFile, "config", "c", "", "config file (default is $HOME/.stepsman.yaml)")
 	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseHost, "db-host", "H", "localhost", "database host address")

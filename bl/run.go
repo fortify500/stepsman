@@ -37,6 +37,22 @@ type RunRecord struct {
 	Script string
 }
 
+func TranslateToRunStatus(status string) (RunStatusType, error) {
+	switch status {
+	case "Stopped":
+		return RunStopped, nil
+	case "In Progress":
+		return RunInProgress, nil
+	case "Done":
+		return RunDone, nil
+	default:
+		return RunStopped, &Error{
+			code: 0,
+			err:  fmt.Errorf("failed to translate run status: %s", status),
+		}
+
+	}
+}
 func TranslateRunStatus(status RunStatusType) (string, error) {
 	switch status {
 	case RunStopped:
@@ -53,8 +69,14 @@ func TranslateRunStatus(status RunStatusType) (string, error) {
 
 	}
 }
-
 func ListRuns() ([]*RunRecord, error) {
+	if IsRemote {
+		return RemoteListRuns()
+	} else {
+		return listRuns()
+	}
+}
+func listRuns() ([]*RunRecord, error) {
 	var result []*RunRecord
 	rows, err := DB.SQL().Queryx("SELECT * FROM runs ORDER BY id DESC")
 	if err != nil {
