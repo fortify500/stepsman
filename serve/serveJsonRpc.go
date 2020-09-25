@@ -28,18 +28,19 @@ import (
 )
 
 type (
-	GetRunsHandler struct{}
-	GetRunsParams  struct {
+	ListRunsHandler struct{}
+	ListRunsParams  struct {
 		Name  string      `json:"name"`
 		Extra interface{} `json:"extra"`
 	}
-	GetRunsResult []bl.RunRPCRecord
+	ListRunsResult []bl.RunRPCRecord
 )
 
-func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+// TODO: need to change this to a response with data and range result{} start, end (start+returned size) and total (hardest to calculate)
+func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	valve.Lever(c).Open()
 	defer valve.Lever(c).Close()
-	var p GetRunsParams
+	var p ListRunsParams
 	if errResult := JSONRPCUnmarshal(params, &p); errResult != nil {
 		return nil, errResult
 	}
@@ -94,7 +95,7 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 
 	mr := jsonrpc.NewMethodRepository()
 
-	if err := mr.RegisterMethod(bl.GET_RUNS, GetRunsHandler{}, GetRunsParams{}, GetRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(bl.LIST_RUNS, ListRunsHandler{}, ListRunsParams{}, ListRunsResult{}); err != nil {
 		log.Error(err)
 	}
 	return mr

@@ -33,7 +33,7 @@ type (
 		Data    interface{} `json:"data,omitempty"`
 	}
 )
-type GetRunsResponse struct {
+type ListRunsResponse struct {
 	Version string         `json:"jsonrpc"`
 	Result  []RunRPCRecord `json:"result,omitempty"`
 	Error   JSONRPCError   `json:"error,omitempty"`
@@ -42,7 +42,7 @@ type GetRunsResponse struct {
 
 func RemoteListRuns() ([]*RunRecord, error) {
 	result := make([]*RunRecord, 0)
-	request, err := NewMarshaledJSONRPCRequest("1", GET_RUNS, &struct {
+	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &struct {
 	}{})
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func RemoteListRuns() ([]*RunRecord, error) {
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to reach remote server, got: %d", response.StatusCode)
 	}
-	var jsonRPCResult GetRunsResponse
+	var jsonRPCResult ListRunsResponse
 	decoder := json.NewDecoder(response.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&jsonRPCResult); err != nil {

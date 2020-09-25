@@ -27,5 +27,5 @@ type (
 )
 
 const (
-	GET_RUNS = "getRuns"
+	LIST_RUNS = "listRuns"
 )

@@ -160,3 +160,8 @@ functions:
 # * A run contains a reference to a specific version of a template so that once created a modification to the actual template has no effect on the run.
 # * Tags can be set also when creating a run which will override existing tag names (from the template)
 # * The serve restapi will be a json-rpc style with 1 endpoint. /v0/json-rpc
+# * Important to note that a decision should not have side effects. If you do, then you have to understand that if you set-done event asynchronously concurrently then only one
+#   will take effect. It will set-done with a transaction, and only then execute the "then" clauses. if it will detect that the status is already done, you will get an error back,
+#   which is ok to ignore if, for example, it was caused by unaware callers (such as a link from a bunch of emails like in approvals process).
+# * Vault secrets and properties (such as tenant properties) will be retrieved by default from a static text file or hashicorp vault client.
+# * You can access environment variables via "env.".
