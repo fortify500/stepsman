@@ -56,8 +56,11 @@ func listRunsInternal(runId int64) {
 		// TODO: add a more useful filter
 		runs, runRange, err = bl.ListRuns(&dao.Query{
 			Range: dao.RangeQuery{
-				Range:        dao.Range{},
-				ComputeTotal: true,
+				Range: dao.Range{
+					Start: Parameters.RangeStart,
+					End:   Parameters.RangeEnd,
+				},
+				ReturnTotal: Parameters.RangeReturnTotal,
 			},
 			Sort:   dao.Sort{},
 			Filter: nil,
@@ -96,4 +99,11 @@ func listRunsInternal(runId int64) {
 
 func init() {
 	listCmd.AddCommand(listRunsCmd)
+	initFlags := func() {
+		listRunsCmd.ResetFlags()
+		listRunsCmd.Flags().Int64Var(&Parameters.RangeStart, "range-start", 0, "Range Start")
+		listRunsCmd.Flags().Int64Var(&Parameters.RangeEnd, "range-end", -1, "Range End")
+		listRunsCmd.Flags().BoolVar(&Parameters.RangeReturnTotal, "range-return-total", false, "Range Return Total")
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

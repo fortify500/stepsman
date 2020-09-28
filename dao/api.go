@@ -41,7 +41,7 @@ type RangeResult struct {
 }
 type RangeQuery struct {
 	Range
-	ComputeTotal bool `json:"return-total"`
+	ReturnTotal bool `json:"return-total"`
 }
 type Sort struct {
 	Fields []string // ordered left to right

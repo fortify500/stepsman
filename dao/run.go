@@ -44,9 +44,11 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	var err error
 	var count int64 = -1
 	sql := ""
+	sqlNoRange := ""
 	params := make([]interface{}, 0)
 	if query == nil {
-		sql = "SELECT * FROM runs ORDER BY id DESC LIMIT 20"
+		sqlNoRange = "SELECT * FROM runs ORDER BY id DESC"
+		sql = sqlNoRange + " LIMIT 20"
 	} else {
 		sql = "SELECT * FROM runs"
 		{
@@ -148,6 +150,7 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 				sql += " ORDER BY id DESC"
 			}
 		}
+		sqlNoRange = sql
 		{
 			if query.Range.End >= query.Range.Start && query.Range.Start > 0 {
 				offset := query.Range.Start - 1
@@ -156,12 +159,12 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 			}
 		}
 	}
-	if query != nil && query.Range.ComputeTotal {
+	if query != nil && query.Range.ReturnTotal {
 		tx, err := DB.SQL().Beginx()
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
 		}
-		err = tx.Get(&count, "select count(*) from ("+sql+") C", params...)
+		err = tx.Get(&count, "select count(*) from ("+sqlNoRange+") C", params...)
 		if err != nil {
 			err = Rollback(tx, err)
 			return nil, nil, fmt.Errorf("failed to query count database run table: %w", err)

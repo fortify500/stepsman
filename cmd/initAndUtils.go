@@ -65,6 +65,10 @@ type AllParameters struct {
 	Step               string
 	Run                int64
 	DisableSuggestions bool
+	//Query
+	RangeStart       int64
+	RangeEnd         int64
+	RangeReturnTotal bool
 	// Others
 	InitialInput   string
 	CurrentCommand CommandType
