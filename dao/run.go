@@ -199,8 +199,10 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 		if len(result) > 0 {
 			if query != nil && query.Range.End >= query.Range.Start && query.Range.Start > 0 {
 				rangeResult.Start = query.Range.Start
-				rangeResult.End = query.Range.Start + int64(len(result)) - 1
+			} else {
+				rangeResult.Start = 1
 			}
+			rangeResult.End = rangeResult.Start + int64(len(result)) - 1
 		}
 		return result, &rangeResult, nil
 	}

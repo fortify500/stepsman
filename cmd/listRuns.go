@@ -44,6 +44,7 @@ func listRunsInternal(runId int64) {
 	t.SetOutputMirror(os.Stdout)
 	t.AppendHeader(table.Row{"ID", "UUID", "Title", "Cursor", "Status"})
 	var runs []*dao.RunRecord
+	var runRange *dao.RangeResult
 	if runId >= 0 {
 		run, err := getRun(runId)
 		if err != nil {
@@ -53,7 +54,14 @@ func listRunsInternal(runId int64) {
 		runs = append(runs, run)
 	} else {
 		// TODO: add a more useful filter
-		runs, _, err = bl.ListRuns(nil)
+		runs, runRange, err = bl.ListRuns(&dao.Query{
+			Range: dao.RangeQuery{
+				Range:        dao.Range{},
+				ComputeTotal: true,
+			},
+			Sort:   dao.Sort{},
+			Filter: nil,
+		})
 	}
 
 	if err != nil {
@@ -78,6 +86,10 @@ func listRunsInternal(runId int64) {
 		t.AppendRows([]table.Row{
 			{run.Id, run.UUID, strings.TrimSpace(text.WrapText(run.Title, 70)), run.Cursor, status},
 		})
+	}
+	if runRange.Total > 0 {
+		t.AppendFooter(table.Row{"", "", "", "", "-----------"})
+		t.AppendFooter(table.Row{"", "", "", "", fmt.Sprintf("%d-%d/%d", runRange.Start, runRange.End, runRange.Total)})
 	}
 	t.Render()
 }
