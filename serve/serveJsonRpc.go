@@ -29,20 +29,17 @@ import (
 
 type (
 	ListRunsHandler struct{}
-	ListRunsParams  struct {
-		Name  string      `json:"name"`
-		Extra interface{} `json:"extra"`
-	}
-	ListRunsResult []bl.RunRPCRecord
 )
 
 // TODO: need to change this to a response with data and range result{} start, end (start+returned size) and total (hardest to calculate)
 func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	valve.Lever(c).Open()
 	defer valve.Lever(c).Close()
-	var p ListRunsParams
-	if errResult := JSONRPCUnmarshal(params, &p); errResult != nil {
-		return nil, errResult
+	var p bl.ListRunsParams
+	if params != nil {
+		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+			return nil, errResult
+		}
 	}
 	runs, err := bl.ListRuns()
 	if err != nil {
@@ -80,11 +77,11 @@ func RunRecordToRunRPCRecord(runs []*bl.RunRecord) ([]bl.RunRPCRecord, error) {
 	return runRpcRecords, nil
 }
 
-func JSONRPCUnmarshal(params *fastjson.RawMessage, dst interface{}) *jsonrpc.Error {
+func JSONRPCUnmarshal(params []byte, dst interface{}) *jsonrpc.Error {
 	if params == nil {
 		return jsonrpc.ErrInvalidParams()
 	}
-	decoder := json.NewDecoder(bytes.NewReader(*params))
+	decoder := json.NewDecoder(bytes.NewReader(params))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
 		return jsonrpc.ErrInvalidParams()
@@ -95,7 +92,7 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 
 	mr := jsonrpc.NewMethodRepository()
 
-	if err := mr.RegisterMethod(bl.LIST_RUNS, ListRunsHandler{}, ListRunsParams{}, ListRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(bl.LIST_RUNS, ListRunsHandler{}, bl.ListRunsParams{}, bl.ListRunsResult{}); err != nil {
 		log.Error(err)
 	}
 	return mr

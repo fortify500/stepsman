@@ -42,8 +42,7 @@ type ListRunsResponse struct {
 
 func RemoteListRuns() ([]*RunRecord, error) {
 	result := make([]*RunRecord, 0)
-	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &struct {
-	}{})
+	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &ListRunsParams{})
 	if err != nil {
 		return nil, err
 	}

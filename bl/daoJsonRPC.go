@@ -29,3 +29,44 @@ type (
 const (
 	LIST_RUNS = "listRuns"
 )
+
+type Range struct {
+	Start int64
+	End   int64
+}
+
+type RangeResult struct {
+	Range
+	Total int64 `json:"total,omitempty"`
+}
+type RangeQuery struct {
+	Range
+	ComputeTotal bool `json:"return-total"`
+}
+type Sort struct {
+	Fields []string // ordered left to right
+	Order  string   // Either asc/desc
+}
+type Expression struct {
+	AttributeName string `json:"attribute-name"`
+	Operator      string // =,>=,>,<=,<,starts-with,ends-with,contains
+	Value         string
+}
+type Filter struct {
+	Expressions []Expression
+}
+
+type Query struct {
+	Range  RangeQuery
+	Sort   Sort
+	Filter Filter
+}
+
+type ListRunsResult struct {
+	Range Range          `json:"range,omitempty"`
+	Data  []RunRPCRecord `json:"data,omitempty"`
+}
+
+type ListRunsParams struct {
+	Query Query
+}

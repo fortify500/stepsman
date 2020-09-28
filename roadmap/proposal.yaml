@@ -1,4 +1,6 @@
 title: "STEPSMAN Hello World"
+schema: 0.1 # the version of the schema used. So if we change the structure of the document in a later stepsman version we can migrate it.
+version: 1.0 # the document version so when we load it up to the repository of templates we can differentiate with older or newer version. Default is 1.0
 # searchable tags. if you want to locate a template by an external key.
 tags:
   uuid: e09d86c4-b907-4674-af4f-8aceeb2b7ef1
