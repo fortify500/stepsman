@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
 
@@ -58,10 +59,10 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 	return runRpcRecords, nil
 }
 
-func RunRecordToRunRPCRecord(runs []*bl.RunRecord) ([]bl.RunRPCRecord, error) {
+func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]bl.RunRPCRecord, error) {
 	var runRpcRecords []bl.RunRPCRecord
 	for _, run := range runs {
-		status, err := bl.TranslateRunStatus(run.Status)
+		status, err := run.Status.TranslateRunStatus()
 		if err != nil {
 			return nil, err
 		}

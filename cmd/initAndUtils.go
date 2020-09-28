@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
@@ -68,7 +69,7 @@ type AllParameters struct {
 	InitialInput   string
 	CurrentCommand CommandType
 	CurrentRunId   int64
-	CurrentRun     *bl.RunRecord
+	CurrentRun     *dao.RunRecord
 	FlagsReInit    []func()
 	Err            error
 }
@@ -201,8 +202,8 @@ func initConfig() {
 	}
 }
 
-func getCursorStep(run *bl.RunRecord) (*bl.StepRecord, error) {
-	step, err := run.GetCursorStep()
+func getCursorStep(run *dao.RunRecord) (*dao.StepRecord, error) {
+	step, err := bl.GetCursorStep(run)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get step with [run id,step id]: [%d,%d]", run.Id, run.Cursor)
 		return nil, &Error{
@@ -213,8 +214,8 @@ func getCursorStep(run *bl.RunRecord) (*bl.StepRecord, error) {
 	return step, nil
 }
 
-func getRun(runId int64) (*bl.RunRecord, error) {
-	run, err := bl.GetRun(runId)
+func getRun(runId int64) (*dao.RunRecord, error) {
+	run, err := dao.GetRun(runId)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %d", runId)
 		return nil, &Error{
@@ -237,7 +238,7 @@ func parseRunId(idStr string) (int64, error) {
 	return runId, nil
 }
 
-func parseStepId(runRecord *bl.RunRecord, idStr string) (int64, error) {
+func parseStepId(runRecord *dao.RunRecord, idStr string) (int64, error) {
 	idStr = strings.TrimSpace(idStr)
 	if idStr == "" {
 		return -1, nil

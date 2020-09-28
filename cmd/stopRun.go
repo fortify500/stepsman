@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +41,7 @@ Use run <run id>.`,
 			return
 		}
 		Parameters.CurrentRunId = run.Id
-		err = run.UpdateStatus(bl.RunStopped)
+		err = bl.UpdateRunStatus(run, dao.RunStopped)
 		if err != nil {
 			msg := "failed to update run status"
 			Parameters.Err = &Error{

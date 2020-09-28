@@ -17,6 +17,7 @@ package bl
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/dao"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"strings"
@@ -39,7 +40,7 @@ type Step struct {
 	Do          interface{}
 	DoType      DoType
 	Script      string
-	stepRecord  *StepRecord
+	stepRecord  *dao.StepRecord
 }
 
 type StepDo struct {
@@ -89,16 +90,15 @@ func (s *Script) LoadFromBytes(err error, yamlFile []byte) error {
 	return nil
 }
 
-func (s *Script) Start(fileName string) (*RunRecord, error) {
+func (s *Script) Start(fileName string) (*dao.RunRecord, error) {
 	yamlBytes, err := s.LoadFromFile(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
 
-	runRow := RunRecord{}
-	err = runRow.Create(err, s, yamlBytes)
+	runRow, err := s.CreateRun(yamlBytes)
 
-	return &runRow, err
+	return runRow, err
 }
 
 func (s *Step) AdjustUnmarshalStep(fillStep bool) error {

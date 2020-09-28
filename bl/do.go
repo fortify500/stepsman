@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
@@ -29,7 +30,7 @@ import (
 
 //var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
 
-func do(doType DoType, doI interface{}) (StepStatusType, error) {
+func do(doType DoType, doI interface{}) (dao.StepStatusType, error) {
 	result := StepDone
 	//_, err := os.Stat("runs")
 	//if os.IsNotExist(err) {
@@ -75,7 +76,7 @@ func do(doType DoType, doI interface{}) (StepStatusType, error) {
 				case <-ctx.Done():
 					break
 				case <-termination:
-					result = StepCanceled
+					result = dao.StepCanceled
 					break
 				}
 			}()
@@ -91,7 +92,7 @@ func do(doType DoType, doI interface{}) (StepStatusType, error) {
 						result = StepDone // We don't want to fail like this
 					}
 				} else if result == StepDone {
-					result = StepFailed
+					result = dao.StepFailed
 				}
 				log.Debug(fmt.Errorf("command failed: %w", errRun))
 

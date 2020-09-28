@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/c-bata/go-prompt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/gobs/args"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -84,7 +85,7 @@ func executor(s string, wasEnter bool) {
 	if Parameters.CurrentRunId > 0 {
 		describeRunCursorStep = []string{"describe", "run", currentRunIdStr, "--step"}
 	}
-	runStatus := bl.RunInProgress
+	runStatus := dao.RunInProgress
 	if Parameters.CurrentRun != nil {
 		runStatus = Parameters.CurrentRun.Status
 	}
@@ -108,7 +109,7 @@ func executor(s string, wasEnter bool) {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
 			RootCmd.SetArgs(describeRunCursorStep)
 			Execute()
-			if runStatus == bl.RunDone {
+			if runStatus == dao.RunDone {
 				resetParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
 				RootCmd.SetArgs(listRunsRunId)
@@ -117,7 +118,7 @@ func executor(s string, wasEnter bool) {
 				nextInitialInput = s
 			}
 		} else {
-			if runStatus == bl.RunDone {
+			if runStatus == dao.RunDone {
 				nextInitialInput = strings.Join(listRunsRunId, " ")
 			} else {
 				nextInitialInput = strings.Join(describeRunCursorStep, " ")
@@ -128,7 +129,7 @@ func executor(s string, wasEnter bool) {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
 			RootCmd.SetArgs(describeRunCursorStep)
 			Execute()
-			if runStatus == bl.RunDone {
+			if runStatus == dao.RunDone {
 				resetParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
 				RootCmd.SetArgs(listRunsRunId)
@@ -137,7 +138,7 @@ func executor(s string, wasEnter bool) {
 				nextInitialInput = s
 			}
 		} else {
-			if runStatus == bl.RunDone {
+			if runStatus == dao.RunDone {
 				nextInitialInput = strings.Join(listRunsRunId, " ")
 			} else {
 				nextInitialInput = strings.Join(describeRunCursorStep, " ")

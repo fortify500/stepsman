@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +42,7 @@ Use run <run id>.`,
 		}
 		Parameters.CurrentRunId = run.Id
 		Parameters.CurrentRun = run
-		if run.Status == bl.RunDone {
+		if run.Status == dao.RunDone {
 			msg := "run is already done"
 			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg),
@@ -54,7 +55,7 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		err = stepRecord.UpdateStatus(bl.StepSkipped, false)
+		err = bl.UpdateStepStatus(stepRecord, dao.StepSkipped, false)
 		if err != nil {
 			msg := "failed to update step status"
 			Parameters.Err = &Error{

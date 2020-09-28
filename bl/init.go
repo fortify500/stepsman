@@ -17,6 +17,7 @@ package bl
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/dao"
 	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -24,7 +25,6 @@ import (
 	"strings"
 )
 
-var DB DBI
 var IsRemote = false
 
 type Error struct {
@@ -54,13 +54,6 @@ func (e *Error) Code() int64 {
 }
 func (e *Error) Unwrap() error {
 	return e.err
-}
-
-type DBI interface {
-	SQL() *sqlx.DB
-	VerifyDBCreation() error
-	Migrate0(tx *sqlx.Tx) error
-	CreateRun(tx *sqlx.Tx, run interface{}) (int64, error)
 }
 
 func InitBL(databaseVendor string, dataSourceName string) error {
@@ -99,19 +92,19 @@ func migrateDB(databaseVendor string, dataSourceName string) error {
 		}
 		switch internalDriverName {
 		case "sqlite3":
-			DB = (*Sqlite3SqlxDB)(dbOpen)
+			dao.DB = (*dao.Sqlite3SqlxDB)(dbOpen)
 		case "pgx":
-			DB = (*PostgreSQLSqlxDB)(dbOpen)
+			dao.DB = (*dao.PostgreSQLSqlxDB)(dbOpen)
 		default:
 			return fmt.Errorf("unsupported internal database driver name: %s", internalDriverName)
 		}
 	}
 
-	err = DB.VerifyDBCreation()
+	err = dao.DB.VerifyDBCreation()
 	if err != nil {
 		return fmt.Errorf("failed to verify database table creation: %w", err)
 	}
-	tx, err := DB.SQL().Beginx()
+	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}
@@ -137,7 +130,7 @@ func migrateDB(databaseVendor string, dataSourceName string) error {
 	}
 	switch version {
 	case 0:
-		DB.Migrate0(tx)
+		dao.DB.Migrate0(tx)
 		if err != nil {
 			err = Rollback(tx, err)
 			return err

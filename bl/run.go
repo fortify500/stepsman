@@ -17,119 +17,34 @@ package bl
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 )
 
-type RunStatusType int64
-
-const (
-	RunStopped    RunStatusType = 10
-	RunInProgress RunStatusType = 12
-	RunDone       RunStatusType = 15
-)
-
-type RunRecord struct {
-	Id     int64
-	UUID   string
-	Title  string
-	Cursor int64
-	Status RunStatusType
-	Script string
-}
-
-func TranslateToRunStatus(status string) (RunStatusType, error) {
-	switch status {
-	case "Stopped":
-		return RunStopped, nil
-	case "In Progress":
-		return RunInProgress, nil
-	case "Done":
-		return RunDone, nil
-	default:
-		return RunStopped, &Error{
-			code: 0,
-			err:  fmt.Errorf("failed to translate run status: %s", status),
-		}
-
-	}
-}
-func TranslateRunStatus(status RunStatusType) (string, error) {
-	switch status {
-	case RunStopped:
-		return "Stopped", nil
-	case RunInProgress:
-		return "In Progress", nil
-	case RunDone:
-		return "Done", nil
-	default:
-		return "", &Error{
-			code: 0,
-			err:  fmt.Errorf("failed to translate run status: %d", status),
-		}
-
-	}
-}
-func ListRuns() ([]*RunRecord, error) {
+func ListRuns() ([]*dao.RunRecord, error) {
 	if IsRemote {
 		return RemoteListRuns()
 	} else {
-		return listRuns()
+		return dao.ListRuns()
 	}
 }
-func listRuns() ([]*RunRecord, error) {
-	var result []*RunRecord
-	rows, err := DB.SQL().Queryx("SELECT * FROM runs ORDER BY id DESC")
-	if err != nil {
-		return nil, fmt.Errorf("failed to query database runs table: %w", err)
-	}
 
-	for rows.Next() {
-		var run RunRecord
-		err = rows.StructScan(&run)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse database runs row: %w", err)
-		}
-		result = append(result, &run)
-	}
-	return result, nil
-}
-
-func GetRun(runId int64) (*RunRecord, error) {
-	var result *RunRecord
-	rows, err := DB.SQL().Queryx("SELECT * FROM runs where id=$1", runId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
-	}
-
-	for rows.Next() {
-		var run RunRecord
-		err = rows.StructScan(&run)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse database runs row - get: %w", err)
-		}
-		result = &run
-	}
-	if result == nil {
-		return nil, ErrRecordNotFound
-	}
-	return result, nil
-}
-
-func (r *RunRecord) GetCursorStep() (*StepRecord, error) {
-	step, err := getStep(nil, r.Id, r.Cursor)
+func GetCursorStep(runRecord *dao.RunRecord) (*dao.StepRecord, error) {
+	step, err := dao.GetStep(runRecord.Id, runRecord.Cursor)
 	return step, err
 }
 
-func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
-	tx, err := DB.SQL().Beginx()
-	if newStatus == RunStopped {
-		steps, err := listSteps(tx, r.Id)
+func UpdateRunStatus(runRecord *dao.RunRecord, newStatus dao.RunStatusType) error {
+	tx, err := dao.DB.SQL().Beginx()
+	if newStatus == dao.RunStopped {
+		//TODO: make a more efficient query.
+		steps, err := dao.ListStepsTx(tx, runRecord.Id)
 		if err != nil {
 			err = Rollback(tx, err)
 			return fmt.Errorf("failed to update database run status: %w", err)
 		}
 		for _, stepRecord := range steps {
-			if stepRecord.Status == StepInProgress {
+			if stepRecord.Status == dao.StepInProgress {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run status: %w", err)
 			}
@@ -139,7 +54,7 @@ func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
 		err = Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
-	_, err = DB.SQL().Exec("update runs set status=$1 where id=$2", newStatus, r.Id)
+	_, err = dao.UpdateRunStatus(runRecord.Id, newStatus)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
@@ -150,70 +65,64 @@ func (r *RunRecord) UpdateStatus(newStatus RunStatusType) error {
 	}
 	return err
 }
-func (r *RunRecord) Create(err error, s *Script, yamlBytes []byte) error {
-	tx, err := DB.SQL().Beginx()
+
+func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
+	title := s.Title
+	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
-		return fmt.Errorf("failed to create database transaction: %w", err)
+		return nil, fmt.Errorf("failed to create database transaction: %w", err)
 	}
 
 	count := -1
-	err = tx.Get(&count, "SELECT count(*) FROM runs where status=$1 and title=$2", RunInProgress, s.Title)
+	err = dao.GetTitleInProgressTx(tx, count, title)
 	if err != nil {
 		err = Rollback(tx, err)
-		return fmt.Errorf("failed to query database runs table count for in progress rows: %w", err)
+		return nil, fmt.Errorf("failed to query database runs table count for in progress rows: %w", err)
 	}
 	if count != 0 {
-		err = Rollback(tx, ErrActiveRunsWithSameTitleExists)
-		return err
-	}
-	count = 0
-	err = tx.Get(&count, "SELECT count(*) FROM runs limit 1")
-	if err != nil {
-		err = Rollback(tx, err)
-		return fmt.Errorf("failed to query database runs table count: %w", err)
+		err = Rollback(tx, dao.ErrActiveRunsWithSameTitleExists)
+		return nil, err
 	}
 
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
 		err = Rollback(tx, err)
-		return fmt.Errorf("failed to generate uuid: %w", err)
+		return nil, fmt.Errorf("failed to generate uuid: %w", err)
 	}
-	runRecord := RunRecord{
+	runRecord := dao.RunRecord{
 		UUID:   uuid4.String(),
-		Title:  s.Title,
+		Title:  title,
 		Cursor: 1,
-		Status: RunInProgress,
+		Status: dao.RunInProgress,
 		Script: string(yamlBytes),
 	}
 
-	runRecord.Id, err = DB.CreateRun(tx, &runRecord)
+	runRecord.Id, err = dao.DB.CreateRun(tx, &runRecord)
 	if err != nil {
 		err = Rollback(tx, err)
-		return fmt.Errorf("failed to create runs row: %w", err)
+		return nil, fmt.Errorf("failed to create runs row: %w", err)
 	}
 
 	for i, step := range s.Steps {
 		uuid4, err := uuid.NewRandom()
-		stepRecord := StepRecord{
+		stepRecord := &dao.StepRecord{
 			RunId:  runRecord.Id,
 			StepId: int64(i) + 1,
 			UUID:   uuid4.String(),
 			Name:   step.Name,
-			Status: StepNotStarted,
+			Status: dao.StepNotStarted,
 			Script: step.Script,
 		}
-		_, err = tx.NamedExec("INSERT INTO steps(run_id, step_id, uuid, name, status, heartbeat, script) values(:run_id,:step_id,:uuid,:name,:status,0,:script)", &stepRecord)
+		_, err = dao.CreateStepTx(tx, stepRecord)
 		if err != nil {
 			err = Rollback(tx, err)
-			return fmt.Errorf("failed to insert database steps row: %w", err)
+			return nil, fmt.Errorf("failed to insert database steps row: %w", err)
 		}
 	}
-
-	*r = runRecord
 
 	err = tx.Commit()
 	if err != nil {
-		return fmt.Errorf("failed to commit database transaction: %w", err)
+		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
 	}
-	return nil
+	return &runRecord, nil
 }

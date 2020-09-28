@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
 	"github.com/spf13/cobra"
@@ -73,13 +74,13 @@ Use run <run id>.`,
 			switch step.Status {
 			case bl.StepDone:
 				checked = "[V]"
-			case bl.StepSkipped:
+			case dao.StepSkipped:
 				checked = "[V]"
 			}
 			if step.StepId == run.Cursor {
 				cursor = ">"
 			}
-			if step.Status == bl.StepInProgress {
+			if step.Status == dao.StepInProgress {
 				heartBeat = fmt.Sprintf("%d", step.HeartBeat)
 			}
 			t.AppendRows([]table.Row{

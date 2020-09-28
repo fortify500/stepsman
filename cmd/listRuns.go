@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
 	"github.com/spf13/cobra"
@@ -37,7 +38,7 @@ var listRunsCmd = &cobra.Command{
 		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"ID", "UUID", "Title", "Cursor", "Status"})
-		var runs []*bl.RunRecord
+		var runs []*dao.RunRecord
 		if strings.TrimSpace(Parameters.Run) != "" {
 			runId, err := parseRunId(Parameters.Run)
 			if err != nil {
@@ -63,7 +64,7 @@ var listRunsCmd = &cobra.Command{
 			return
 		}
 		for _, run := range runs {
-			status, err := bl.TranslateRunStatus(run.Status)
+			status, err := run.Status.TranslateRunStatus()
 			if err != nil {
 				msg := "failed to listRuns runs"
 				Parameters.Err = &Error{

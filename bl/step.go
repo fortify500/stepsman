@@ -17,140 +17,65 @@ package bl
 
 import (
 	"fmt"
-	"github.com/jmoiron/sqlx"
+	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
 
-type StepStatusType int64
-
 const HeartBeatInterval = 10
 
 const (
-	StepNotStarted StepStatusType = 0
-	StepInProgress StepStatusType = 2
-	StepCanceled   StepStatusType = 3
-	StepFailed     StepStatusType = 4
-	StepDone       StepStatusType = 5
-	StepSkipped    StepStatusType = 6
+	StepDone dao.StepStatusType = 5
 )
 
-type StepRecord struct {
-	RunId     int64 `db:"run_id"`
-	StepId    int64 `db:"step_id"`
-	UUID      string
-	Name      string
-	Status    StepStatusType
-	HeartBeat int64
-	Script    string
-}
-
-func TranslateStepStatus(status StepStatusType) (string, error) {
+func TranslateStepStatus(status dao.StepStatusType) (string, error) {
 	switch status {
-	case StepNotStarted:
+	case dao.StepNotStarted:
 		return "Not Started", nil
-	case StepInProgress:
+	case dao.StepInProgress:
 		return "In Progress", nil
-	case StepCanceled:
+	case dao.StepCanceled:
 		return "Canceled", nil
-	case StepFailed:
+	case dao.StepFailed:
 		return "Failed", nil
 	case StepDone:
 		return "Done", nil
-	case StepSkipped:
+	case dao.StepSkipped:
 		return "Skipped", nil
 	default:
 		return "", fmt.Errorf("failed to translate run status: %d", status)
 	}
 }
-func ListSteps(runId int64) ([]*StepRecord, error) {
-	return listSteps(nil, runId)
-}
-func listSteps(tx *sqlx.Tx, runId int64) ([]*StepRecord, error) {
-	var result []*StepRecord
-	var rows *sqlx.Rows
-	var err error
-	const query = "SELECT * FROM steps WHERE run_id=$1"
-	if tx == nil {
-		rows, err = DB.SQL().Queryx(query, runId)
-	} else {
-		rows, err = tx.Queryx(query, runId)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to query database steps table: %w", err)
-	}
-
-	for rows.Next() {
-		var step StepRecord
-		err = rows.StructScan(&step)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row: %w", err)
-		}
-		result = append(result, &step)
-	}
-	return result, nil
+func ListSteps(runId int64) ([]*dao.StepRecord, error) {
+	return dao.ListSteps(runId)
 }
 
-func getStep(tx *sqlx.Tx, runId int64, stepId int64) (*StepRecord, error) {
-	var result *StepRecord
-
-	const query = "SELECT * FROM steps where run_id=$1 and step_id=$2"
-	var rows *sqlx.Rows
-	var err error
-	if tx == nil {
-		rows, err = DB.SQL().Queryx(query, runId, stepId)
-	} else {
-		rows, err = tx.Queryx(query, runId, stepId)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to query database steps table - get: %w", err)
-	}
-
-	for rows.Next() {
-		var step StepRecord
-		err = rows.StructScan(&step)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row - get: %w", err)
-		}
-		result = &step
-	}
-	if result == nil {
-		return nil, ErrRecordNotFound
-	}
-	return result, nil
-}
-func (s *StepRecord) ToStep() (*Step, error) {
+func ToStep(stepRecord *dao.StepRecord) (*Step, error) {
 	step := Step{
-		Script: s.Script,
+		Script: stepRecord.Script,
 	}
 	err := step.AdjustUnmarshalStep(true)
 	if err != nil {
 		return nil, err
 	}
-	step.stepRecord = s
+	step.stepRecord = stepRecord
 	return &step, nil
 }
-func (s *StepRecord) UpdateHeartBeat() error {
-	_, err := DB.SQL().Exec("update steps set UpdateHeheartbeat=$1 where run_id=$2 and step_id=$3", time.Now().Unix(), s.RunId, s.StepId)
-	if err != nil {
-		return fmt.Errorf("failed to update database step heartbeat: %w", err)
-	}
-	return nil
-}
-func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error {
-	tx, err := DB.SQL().Beginx()
+
+func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, doFinish bool) error {
+	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}
-	step, err := getStep(tx, s.RunId, s.StepId)
+	runId := stepRecord.RunId
+	step, err := dao.GetStepTx(tx, runId, stepRecord.StepId)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
 	}
 
-	if !doFinish && step.Status == StepInProgress {
+	if !doFinish && step.Status == dao.StepInProgress {
 		delta := time.Now().Sub(time.Unix(step.HeartBeat, 0))
 		if delta < 0 {
 			delta = delta * -1
@@ -163,33 +88,33 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 	}
 	// don't change done if the status did not change.
 	// must be after (because we want to raise StepInProgress=StepInProgress error
-	if newStatus == s.Status {
+	if newStatus == stepRecord.Status {
 		err = tx.Rollback()
 		return err
 	}
 	heartBeat := step.HeartBeat
-	if newStatus == StepInProgress {
+	if newStatus == dao.StepInProgress {
 		if doFinish {
 			heartBeat = 0
 		} else {
 			heartBeat = time.Now().Unix()
 		}
 	}
-	_, err = tx.Exec("update steps set status=$1, heartbeat=$2 where run_id=$3 and step_id=$4", newStatus, heartBeat, s.RunId, s.StepId)
+	_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus, heartBeat)
 	if err != nil {
 		err = Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
 	}
 
-	if newStatus != StepNotStarted {
-		var run *RunRecord
-		run, err = GetRun(s.RunId)
+	if newStatus != dao.StepNotStarted {
+		var run *dao.RunRecord
+		run, err = dao.GetRun(runId)
 		if err != nil {
 			err = Rollback(tx, err)
 			return fmt.Errorf("failed to update database step row: %w", err)
 		}
-		if run.Status != RunInProgress {
-			_, err = tx.Exec("update runs set status=$1 where id=$2", RunInProgress, s.RunId)
+		if run.Status != dao.RunInProgress {
+			_, err = dao.UpdateRunStatus(run.Id, dao.RunInProgress)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row: %w", err)
@@ -197,9 +122,11 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 		}
 	}
 
-	if newStatus == StepDone || newStatus == StepSkipped {
-		var steps []*StepRecord
-		steps, err = listSteps(tx, s.RunId)
+	if newStatus == StepDone || newStatus == dao.StepSkipped {
+		var steps []*dao.StepRecord
+
+		//TODO: need to replace with more efficient method.
+		steps, err = dao.ListStepsTx(tx, runId)
 		if err != nil {
 			err = Rollback(tx, err)
 			return fmt.Errorf("failed to list database run rows: %w", err)
@@ -207,13 +134,13 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 		allDoneOrSkipped := true
 		nextCursorPosition := -1
 		for i, stepRecord := range steps {
-			if stepRecord.Status != StepDone && stepRecord.Status != StepSkipped {
+			if stepRecord.Status != StepDone && stepRecord.Status != dao.StepSkipped {
 				allDoneOrSkipped = false
 				if nextCursorPosition > 0 {
 					break
 				}
 			}
-			if stepRecord.StepId == s.StepId {
+			if stepRecord.StepId == stepRecord.StepId {
 				if i < len(steps) {
 					nextCursorPosition = i + 1
 				}
@@ -223,13 +150,13 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 			}
 		}
 		if allDoneOrSkipped {
-			_, err = tx.Exec("update runs set status=$1 where id=$2", RunDone, s.RunId)
+			_, err = dao.UpdateRunStatus(runId, dao.RunDone)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row status: %w", err)
 			}
 		} else if nextCursorPosition > 0 {
-			_, err = tx.Exec("update runs set cursor=$1 where id=$2", steps[nextCursorPosition].StepId, s.RunId)
+			_, err = dao.UpdateRunCursorTx(tx, steps[nextCursorPosition].StepId, runId)
 			if err != nil {
 				err = Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row cursor: %w", err)
@@ -241,13 +168,14 @@ func (s *StepRecord) UpdateStatus(newStatus StepStatusType, doFinish bool) error
 	if err != nil {
 		return fmt.Errorf("failed to commit database transaction: %w", err)
 	}
-	s.Status = newStatus
+	stepRecord.Status = newStatus
 	return nil
 }
-func (s *Step) StartDo() (StepStatusType, error) {
-	err := s.stepRecord.UpdateStatus(StepInProgress, false)
+
+func (s *Step) StartDo() (dao.StepStatusType, error) {
+	err := UpdateStepStatus(s.stepRecord, dao.StepInProgress, false)
 	if err != nil {
-		return StepFailed, err
+		return dao.StepFailed, err
 	}
 	var wg sync.WaitGroup
 	heartBeatDone1 := make(chan int)
@@ -274,10 +202,10 @@ func (s *Step) StartDo() (StepStatusType, error) {
 	defer close(heartBeatDone1) //in case of a panic
 	newStatus, err := do(s.DoType, s.Do)
 	if err != nil {
-		return StepFailed, err
+		return dao.StepFailed, err
 	}
 	close(heartBeatDone2)
 	wg.Wait()
-	err = s.stepRecord.UpdateStatus(newStatus, true)
+	err = UpdateStepStatus(s.stepRecord, newStatus, true)
 	return newStatus, err
 }

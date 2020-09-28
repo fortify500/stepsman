@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"strings"
@@ -43,7 +44,7 @@ var createRunCmd = &cobra.Command{
 			return
 		}
 		runRow, err := t.Start(Parameters.CreateFileName)
-		if err == bl.ErrActiveRunsWithSameTitleExists {
+		if err == dao.ErrActiveRunsWithSameTitleExists {
 			msg := "you must stop runs with the same title before creating a new run"
 			//"you must either stop runs with the same title or force an additional run (see --force-run)"
 			Parameters.Err = &Error{

@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
 	"github.com/spf13/cobra"
@@ -66,7 +67,7 @@ You can also describe a single step by adding --step <step id>.`,
 			mainT.AppendRow(table.Row{"Description"})
 
 			{
-				runStatus, err := bl.TranslateRunStatus(run.Status)
+				runStatus, err := run.Status.TranslateRunStatus()
 				if err != nil {
 					msg := "failed to describe steps"
 					Parameters.Err = &Error{
@@ -114,7 +115,7 @@ You can also describe a single step by adding --step <step id>.`,
 			switch stepRecord.Status {
 			case bl.StepDone:
 				checked = "True"
-			case bl.StepSkipped:
+			case dao.StepSkipped:
 				checked = "True"
 			}
 			if stepRecord.StepId == run.Cursor {
@@ -122,10 +123,10 @@ You can also describe a single step by adding --step <step id>.`,
 			} else {
 				cursor = "False"
 			}
-			if stepRecord.Status == bl.StepInProgress {
+			if stepRecord.Status == dao.StepInProgress {
 				heartBeat = fmt.Sprintf("%d", stepRecord.HeartBeat)
 			}
-			step, err := stepRecord.ToStep()
+			step, err := bl.ToStep(stepRecord)
 			if err != nil {
 				msg := "failed to describe steps"
 				Parameters.Err = &Error{
