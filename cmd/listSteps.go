@@ -26,24 +26,18 @@ import (
 	"strings"
 )
 
-var listRunCmd = &cobra.Command{
-	Use:   "run",
-	Args:  cobra.ExactArgs(1),
+var listStepsCmd = &cobra.Command{
+	Use:   "steps",
+	Args:  cobra.NoArgs,
 	Short: "List the steps of a run.",
-	Long: `List the steps of a run and their status.
-Use run <run id>.`,
+	Long:  `List the steps of a run and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListRun
 		t := table.NewWriter()
 		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"", "", "ID", "UUID", "Title", "Status", "HeartBeat"})
-		runId, err := parseRunId(args[0])
-		if err != nil {
-			Parameters.Err = err
-			return
-		}
-		run, err := getRun(runId)
+		run, err := getRun(Parameters.Run)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -92,5 +86,11 @@ Use run <run id>.`,
 }
 
 func init() {
-	listCmd.AddCommand(listRunCmd)
+	listCmd.AddCommand(listStepsCmd)
+	initFlags := func() {
+		listStepsCmd.ResetFlags()
+		listStepsCmd.Flags().Int64VarP(&Parameters.Run, "run", "r", -1, "Run Id")
+		listStepsCmd.MarkFlagRequired("run")
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

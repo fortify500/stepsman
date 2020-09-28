@@ -63,7 +63,7 @@ type AllParameters struct {
 	CreateFileName     string
 	ServerPort         int64
 	Step               string
-	Run                string
+	Run                int64
 	DisableSuggestions bool
 	// Others
 	InitialInput   string
@@ -78,7 +78,7 @@ var Parameters = AllParameters{
 	CfgFile:            "",
 	CreateFileName:     "",
 	Step:               "",
-	Run:                "",
+	Run:                -1,
 	DisableSuggestions: true,
 	InitialInput:       "",
 	CurrentCommand:     CommandUndetermined,

@@ -91,13 +91,13 @@ func executor(s string, wasEnter bool) {
 	}
 	currentCommand := Parameters.CurrentCommand
 	nextInitialInput := ""
-	listRunsRunId := []string{"list", "runs", "--run", currentRunIdStr}
+	getRunRunId := []string{"get", "run", currentRunIdStr}
 	resetParameters()
 	switch currentCommand {
 	case CommandCreateRun:
 		if !wasError {
-			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
-			RootCmd.SetArgs(listRunsRunId)
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
+			RootCmd.SetArgs(getRunRunId)
 			Execute()
 			resetParameters()
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
@@ -111,15 +111,15 @@ func executor(s string, wasEnter bool) {
 			Execute()
 			if runStatus == dao.RunDone {
 				resetParameters()
-				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
-				RootCmd.SetArgs(listRunsRunId)
+				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
+				RootCmd.SetArgs(getRunRunId)
 				Execute()
 			} else {
 				nextInitialInput = s
 			}
 		} else {
 			if runStatus == dao.RunDone {
-				nextInitialInput = strings.Join(listRunsRunId, " ")
+				nextInitialInput = strings.Join(getRunRunId, " ")
 			} else {
 				nextInitialInput = strings.Join(describeRunCursorStep, " ")
 			}
@@ -131,23 +131,23 @@ func executor(s string, wasEnter bool) {
 			Execute()
 			if runStatus == dao.RunDone {
 				resetParameters()
-				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
-				RootCmd.SetArgs(listRunsRunId)
+				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
+				RootCmd.SetArgs(getRunRunId)
 				Execute()
 			} else {
 				nextInitialInput = s
 			}
 		} else {
 			if runStatus == dao.RunDone {
-				nextInitialInput = strings.Join(listRunsRunId, " ")
+				nextInitialInput = strings.Join(getRunRunId, " ")
 			} else {
 				nextInitialInput = strings.Join(describeRunCursorStep, " ")
 			}
 		}
 	case CommandStopRun:
 		if !wasError {
-			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(listRunsRunId, " ")))
-			RootCmd.SetArgs(listRunsRunId)
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
+			RootCmd.SetArgs(getRunRunId)
 			Execute()
 		}
 	default:

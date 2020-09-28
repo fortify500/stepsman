@@ -77,8 +77,10 @@ func GetRun(runId int64) (*RunRecord, error) {
 	return result, nil
 }
 
-func GetTitleInProgressTx(tx *sqlx.Tx, count int, title string) error {
-	return tx.Get(&count, "SELECT count(*) FROM runs where status=$1 and title=$2", RunInProgress, title)
+func GetTitleInProgressTx(tx *sqlx.Tx, title string) (int, error) {
+	var count int
+	err := tx.Get(&count, "SELECT count(*) FROM runs where status=$1 and title=$2", RunInProgress, title)
+	return count, err
 }
 
 func UpdateRunStatus(runId int64, newStatus RunStatusType) (sql.Result, error) {

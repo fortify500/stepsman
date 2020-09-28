@@ -32,29 +32,39 @@ var listRunsCmd = &cobra.Command{
 	Short: "Runs summary.",
 	Long:  `A succinct list of runs and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		var err error
-		Parameters.CurrentCommand = CommandListRuns
-		t := table.NewWriter()
-		t.SetStyle(NoBordersStyle)
-		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"ID", "UUID", "Title", "Cursor", "Status"})
-		var runs []*dao.RunRecord
-		if strings.TrimSpace(Parameters.Run) != "" {
-			runId, err := parseRunId(Parameters.Run)
-			if err != nil {
-				Parameters.Err = err
-				return
-			}
-			run, err := getRun(runId)
-			if err != nil {
-				Parameters.Err = err
-				return
-			}
-			runs = append(runs, run)
-		} else {
-			runs, err = bl.ListRuns()
-		}
+		listRunsInternal(-1)
+	},
+}
 
+func listRunsInternal(runId int64) {
+	var err error
+	Parameters.CurrentCommand = CommandListRuns
+	t := table.NewWriter()
+	t.SetStyle(NoBordersStyle)
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"ID", "UUID", "Title", "Cursor", "Status"})
+	var runs []*dao.RunRecord
+	if runId >= 0 {
+		run, err := getRun(runId)
+		if err != nil {
+			Parameters.Err = err
+			return
+		}
+		runs = append(runs, run)
+	} else {
+		runs, err = bl.ListRuns()
+	}
+
+	if err != nil {
+		msg := "failed to listRuns runs"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
+		return
+	}
+	for _, run := range runs {
+		status, err := run.Status.TranslateRunStatus()
 		if err != nil {
 			msg := "failed to listRuns runs"
 			Parameters.Err = &Error{
@@ -63,30 +73,14 @@ var listRunsCmd = &cobra.Command{
 			}
 			return
 		}
-		for _, run := range runs {
-			status, err := run.Status.TranslateRunStatus()
-			if err != nil {
-				msg := "failed to listRuns runs"
-				Parameters.Err = &Error{
-					Technical: fmt.Errorf(msg+": %w", err),
-					Friendly:  msg,
-				}
-				return
-			}
 
-			t.AppendRows([]table.Row{
-				{run.Id, run.UUID, strings.TrimSpace(text.WrapText(run.Title, 70)), run.Cursor, status},
-			})
-		}
-		t.Render()
-	},
+		t.AppendRows([]table.Row{
+			{run.Id, run.UUID, strings.TrimSpace(text.WrapText(run.Title, 70)), run.Cursor, status},
+		})
+	}
+	t.Render()
 }
 
 func init() {
 	listCmd.AddCommand(listRunsCmd)
-	initFlags := func() {
-		listRunsCmd.ResetFlags()
-		listRunsCmd.Flags().StringVarP(&Parameters.Run, "run", "r", "", "Run Id")
-	}
-	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

@@ -73,8 +73,7 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 		return nil, fmt.Errorf("failed to create database transaction: %w", err)
 	}
 
-	count := -1
-	err = dao.GetTitleInProgressTx(tx, count, title)
+	count, err := dao.GetTitleInProgressTx(tx, title)
 	if err != nil {
 		err = Rollback(tx, err)
 		return nil, fmt.Errorf("failed to query database runs table count for in progress rows: %w", err)
