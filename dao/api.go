@@ -54,9 +54,9 @@ type Expression struct {
 }
 
 type Query struct {
-	Range  RangeQuery
-	Sort   Sort
-	Filter []Expression
+	Range   RangeQuery
+	Sort    Sort
+	Filters []Expression
 }
 
 type ListRunsResult struct {

@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"encoding/csv"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
@@ -54,7 +55,7 @@ func listRunsInternal(runId int64) {
 		runs = append(runs, run)
 	} else {
 		// TODO: add a more useful filter
-		runs, runRange, err = bl.ListRuns(&dao.Query{
+		query := dao.Query{
 			Range: dao.RangeQuery{
 				Range: dao.Range{
 					Start: Parameters.RangeStart,
@@ -66,8 +67,16 @@ func listRunsInternal(runId int64) {
 				Fields: Parameters.SortFields,
 				Order:  Parameters.SortOrder,
 			},
-			Filter: nil,
-		})
+			Filters: nil,
+		}
+		if len(Parameters.Filters) > 0 {
+			var exitErr bool
+			query.Filters, exitErr = parseFilters()
+			if exitErr {
+				return
+			}
+		}
+		runs, runRange, err = bl.ListRuns(&query)
 	}
 
 	if err != nil {
@@ -100,6 +109,150 @@ func listRunsInternal(runId int64) {
 	t.Render()
 }
 
+func parseFilters() ([]dao.Expression, bool) {
+	expressions := make([]dao.Expression, len(Parameters.Filters))
+	for i, filter := range Parameters.Filters {
+		name := ""
+		value := ""
+		operator := ""
+		if strings.HasPrefix(filter, "id") {
+			trimPrefix := strings.TrimPrefix(filter, "id")
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = "id"
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, "uuid") {
+			trimPrefix := strings.TrimPrefix(filter, "uuid")
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = "uuid"
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, "title") {
+			trimPrefix := strings.TrimPrefix(filter, "title")
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = "title"
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, "cursor") {
+			trimPrefix := strings.TrimPrefix(filter, "cursor")
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = "cursor"
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, "status") {
+			trimPrefix := strings.TrimPrefix(filter, "status")
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = "status"
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, "startsWith(") && strings.HasSuffix(filter, ")") {
+			operator = "startsWith"
+			fields, errDone := detectStringOperator(filter, operator)
+			if errDone {
+				return nil, true
+			}
+			name = fields[0]
+			value = fields[1]
+		} else if strings.HasPrefix(filter, "endsWith(") && strings.HasSuffix(filter, ")") {
+			operator = "endsWith"
+			fields, errDone := detectStringOperator(filter, operator)
+			if errDone {
+				return nil, true
+			}
+			name = fields[0]
+			value = fields[1]
+		} else if strings.HasPrefix(filter, "contains(") && strings.HasSuffix(filter, ")") {
+			operator = "contains"
+			fields, errDone := detectStringOperator(filter, operator)
+			if errDone {
+				return nil, true
+			}
+			name = fields[0]
+			value = fields[1]
+		} else {
+			msg := "failed to parse filter"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+" %s", filter),
+				Friendly:  msg,
+			}
+			return nil, true
+		}
+		expressions[i] = dao.Expression{
+			AttributeName: name,
+			Operator:      operator,
+			Value:         value,
+		}
+	}
+	return expressions, false
+}
+
+func detectStringOperator(filter string, operator string) ([]string, bool) {
+	trimmed := strings.TrimPrefix(filter, operator+"(")
+	trimmed = strings.TrimSuffix(trimmed, ")")
+	r := csv.NewReader(strings.NewReader(trimmed))
+	r.Comma = ','
+	fields, err := r.Read()
+	if err != nil {
+		msg := "failed to parse filter"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+" %s", filter),
+			Friendly:  msg,
+		}
+		return nil, true
+	}
+	if len(fields) != 2 {
+		msg := "failed to parse filter"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+" %s", filter),
+			Friendly:  msg,
+		}
+		return nil, true
+	}
+	switch fields[0] {
+	case "id":
+	case "uuid":
+	case "title":
+	case "cursor":
+	case "status":
+	default:
+		msg := "failed to parse filter"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+" %s", filter),
+			Friendly:  msg,
+		}
+		return nil, true
+	}
+	return fields, false
+}
+
+func detectStartsWithGTLTEquals(trimPrefix string, filter string) string {
+	if strings.HasPrefix(trimPrefix, "<=") {
+		return "<="
+	} else if strings.HasPrefix(trimPrefix, ">=") {
+		return ">="
+	} else if strings.HasPrefix(trimPrefix, "<>") {
+		return "<>"
+	} else if strings.HasPrefix(trimPrefix, ">") {
+		return ">"
+	} else if strings.HasPrefix(trimPrefix, "<") {
+		return "<"
+	} else if strings.HasPrefix(trimPrefix, "=") {
+		return "="
+	} else {
+		msg := "failed to parse filter"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+" %s", filter),
+			Friendly:  msg,
+		}
+		return ""
+	}
+}
+
 func init() {
 	listCmd.AddCommand(listRunsCmd)
 	initFlags := func() {
@@ -109,6 +262,7 @@ func init() {
 		listRunsCmd.Flags().BoolVar(&Parameters.RangeReturnTotal, "range-return-total", false, "Range Return Total")
 		listRunsCmd.Flags().StringArrayVar(&Parameters.SortFields, "sort-field", []string{}, "Repeat sort-field for many fields")
 		listRunsCmd.Flags().StringVar(&Parameters.SortOrder, "sort-order", "desc", "Sort order asc/desc which are a short for ascending/descending respectively")
+		listRunsCmd.Flags().StringArrayVar(&Parameters.Filters, "filter", []string{}, "Repeat filter for many filters --filter=startsWith(\"title\",\"STEP\") --filter=title=STEPSMAN\\ Hello\\ World\npossible operators:startsWith,endsWith,contains,>,<,>=,<=,=,<>")
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

@@ -43,17 +43,17 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	var rows *sqlx.Rows
 	var err error
 	var count int64 = -1
-	sql := ""
+	sqlQuery := ""
 	sqlNoRange := ""
 	params := make([]interface{}, 0)
 	if query == nil {
 		sqlNoRange = "SELECT * FROM runs ORDER BY id DESC"
-		sql = sqlNoRange + " LIMIT 20"
+		sqlQuery = sqlNoRange + " LIMIT 20"
 	} else {
-		sql = "SELECT * FROM runs"
+		sqlQuery = "SELECT * FROM runs"
 		{
 			filterQuery := ""
-			for i, expression := range query.Filter {
+			for i, expression := range query.Filters {
 				queryExpression := ""
 				switch expression.AttributeName {
 				case "id":
@@ -80,33 +80,33 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += expression.Operator
-					queryExpression += "$" + string(i+1)
+					queryExpression += fmt.Sprintf("$%d", +i+1)
 				case "<>":
 					fallthrough
 				case "=":
 					queryExpression += expression.Operator
-					queryExpression += "$" + string(i+1)
+					queryExpression += fmt.Sprintf("$%d", +i+1)
 				case "startsWith":
 					switch expression.AttributeName {
 					case "title":
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
-					queryExpression += "LIKE $" + string(i+1) + " || '%'"
+					queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
 				case "endsWith":
 					switch expression.AttributeName {
 					case "title":
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
-					queryExpression += "LIKE '%' || $" + string(i+1)
+					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
 				case "contains":
 					switch expression.AttributeName {
 					case "title":
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
-					queryExpression += "LIKE '%' || $" + string(i+1) + " || '%'"
+					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i+1)
 				default:
 					return nil, nil, fmt.Errorf("invalud operator in filter: %s", expression.Operator)
 				}
@@ -117,13 +117,13 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 				filterQuery += queryExpression
 			}
 			if filterQuery != "" {
-				sql += " WHERE " + filterQuery
+				sqlQuery += " WHERE " + filterQuery
 			}
 		}
 		{
 			if len(query.Sort.Fields) > 0 {
-				const orderby = " ORDER BY "
-				sort := orderby
+				const orderBy = " ORDER BY "
+				sort := orderBy
 				for _, field := range query.Sort.Fields {
 					switch field {
 					case "id":
@@ -134,7 +134,7 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
 					}
-					if sort != orderby {
+					if sort != orderBy {
 						sort += ","
 					}
 					sort += field
@@ -145,17 +145,17 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 				default:
 					return nil, nil, fmt.Errorf("invalid sort order: %s", query.Sort.Order)
 				}
-				sql += sort + " " + query.Sort.Order
+				sqlQuery += sort + " " + query.Sort.Order
 			} else {
-				sql += " ORDER BY id DESC"
+				sqlQuery += " ORDER BY id DESC"
 			}
 		}
-		sqlNoRange = sql
+		sqlNoRange = sqlQuery
 		{
 			if query.Range.End >= query.Range.Start && query.Range.Start > 0 {
 				offset := query.Range.Start - 1
 				limit := query.Range.End - query.Range.Start + 1
-				sql += fmt.Sprintf(" OFFSET %d LIMIT %d", offset, limit)
+				sqlQuery += fmt.Sprintf(" OFFSET %d LIMIT %d", offset, limit)
 			}
 		}
 	}
@@ -169,7 +169,7 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 			err = Rollback(tx, err)
 			return nil, nil, fmt.Errorf("failed to query count database run table: %w", err)
 		}
-		rows, err = tx.Queryx(sql, params...)
+		rows, err = tx.Queryx(sqlQuery, params...)
 		if err != nil {
 			err = Rollback(tx, err)
 			return nil, nil, fmt.Errorf("failed to query database run table: %w", err)
@@ -177,7 +177,7 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 
 		defer tx.Commit()
 	} else {
-		rows, err = DB.SQL().Queryx(sql, params...)
+		rows, err = DB.SQL().Queryx(sqlQuery, params...)
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)

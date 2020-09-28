@@ -71,6 +71,7 @@ type AllParameters struct {
 	RangeReturnTotal bool
 	SortFields       []string
 	SortOrder        string
+	Filters          []string
 	// Others
 	InitialInput   string
 	CurrentCommand CommandType
