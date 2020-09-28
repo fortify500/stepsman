@@ -13,13 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package bl
+package dao
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/fortify500/stepsman/dao"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -41,8 +40,8 @@ type ListRunsResponse struct {
 	ID      string         `json:"id,omitempty"`
 }
 
-func RemoteListRuns() ([]*dao.RunRecord, error) {
-	result := make([]*dao.RunRecord, 0)
+func RemoteListRuns() ([]*RunRecord, error) {
+	result := make([]*RunRecord, 0)
 	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &ListRunsParams{})
 	if err != nil {
 		return nil, err
@@ -72,11 +71,11 @@ func RemoteListRuns() ([]*dao.RunRecord, error) {
 	}
 	if jsonRPCResult.Result != nil {
 		for _, record := range jsonRPCResult.Result {
-			status, err := dao.TranslateToRunStatus(record.Status)
+			status, err := TranslateToRunStatus(record.Status)
 			if err != nil {
 				return nil, err
 			}
-			result = append(result, &dao.RunRecord{
+			result = append(result, &RunRecord{
 				Id:     record.Id,
 				UUID:   record.UUID,
 				Title:  record.Title,

@@ -36,7 +36,7 @@ type (
 func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	valve.Lever(c).Open()
 	defer valve.Lever(c).Close()
-	var p bl.ListRunsParams
+	var p dao.ListRunsParams
 	if params != nil {
 		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 			return nil, errResult
@@ -59,14 +59,14 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 	return runRpcRecords, nil
 }
 
-func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]bl.RunRPCRecord, error) {
-	var runRpcRecords []bl.RunRPCRecord
+func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]dao.RunRPCRecord, error) {
+	var runRpcRecords []dao.RunRPCRecord
 	for _, run := range runs {
 		status, err := run.Status.TranslateRunStatus()
 		if err != nil {
 			return nil, err
 		}
-		runRpcRecords = append(runRpcRecords, bl.RunRPCRecord{
+		runRpcRecords = append(runRpcRecords, dao.RunRPCRecord{
 			Id:     run.Id,
 			UUID:   run.UUID,
 			Title:  run.Title,
@@ -93,7 +93,7 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 
 	mr := jsonrpc.NewMethodRepository()
 
-	if err := mr.RegisterMethod(bl.LIST_RUNS, ListRunsHandler{}, bl.ListRunsParams{}, bl.ListRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(dao.LIST_RUNS, ListRunsHandler{}, dao.ListRunsParams{}, dao.ListRunsResult{}); err != nil {
 		log.Error(err)
 	}
 	return mr

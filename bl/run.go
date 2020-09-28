@@ -23,7 +23,7 @@ import (
 
 func ListRuns() ([]*dao.RunRecord, error) {
 	if IsRemote {
-		return RemoteListRuns()
+		return dao.RemoteListRuns()
 	} else {
 		return dao.ListRuns()
 	}
