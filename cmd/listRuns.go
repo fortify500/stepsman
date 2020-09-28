@@ -62,7 +62,10 @@ func listRunsInternal(runId int64) {
 				},
 				ReturnTotal: Parameters.RangeReturnTotal,
 			},
-			Sort:   dao.Sort{},
+			Sort: dao.Sort{
+				Fields: Parameters.SortFields,
+				Order:  Parameters.SortOrder,
+			},
 			Filter: nil,
 		})
 	}
@@ -104,6 +107,8 @@ func init() {
 		listRunsCmd.Flags().Int64Var(&Parameters.RangeStart, "range-start", 0, "Range Start")
 		listRunsCmd.Flags().Int64Var(&Parameters.RangeEnd, "range-end", -1, "Range End")
 		listRunsCmd.Flags().BoolVar(&Parameters.RangeReturnTotal, "range-return-total", false, "Range Return Total")
+		listRunsCmd.Flags().StringArrayVar(&Parameters.SortFields, "sort-field", []string{}, "Repeat sort-field for many fields")
+		listRunsCmd.Flags().StringVar(&Parameters.SortOrder, "sort-order", "desc", "Sort order asc/desc which are a short for ascending/descending respectively")
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

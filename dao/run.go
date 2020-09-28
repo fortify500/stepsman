@@ -137,15 +137,15 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 					if sort != orderby {
 						sort += ","
 					}
-					sql += field
+					sort += field
 				}
 				switch query.Sort.Order {
-				case "descending":
-				case "ascending":
+				case "desc":
+				case "asc":
 				default:
-					return nil, nil, fmt.Errorf("invalud sort order: %s", query.Sort.Order)
+					return nil, nil, fmt.Errorf("invalid sort order: %s", query.Sort.Order)
 				}
-				sql += query.Sort.Order
+				sql += sort + " " + query.Sort.Order
 			} else {
 				sql += " ORDER BY id DESC"
 			}

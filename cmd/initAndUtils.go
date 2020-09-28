@@ -69,6 +69,8 @@ type AllParameters struct {
 	RangeStart       int64
 	RangeEnd         int64
 	RangeReturnTotal bool
+	SortFields       []string
+	SortOrder        string
 	// Others
 	InitialInput   string
 	CurrentCommand CommandType
