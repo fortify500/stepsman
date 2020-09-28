@@ -16,6 +16,7 @@ limitations under the License.
 package bl
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/fortify500/stepsman/dao"
 	"gopkg.in/yaml.v2"
@@ -51,6 +52,7 @@ type DO interface {
 	Describe() string
 }
 type StepDoShellExecute struct {
+	StepDo  `yaml:",inline"`
 	Options StepDoShellExecuteOptions
 }
 type StepDoShellExecuteOptions struct {
@@ -65,19 +67,21 @@ func (do StepDoShellExecute) Describe() string {
 }
 
 func (s *Script) LoadFromFile(filename string) ([]byte, error) {
-	yamlFile, err := ioutil.ReadFile(filename)
+	yamlDocument, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	err = s.LoadFromBytes(err, yamlFile)
+	err = s.LoadFromBytes(err, yamlDocument)
 	if err != nil {
 		return nil, err
 	}
-	return yamlFile, nil
+	return yamlDocument, nil
 }
 
-func (s *Script) LoadFromBytes(err error, yamlFile []byte) error {
-	err = yaml.Unmarshal(yamlFile, s)
+func (s *Script) LoadFromBytes(err error, yamlDocument []byte) error {
+	decoder := yaml.NewDecoder(bytes.NewBuffer(yamlDocument))
+	decoder.SetStrict(true)
+	err = decoder.Decode(s)
 	if err != nil {
 		return err
 	}
@@ -122,7 +126,9 @@ func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
 		if err != nil {
 			return err
 		}
-		err = yaml.Unmarshal(stepDoBytes, &stepDo)
+		decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
+		decoder.SetStrict(false)
+		err = decoder.Decode(&stepDo)
 		if err != nil {
 			return err
 		}
@@ -132,7 +138,9 @@ func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
 			fallthrough
 		case DoTypeShellExecute:
 			do := StepDoShellExecute{}
-			err = yaml.Unmarshal(stepDoBytes, &do)
+			decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
+			decoder.SetStrict(true)
+			err = decoder.Decode(&do)
 			if err != nil {
 				return err
 			}

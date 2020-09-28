@@ -42,7 +42,7 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 			return nil, errResult
 		}
 	}
-	runs, err := bl.ListRuns()
+	runs, runsRange, err := bl.ListRuns(&p.Query)
 	if err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
@@ -56,17 +56,20 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 			Message: err.Error(),
 		}
 	}
-	return runRpcRecords, nil
+	return dao.ListRunsResult{
+		Range: *runsRange,
+		Data:  runRpcRecords,
+	}, nil
 }
 
-func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]dao.RunRPCRecord, error) {
-	var runRpcRecords []dao.RunRPCRecord
+func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]dao.RunAPIRecord, error) {
+	var runRpcRecords []dao.RunAPIRecord
 	for _, run := range runs {
 		status, err := run.Status.TranslateRunStatus()
 		if err != nil {
 			return nil, err
 		}
-		runRpcRecords = append(runRpcRecords, dao.RunRPCRecord{
+		runRpcRecords = append(runRpcRecords, dao.RunAPIRecord{
 			Id:     run.Id,
 			UUID:   run.UUID,
 			Title:  run.Title,

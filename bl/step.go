@@ -71,7 +71,7 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 	runId := stepRecord.RunId
 	step, err := dao.GetStepTx(tx, runId, stepRecord.StepId)
 	if err != nil {
-		err = Rollback(tx, err)
+		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
 	}
 
@@ -82,7 +82,7 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		}
 		// +5 for slow downs
 		if delta <= (HeartBeatInterval+5)*time.Second {
-			err = Rollback(tx, fmt.Errorf("step is already in progress and has a heartbeat with an interval of %d", HeartBeatInterval))
+			err = dao.Rollback(tx, fmt.Errorf("step is already in progress and has a heartbeat with an interval of %d", HeartBeatInterval))
 			return fmt.Errorf("failed to update database step row: %w", err)
 		}
 	}
@@ -102,7 +102,7 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 	}
 	_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus, heartBeat)
 	if err != nil {
-		err = Rollback(tx, err)
+		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
 	}
 
@@ -110,13 +110,13 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		var run *dao.RunRecord
 		run, err = dao.GetRun(runId)
 		if err != nil {
-			err = Rollback(tx, err)
+			err = dao.Rollback(tx, err)
 			return fmt.Errorf("failed to update database step row: %w", err)
 		}
 		if run.Status != dao.RunInProgress {
 			_, err = dao.UpdateRunStatus(run.Id, dao.RunInProgress)
 			if err != nil {
-				err = Rollback(tx, err)
+				err = dao.Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row: %w", err)
 			}
 		}
@@ -128,7 +128,7 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		//TODO: need to replace with more efficient method.
 		steps, err = dao.ListStepsTx(tx, runId)
 		if err != nil {
-			err = Rollback(tx, err)
+			err = dao.Rollback(tx, err)
 			return fmt.Errorf("failed to list database run rows: %w", err)
 		}
 		allDoneOrSkipped := true
@@ -152,13 +152,13 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		if allDoneOrSkipped {
 			_, err = dao.UpdateRunStatus(runId, dao.RunDone)
 			if err != nil {
-				err = Rollback(tx, err)
+				err = dao.Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row status: %w", err)
 			}
 		} else if nextCursorPosition > 0 {
 			_, err = dao.UpdateRunCursorTx(tx, steps[nextCursorPosition].StepId, runId)
 			if err != nil {
-				err = Rollback(tx, err)
+				err = dao.Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row cursor: %w", err)
 			}
 		}

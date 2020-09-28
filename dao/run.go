@@ -38,22 +38,172 @@ type RunRecord struct {
 	Script string
 }
 
-func ListRuns() ([]*RunRecord, error) {
+func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	var result []*RunRecord
-	rows, err := DB.SQL().Queryx("SELECT * FROM runs ORDER BY id DESC")
+	var rows *sqlx.Rows
+	var err error
+	var count int64 = -1
+	sql := ""
+	params := make([]interface{}, 0)
+	if query == nil {
+		sql = "SELECT * FROM runs ORDER BY id DESC LIMIT 20"
+	} else {
+		sql = "SELECT * FROM runs"
+		{
+			filterQuery := ""
+			for i, expression := range query.Filter {
+				queryExpression := ""
+				switch expression.AttributeName {
+				case "id":
+				case "uuid":
+				case "title":
+				case "cursor":
+				case "status":
+				default:
+					return nil, nil, fmt.Errorf("invalid attribute name in filter: %s", expression.AttributeName)
+				}
+				queryExpression = expression.AttributeName
+				switch expression.Operator {
+				case "<":
+					fallthrough
+				case ">":
+					fallthrough
+				case "<=":
+					fallthrough
+				case ">=":
+					switch expression.AttributeName {
+					case "id":
+					case "cursor":
+					default:
+						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					}
+					queryExpression += expression.Operator
+					queryExpression += "$" + string(i+1)
+				case "<>":
+					fallthrough
+				case "=":
+					queryExpression += expression.Operator
+					queryExpression += "$" + string(i+1)
+				case "startsWith":
+					switch expression.AttributeName {
+					case "title":
+					default:
+						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					}
+					queryExpression += "LIKE $" + string(i+1) + " || '%'"
+				case "endsWith":
+					switch expression.AttributeName {
+					case "title":
+					default:
+						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					}
+					queryExpression += "LIKE '%' || $" + string(i+1)
+				case "contains":
+					switch expression.AttributeName {
+					case "title":
+					default:
+						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					}
+					queryExpression += "LIKE '%' || $" + string(i+1) + " || '%'"
+				default:
+					return nil, nil, fmt.Errorf("invalud operator in filter: %s", expression.Operator)
+				}
+				params = append(params, expression.Value)
+				if filterQuery != "" {
+					filterQuery += " AND "
+				}
+				filterQuery += queryExpression
+			}
+			if filterQuery != "" {
+				sql += " WHERE " + filterQuery
+			}
+		}
+		{
+			if len(query.Sort.Fields) > 0 {
+				const orderby = " ORDER BY "
+				sort := orderby
+				for _, field := range query.Sort.Fields {
+					switch field {
+					case "id":
+					case "uuid":
+					case "title":
+					case "cursor":
+					case "status":
+					default:
+						return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
+					}
+					if sort != orderby {
+						sort += ","
+					}
+					sql += field
+				}
+				switch query.Sort.Order {
+				case "descending":
+				case "ascending":
+				default:
+					return nil, nil, fmt.Errorf("invalud sort order: %s", query.Sort.Order)
+				}
+				sql += query.Sort.Order
+			} else {
+				sql += " ORDER BY id DESC"
+			}
+		}
+		{
+			if query.Range.End >= query.Range.Start && query.Range.Start > 0 {
+				offset := query.Range.Start - 1
+				limit := query.Range.End - query.Range.Start + 1
+				sql += fmt.Sprintf(" OFFSET %d LIMIT %d", offset, limit)
+			}
+		}
+	}
+	if query != nil && query.Range.ComputeTotal {
+		tx, err := DB.SQL().Beginx()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
+		}
+		err = tx.Get(&count, "select count(*) from ("+sql+") C", params...)
+		if err != nil {
+			err = Rollback(tx, err)
+			return nil, nil, fmt.Errorf("failed to query count database run table: %w", err)
+		}
+		rows, err = tx.Queryx(sql, params...)
+		if err != nil {
+			err = Rollback(tx, err)
+			return nil, nil, fmt.Errorf("failed to query database run table: %w", err)
+		}
+
+		defer tx.Commit()
+	} else {
+		rows, err = DB.SQL().Queryx(sql, params...)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query database runs table: %w", err)
+		return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
 	}
 
 	for rows.Next() {
 		var run RunRecord
 		err = rows.StructScan(&run)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse database runs row: %w", err)
+			return nil, nil, fmt.Errorf("failed to parse database runs row: %w", err)
 		}
 		result = append(result, &run)
 	}
-	return result, nil
+	{
+		rangeResult := RangeResult{
+			Range: Range{
+				Start: 0,
+				End:   -1,
+			},
+			Total: count,
+		}
+		if len(result) > 0 {
+			if query != nil && query.Range.End >= query.Range.Start && query.Range.Start > 0 {
+				rangeResult.Start = query.Range.Start
+				rangeResult.End = query.Range.Start + int64(len(result)) - 1
+			}
+		}
+		return result, &rangeResult, nil
+	}
 }
 
 func GetRun(runId int64) (*RunRecord, error) {

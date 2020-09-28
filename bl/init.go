@@ -17,8 +17,8 @@ package bl
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/dao"
 	_ "github.com/jackc/pgx/stdlib"
-	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -56,7 +56,7 @@ func (e *Error) Unwrap() error {
 func InitBL(databaseVendor string, dataSourceName string) error {
 	if databaseVendor != "remote" {
 		IsRemote = false
-		err := OpenDatabase(databaseVendor, dataSourceName)
+		err := dao.OpenDatabase(databaseVendor, dataSourceName)
 		if err != nil {
 			return err
 		}
@@ -68,12 +68,4 @@ func InitBL(databaseVendor string, dataSourceName string) error {
 		IsRemote = true
 	}
 	return nil
-}
-
-func Rollback(tx *sqlx.Tx, err error) error {
-	err2 := tx.Rollback()
-	if err2 != nil {
-		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	}
-	return err
 }

@@ -209,7 +209,8 @@ OUT:
 	if strings.EqualFold(relevantCommand.Use, "run") &&
 		len(runWord) > len("run") &&
 		strings.EqualFold(strings.TrimSpace(runWord), "run") {
-		runs, err := bl.ListRuns()
+		// TODO: add a more useful filter
+		runs, _, err := bl.ListRuns(nil)
 		if err != nil {
 			log.Error(fmt.Errorf("failed to list runs: %w", err))
 			return []prompt.Suggest{}

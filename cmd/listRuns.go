@@ -52,7 +52,8 @@ func listRunsInternal(runId int64) {
 		}
 		runs = append(runs, run)
 	} else {
-		runs, err = bl.ListRuns()
+		// TODO: add a more useful filter
+		runs, _, err = bl.ListRuns(nil)
 	}
 
 	if err != nil {

@@ -35,45 +35,47 @@ type (
 )
 type ListRunsResponse struct {
 	Version string         `json:"jsonrpc"`
-	Result  []RunRPCRecord `json:"result,omitempty"`
+	Result  ListRunsResult `json:"result,omitempty"`
 	Error   JSONRPCError   `json:"error,omitempty"`
 	ID      string         `json:"id,omitempty"`
 }
 
-func RemoteListRuns() ([]*RunRecord, error) {
+func RemoteListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	result := make([]*RunRecord, 0)
-	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &ListRunsParams{})
+	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &ListRunsParams{Query: *query})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	newRequest, err := http.NewRequest("POST", "http://localhost:3333/v0/json-rpc", bytes.NewBuffer(request))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	newRequest.Header.Set("Content-type", "application/json")
 	response, err := Client.Do(newRequest)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer response.Body.Close()
 	defer io.Copy(ioutil.Discard, response.Body)
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to reach remote server, got: %d", response.StatusCode)
+		return nil, nil, fmt.Errorf("failed to reach remote server, got: %d", response.StatusCode)
 	}
 	var jsonRPCResult ListRunsResponse
 	decoder := json.NewDecoder(response.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&jsonRPCResult); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if jsonRPCResult.Error.Code != 0 {
-		return nil, fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRPCResult.Error.Code, jsonRPCResult.Error.Message)
+		return nil, nil, fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRPCResult.Error.Code, jsonRPCResult.Error.Message)
 	}
-	if jsonRPCResult.Result != nil {
-		for _, record := range jsonRPCResult.Result {
+	if jsonRPCResult.Result.Data != nil &&
+		jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
+		jsonRPCResult.Result.Range.Start > 0 {
+		for _, record := range jsonRPCResult.Result.Data {
 			status, err := TranslateToRunStatus(record.Status)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			result = append(result, &RunRecord{
 				Id:     record.Id,
@@ -85,5 +87,5 @@ func RemoteListRuns() ([]*RunRecord, error) {
 			})
 		}
 	}
-	return result, nil
+	return result, &jsonRPCResult.Result.Range, nil
 }

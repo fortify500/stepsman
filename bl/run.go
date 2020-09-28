@@ -21,11 +21,11 @@ import (
 	"github.com/google/uuid"
 )
 
-func ListRuns() ([]*dao.RunRecord, error) {
+func ListRuns(query *dao.Query) ([]*dao.RunRecord, *dao.RangeResult, error) {
 	if IsRemote {
-		return dao.RemoteListRuns()
+		return dao.RemoteListRuns(query)
 	} else {
-		return dao.ListRuns()
+		return dao.ListRuns(query)
 	}
 }
 
@@ -40,23 +40,23 @@ func UpdateRunStatus(runRecord *dao.RunRecord, newStatus dao.RunStatusType) erro
 		//TODO: make a more efficient query.
 		steps, err := dao.ListStepsTx(tx, runRecord.Id)
 		if err != nil {
-			err = Rollback(tx, err)
+			err = dao.Rollback(tx, err)
 			return fmt.Errorf("failed to update database run status: %w", err)
 		}
 		for _, stepRecord := range steps {
 			if stepRecord.Status == dao.StepInProgress {
-				err = Rollback(tx, err)
+				err = dao.Rollback(tx, err)
 				return fmt.Errorf("failed to update database run status: %w", err)
 			}
 		}
 
 	} else {
-		err = Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
+		err = dao.Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
 	_, err = dao.UpdateRunStatus(runRecord.Id, newStatus)
 	if err != nil {
-		err = Rollback(tx, err)
+		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
 	err = tx.Commit()
@@ -75,17 +75,17 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 
 	count, err := dao.GetTitleInProgressTx(tx, title)
 	if err != nil {
-		err = Rollback(tx, err)
+		err = dao.Rollback(tx, err)
 		return nil, fmt.Errorf("failed to query database runs table count for in progress rows: %w", err)
 	}
 	if count != 0 {
-		err = Rollback(tx, dao.ErrActiveRunsWithSameTitleExists)
+		err = dao.Rollback(tx, dao.ErrActiveRunsWithSameTitleExists)
 		return nil, err
 	}
 
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
-		err = Rollback(tx, err)
+		err = dao.Rollback(tx, err)
 		return nil, fmt.Errorf("failed to generate uuid: %w", err)
 	}
 	runRecord := dao.RunRecord{
@@ -98,7 +98,7 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 
 	runRecord.Id, err = dao.DB.CreateRun(tx, &runRecord)
 	if err != nil {
-		err = Rollback(tx, err)
+		err = dao.Rollback(tx, err)
 		return nil, fmt.Errorf("failed to create runs row: %w", err)
 	}
 
@@ -114,7 +114,7 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 		}
 		_, err = dao.CreateStepTx(tx, stepRecord)
 		if err != nil {
-			err = Rollback(tx, err)
+			err = dao.Rollback(tx, err)
 			return nil, fmt.Errorf("failed to insert database steps row: %w", err)
 		}
 	}

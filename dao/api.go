@@ -16,7 +16,7 @@ limitations under the License.
 package dao
 
 type (
-	RunRPCRecord struct {
+	RunAPIRecord struct {
 		Id     int64
 		UUID   string
 		Title  string
@@ -52,19 +52,16 @@ type Expression struct {
 	Operator      string // =,>=,>,<=,<,starts-with,ends-with,contains
 	Value         string
 }
-type Filter struct {
-	Expressions []Expression
-}
 
 type Query struct {
 	Range  RangeQuery
 	Sort   Sort
-	Filter Filter
+	Filter []Expression
 }
 
 type ListRunsResult struct {
-	Range Range          `json:"range,omitempty"`
-	Data  []RunRPCRecord `json:"data,omitempty"`
+	Range RangeResult    `json:"range,omitempty"`
+	Data  []RunAPIRecord `json:"data,omitempty"`
 }
 
 type ListRunsParams struct {
