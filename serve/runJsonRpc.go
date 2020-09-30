@@ -38,7 +38,7 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p dao.ListRunsParams
+	var p dao.ListParams
 	if params != nil {
 		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 			return nil, errResult
@@ -62,6 +62,42 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		Range: *runsRange,
 		Data:  runRpcRecords,
 	}, nil
+}
+
+type (
+	GetRunsHandler struct{}
+)
+
+func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	err := valve.Lever(c).Open()
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	defer valve.Lever(c).Close()
+	var p dao.GetParams
+	if params != nil {
+		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+			return nil, errResult
+		}
+	}
+	runs, err := bl.GetRuns(p)
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	runRpcRecords, err := RunRecordToRunRPCRecord(runs)
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	return runRpcRecords, nil
 }
 
 func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]dao.RunAPIRecord, error) {

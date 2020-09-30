@@ -39,8 +39,11 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 
 	mr := jsonrpc.NewMethodRepository()
 
-	if err := mr.RegisterMethod(dao.LIST_RUNS, ListRunsHandler{}, dao.ListRunsParams{}, dao.ListRunsResult{}); err != nil {
-		log.Error(err)
+	if err := mr.RegisterMethod(dao.LIST_RUNS, ListRunsHandler{}, dao.ListParams{}, dao.ListRunsResult{}); err != nil {
+		log.Fatal(err)
+	}
+	if err := mr.RegisterMethod(dao.GET_RUNS, GetRunsHandler{}, dao.GetParams{}, dao.GetRunsResult{}); err != nil {
+		log.Fatal(err)
 	}
 	return mr
 }

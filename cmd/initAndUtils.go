@@ -1,18 +1,18 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package cmd
 
 import (
@@ -51,20 +51,19 @@ const (
 
 type AllParameters struct {
 	// Flags
-	CfgFile            string
-	DatabaseVendor     string
-	DataSourceName     string
-	DatabaseHost       string
-	DatabasePort       int64
-	DatabaseName       string
-	DatabaseSSLMode    bool
-	DatabaseUserName   string
-	DatabasePassword   string
-	CreateFileName     string
-	ServerPort         int64
-	Step               string
-	Run                int64
-	DisableSuggestions bool
+	CfgFile          string
+	DatabaseVendor   string
+	DataSourceName   string
+	DatabaseHost     string
+	DatabasePort     int64
+	DatabaseName     string
+	DatabaseSSLMode  bool
+	DatabaseUserName string
+	DatabasePassword string
+	CreateFileName   string
+	ServerPort       int64
+	Step             string
+	Run              int64
 	//Query
 	RangeStart       int64
 	RangeEnd         int64
@@ -82,15 +81,14 @@ type AllParameters struct {
 }
 
 var Parameters = AllParameters{
-	CfgFile:            "",
-	CreateFileName:     "",
-	Step:               "",
-	Run:                -1,
-	DisableSuggestions: true,
-	InitialInput:       "",
-	CurrentCommand:     CommandUndetermined,
-	CurrentRunId:       -1,
-	FlagsReInit:        []func(){},
+	CfgFile:        "",
+	CreateFileName: "",
+	Step:           "",
+	Run:            -1,
+	InitialInput:   "",
+	CurrentCommand: CommandUndetermined,
+	CurrentRunId:   -1,
+	FlagsReInit:    []func(){},
 }
 
 var StoreDir string
@@ -222,7 +220,7 @@ func getCursorStep(run *dao.RunRecord) (*dao.StepRecord, error) {
 }
 
 func getRun(runId int64) (*dao.RunRecord, error) {
-	run, err := dao.GetRun(runId)
+	run, err := bl.GetRun(runId)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %d", runId)
 		return nil, &Error{

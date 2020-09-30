@@ -101,7 +101,7 @@ func listRunsInternal(runId int64) {
 			{run.Id, run.UUID, strings.TrimSpace(text.WrapText(run.Title, 70)), run.Cursor, status},
 		})
 	}
-	if runRange.Total > 0 {
+	if runRange != nil && runRange.Total > 0 {
 		t.AppendFooter(table.Row{"", "", "", "", "-----------"})
 		t.AppendFooter(table.Row{"", "", "", "", fmt.Sprintf("%d-%d/%d", runRange.Start, runRange.End, runRange.Total)})
 	}

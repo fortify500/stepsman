@@ -167,17 +167,6 @@ func resetParameters() {
 }
 
 func completer(d prompt.Document) []prompt.Suggest {
-	if d.LastKeyStroke() == prompt.Escape {
-		Parameters.DisableSuggestions = true
-		return []prompt.Suggest{}
-
-	}
-	if Parameters.DisableSuggestions && d.LastKeyStroke() == prompt.Tab {
-		Parameters.DisableSuggestions = false
-	} else if Parameters.DisableSuggestions {
-		return []prompt.Suggest{}
-	}
-
 	var s []prompt.Suggest
 	currentWord := d.GetWordBeforeCursorUntilSeparator(" ")
 

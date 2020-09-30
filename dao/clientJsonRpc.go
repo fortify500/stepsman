@@ -1,18 +1,18 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package dao
 
 import (
@@ -21,8 +21,82 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"time"
 )
+
+var Transport = http.Transport{
+	Proxy: nil,
+	DialContext: (&net.Dialer{
+		Timeout:   60 * time.Second,
+		KeepAlive: 60 * time.Second,
+		DualStack: true,
+	}).DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          100,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   30 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+	//MaxIdleConnsPerHost:    0,
+	//MaxConnsPerHost:        0,
+	ResponseHeaderTimeout:  60 * time.Second,
+	MaxResponseHeaderBytes: 10 * 1024 * 1024,
+}
+var Client = &http.Client{
+	//Jar:           nil,
+	Timeout:   time.Second * 60,
+	Transport: &Transport,
+}
+
+type JSONRPCRequest struct {
+	Version string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params,omitempty"`
+	ID      string      `json:"id,omitempty"`
+}
+
+func NewMarshaledJSONRPCRequest(id string, method string, params interface{}) ([]byte, error) {
+	request := JSONRPCRequest{
+		Version: "2.0",
+		Method:  method,
+		Params:  params,
+		ID:      id,
+	}
+	return json.Marshal(request)
+}
+
+var jsonRpcUrl string
+
+func InitClient() {
+	protocol := "http"
+	if parameters.DatabaseSSLMode {
+		protocol += "s"
+	}
+	jsonRpcUrl = fmt.Sprintf("%s://%s:%d/v0/json-rpc",
+		protocol,
+		parameters.DatabaseHost,
+		parameters.DatabasePort)
+}
+
+func remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCloser) error) error {
+	newRequest, err := http.NewRequest("POST", jsonRpcUrl, bytes.NewBuffer(request))
+	if err != nil {
+		return err
+	}
+	newRequest.Header.Set("Content-type", "application/json")
+	response, err := Client.Do(newRequest)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	defer io.Copy(ioutil.Discard, response.Body)
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to reach remote server, got: %d", response.StatusCode)
+	}
+	err = decodeResponse(&response.Body)
+	return err
+}
 
 type (
 	ErrorCode int64
@@ -33,59 +107,10 @@ type (
 		Data    interface{} `json:"data,omitempty"`
 	}
 )
-type ListRunsResponse struct {
-	Version string         `json:"jsonrpc"`
-	Result  ListRunsResult `json:"result,omitempty"`
-	Error   JSONRPCError   `json:"error,omitempty"`
-	ID      string         `json:"id,omitempty"`
-}
 
-func RemoteListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
-	result := make([]*RunRecord, 0)
-	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &ListRunsParams{Query: *query})
-	if err != nil {
-		return nil, nil, err
+func getJSONRPCError(jsonRpcError *JSONRPCError) error {
+	if jsonRpcError.Code != 0 {
+		return fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRpcError.Code, jsonRpcError.Message)
 	}
-	newRequest, err := http.NewRequest("POST", "http://localhost:3333/v0/json-rpc", bytes.NewBuffer(request))
-	if err != nil {
-		return nil, nil, err
-	}
-	newRequest.Header.Set("Content-type", "application/json")
-	response, err := Client.Do(newRequest)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer response.Body.Close()
-	defer io.Copy(ioutil.Discard, response.Body)
-	if response.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("failed to reach remote server, got: %d", response.StatusCode)
-	}
-	var jsonRPCResult ListRunsResponse
-	decoder := json.NewDecoder(response.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&jsonRPCResult); err != nil {
-		return nil, nil, err
-	}
-	if jsonRPCResult.Error.Code != 0 {
-		return nil, nil, fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRPCResult.Error.Code, jsonRPCResult.Error.Message)
-	}
-	if jsonRPCResult.Result.Data != nil &&
-		jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
-		jsonRPCResult.Result.Range.Start > 0 {
-		for _, record := range jsonRPCResult.Result.Data {
-			status, err := TranslateToRunStatus(record.Status)
-			if err != nil {
-				return nil, nil, err
-			}
-			result = append(result, &RunRecord{
-				Id:     record.Id,
-				UUID:   record.UUID,
-				Title:  record.Title,
-				Cursor: record.Cursor,
-				Status: status,
-				Script: record.Script,
-			})
-		}
-	}
-	return result, &jsonRPCResult.Result.Range, nil
+	return nil
 }

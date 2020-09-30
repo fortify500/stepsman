@@ -1,18 +1,18 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package dao
 
 import (
@@ -212,8 +212,16 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 }
 
 func GetRun(runId int64) (*RunRecord, error) {
-	var result *RunRecord
-	rows, err := DB.SQL().Queryx("SELECT * FROM runs where id=$1", runId)
+	runs, err := GetRuns([]int64{runId})
+	if err != nil {
+		return nil, err
+	}
+	return runs[0], nil
+}
+
+func GetRuns(ids []int64) ([]*RunRecord, error) {
+	var result []*RunRecord
+	rows, err := DB.SQL().Queryx(fmt.Sprintf("SELECT * FROM runs where id IN %s", int64sListToStringInClause(ids)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
 	}
@@ -224,9 +232,9 @@ func GetRun(runId int64) (*RunRecord, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse database runs row - get: %w", err)
 		}
-		result = &run
+		result = append(result, &run)
 	}
-	if result == nil {
+	if result == nil || len(result) != len(ids) {
 		return nil, ErrRecordNotFound
 	}
 	return result, nil

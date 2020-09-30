@@ -1,18 +1,18 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package bl
 
 import (
@@ -22,10 +22,30 @@ import (
 )
 
 func ListRuns(query *dao.Query) ([]*dao.RunRecord, *dao.RangeResult, error) {
-	if IsRemote {
+	if dao.IsRemote {
 		return dao.RemoteListRuns(query)
 	} else {
 		return dao.ListRuns(query)
+	}
+}
+
+func GetRun(runId int64) (*dao.RunRecord, error) {
+	if dao.IsRemote {
+		runs, err := dao.RemoteGetRuns([]int64{runId})
+		if err != nil {
+			return nil, err
+		}
+		return runs[0], nil
+	} else {
+		return dao.GetRun(runId)
+	}
+}
+
+func GetRuns(ids []int64) ([]*dao.RunRecord, error) {
+	if dao.IsRemote {
+		return dao.RemoteGetRuns(ids)
+	} else {
+		return dao.GetRuns(ids)
 	}
 }
 
@@ -104,6 +124,10 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 
 	for i, step := range s.Steps {
 		uuid4, err := uuid.NewRandom()
+		if err != nil {
+			err = dao.Rollback(tx, err)
+			return nil, fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
+		}
 		stepRecord := &dao.StepRecord{
 			RunId:  runRecord.Id,
 			StepId: int64(i) + 1,
