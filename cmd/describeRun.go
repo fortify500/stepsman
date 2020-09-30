@@ -1,18 +1,18 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package cmd
 
 import (
@@ -51,7 +51,17 @@ You can also describe a single step by adding --step <step id>.`,
 			Parameters.Err = err
 			return
 		}
-		steps, err := bl.ListSteps(run.Id)
+		stepRecords, err := bl.ListSteps(run.Id)
+		if err != nil {
+			msg := "failed to describe steps"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
+			return
+		}
+		script := bl.Script{}
+		err = script.LoadFromBytes([]byte(run.Script))
 		if err != nil {
 			msg := "failed to describe steps"
 			Parameters.Err = &Error{
@@ -96,7 +106,7 @@ You can also describe a single step by adding --step <step id>.`,
 			mainT.AppendRow(table.Row{"Step"})
 		}
 
-		for i, stepRecord := range steps {
+		for i, stepRecord := range stepRecords {
 			if stepId > 0 && stepId != int64(i)+1 {
 				continue
 			}
@@ -126,15 +136,7 @@ You can also describe a single step by adding --step <step id>.`,
 			if stepRecord.Status == dao.StepInProgress {
 				heartBeat = fmt.Sprintf("%d", stepRecord.HeartBeat)
 			}
-			step, err := bl.ToStep(stepRecord)
-			if err != nil {
-				msg := "failed to describe steps"
-				Parameters.Err = &Error{
-					Technical: fmt.Errorf(msg+": %w", err),
-					Friendly:  msg,
-				}
-				return
-			}
+			step := script.Steps[stepRecord.StepId-1]
 			{
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)

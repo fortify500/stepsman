@@ -51,17 +51,17 @@ func ListSteps(runId int64) ([]*dao.StepRecord, error) {
 	return dao.ListSteps(runId)
 }
 
-func ToStep(stepRecord *dao.StepRecord) (*Step, error) {
-	step := Step{
-		Script: stepRecord.Script,
-	}
-	err := step.AdjustUnmarshalStep(true)
-	if err != nil {
-		return nil, err
-	}
-	step.stepRecord = stepRecord
-	return &step, nil
-}
+//func ToStep(stepRecord *dao.StepRecord) (*Step, error) {
+//	step := Step{
+//		Script: stepRecord.Script,
+//	}
+//	err := step.AdjustUnmarshalStep(true)
+//	if err != nil {
+//		return nil, err
+//	}
+//	step.stepRecord = stepRecord
+//	return &step, nil
+//}
 
 func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, doFinish bool) error {
 	tx, err := dao.DB.SQL().Beginx()

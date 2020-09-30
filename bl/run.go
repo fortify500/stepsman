@@ -134,7 +134,6 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 			UUID:   uuid4.String(),
 			Name:   step.Name,
 			Status: dao.StepNotStarted,
-			Script: step.Script,
 		}
 		_, err = dao.CreateStepTx(tx, stepRecord)
 		if err != nil {
