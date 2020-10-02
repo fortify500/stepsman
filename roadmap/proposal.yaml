@@ -1,13 +1,6 @@
 title: "STEPSMAN Hello World"
-schema: 0.1 # the version of the schema used. So if we change the structure of the document in a later stepsman version we can migrate it.
-version: 1.0 # the document version so when we load it up to the repository of templates we can differentiate with older or newer version. Default is 1.0
-# searchable tags. if you want to locate a template by an external key.
 tags:
   uuid: e09d86c4-b907-4674-af4f-8aceeb2b7ef1
-# a free form json which can contain additional information such as identifying or other info.
-# when a run is created, they can be provided as overrides to the existing context or updated or per call when calling a step directly.
-context: >
-  {"app_id": 2 }
 # validations are tested before and after each step calls do. before any other event (like on-done).
 validations:
   - if: >
@@ -167,3 +160,7 @@ functions:
 #   which is ok to ignore if, for example, it was caused by unaware callers (such as a link from a bunch of emails like in approvals process).
 # * Vault secrets and properties (such as tenant properties) will be retrieved by default from a static text file or hashicorp vault client.
 # * You can access environment variables via "env.".
+# * Each step record will have a label json/jsonb(where applicable) to hold state do result
+# * The template will be loaded for each step for every do. In serve mode we can cache it and initialize the updated state.
+#   The state of the other labels may not be updated as expected but that is fine if the steps do are being run concurrently.
+# * Step and Run state should be updated in different transaction to avoid contention. It is ok for an update of run state to fail after updating a step state.
