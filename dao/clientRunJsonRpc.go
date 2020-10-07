@@ -58,12 +58,13 @@ func RemoteListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 					return err
 				}
 				result = append(result, &RunRecord{
-					Id:     record.Id,
-					UUID:   record.UUID,
-					Title:  record.Title,
-					Cursor: record.Cursor,
-					Status: status,
-					Script: record.Script,
+					Id:              record.Id,
+					Key:             record.Key,
+					TemplateVersion: record.TemplateVersion,
+					TemplateTitle:   record.TemplateTitle,
+					Status:          status,
+					Template:        record.Template,
+					State:           record.State,
 				})
 			}
 		}
@@ -80,7 +81,7 @@ type GetRunsResponse struct {
 	ID      string        `json:"id,omitempty"`
 }
 
-func RemoteGetRuns(ids []int64) ([]*RunRecord, error) {
+func RemoteGetRuns(ids []string) ([]*RunRecord, error) {
 	result := make([]*RunRecord, 0)
 	request, err := NewMarshaledJSONRPCRequest("1", GET_RUNS, &ids)
 	if err != nil {
@@ -104,12 +105,13 @@ func RemoteGetRuns(ids []int64) ([]*RunRecord, error) {
 					return err
 				}
 				result = append(result, &RunRecord{
-					Id:     record.Id,
-					UUID:   record.UUID,
-					Title:  record.Title,
-					Cursor: record.Cursor,
-					Status: status,
-					Script: record.Script,
+					Id:              record.Id,
+					Key:             record.Key,
+					TemplateVersion: record.TemplateVersion,
+					TemplateTitle:   record.TemplateTitle,
+					Status:          status,
+					Template:        record.Template,
+					State:           record.State,
 				})
 			}
 		}

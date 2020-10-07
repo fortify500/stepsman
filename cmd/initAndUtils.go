@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
@@ -61,9 +62,10 @@ type AllParameters struct {
 	DatabaseUserName string
 	DatabasePassword string
 	CreateFileName   string
+	RunKey           string
 	ServerPort       int64
 	Step             string
-	Run              int64
+	Run              string
 	//Query
 	RangeStart       int64
 	RangeEnd         int64
@@ -74,25 +76,26 @@ type AllParameters struct {
 	// Others
 	InitialInput   string
 	CurrentCommand CommandType
-	CurrentRunId   int64
+	CurrentRunId   string
 	CurrentRun     *dao.RunRecord
-	FlagsReInit    []func()
+	FlagsReInit    []func() error
 	Err            error
 }
 
 var Parameters = AllParameters{
 	CfgFile:        "",
+	RunKey:         "",
 	CreateFileName: "",
 	Step:           "",
-	Run:            -1,
+	Run:            "",
 	InitialInput:   "",
 	CurrentCommand: CommandUndetermined,
-	CurrentRunId:   -1,
-	FlagsReInit:    []func(){},
+	CurrentRunId:   "",
+	FlagsReInit:    []func() error{},
 }
 
 var StoreDir string
-var Luberjack *lumberjack.Logger
+var LumberJack *lumberjack.Logger
 
 type Error struct {
 	Technical error
@@ -122,7 +125,7 @@ func Execute() bool {
 	return false
 }
 
-func initConfig() {
+func InitConfig() {
 	flag.Parse()
 	dir, err := homedir.Dir()
 	if err != nil {
@@ -141,7 +144,7 @@ func initConfig() {
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
-	Luberjack = &lumberjack.Logger{
+	LumberJack = &lumberjack.Logger{
 		Filename:   path.Join(StoreDir, "stepsman.log"),
 		MaxSize:    100, // megabytes
 		MaxBackups: 2,
@@ -150,7 +153,7 @@ func initConfig() {
 	}
 	log.SetFormatter(&log.JSONFormatter{})
 	// use this later on
-	log.SetOutput(Luberjack)
+	log.SetOutput(LumberJack)
 
 	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
 	//	Filename:   path.Join(StoreDir, "stepsman.log"),
@@ -207,10 +210,10 @@ func initConfig() {
 	}
 }
 
-func getCursorStep(run *dao.RunRecord) (*dao.StepRecord, error) {
-	step, err := bl.GetCursorStep(run)
+func GetNotDoneAndNotSkippedStep(run *dao.RunRecord) (*dao.StepRecord, error) {
+	step, err := bl.GetNotDoneAndNotSkippedStep(run)
 	if err != nil {
-		msg := fmt.Sprintf("failed to get step with [run id,step id]: [%d,%d]", run.Id, run.Cursor)
+		msg := fmt.Sprintf("failed to get step with [run id]: [%s]", run.Id)
 		return nil, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
@@ -219,10 +222,10 @@ func getCursorStep(run *dao.RunRecord) (*dao.StepRecord, error) {
 	return step, nil
 }
 
-func getRun(runId int64) (*dao.RunRecord, error) {
-	run, err := bl.GetRun(runId)
+func getRun(id string) (*dao.RunRecord, error) {
+	run, err := bl.GetRun(id)
 	if err != nil {
-		msg := fmt.Sprintf("failed to get run with id: %d", runId)
+		msg := fmt.Sprintf("failed to get run with id: %s", id)
 		return nil, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
@@ -231,39 +234,32 @@ func getRun(runId int64) (*dao.RunRecord, error) {
 	return run, nil
 }
 
-func parseRunId(idStr string) (int64, error) {
-	runId, err := strconv.ParseInt(idStr, 10, 64)
+func parseRunId(idStr string) (string, error) {
+	uuid4, err := uuid.Parse(idStr)
 	if err != nil {
 		msg := "failed to parse run id"
-		return -1, &Error{
+		return "", &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
 	}
-	return runId, nil
+	return strings.ToLower(uuid4.String()), nil
 }
 
-func parseStepId(runRecord *dao.RunRecord, idStr string) (int64, error) {
+func parseIndex(idStr string) (int64, error) {
 	idStr = strings.TrimSpace(idStr)
 	if idStr == "" {
 		return -1, nil
 	}
-	if strings.EqualFold(idStr, "cursor") {
-		return runRecord.Cursor, nil
-	}
-	stepId, err := strconv.ParseInt(idStr, 10, 64)
+	index, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		msg := "failed to parse step id"
+		msg := "failed to parse Index"
 		return -1, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
 	}
-	return stepId, nil
-}
-
-func init() {
-	initConfig()
+	return index, nil
 }
 
 var NoBordersStyle = table.Style{

@@ -32,7 +32,7 @@ var describeRunCmd = &cobra.Command{
 	Short: "Describe a run steps",
 	Long: `Enumerate the steps of a run in a verbose and friendly way. 
 Use run <run id>.
-You can also describe a single step by adding --step <step id>.`,
+You can also describe a single step by adding --step <Index>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandDescribeRun
 		runId, err := parseRunId(args[0])
@@ -46,7 +46,7 @@ You can also describe a single step by adding --step <step id>.`,
 			return
 		}
 		Parameters.CurrentRunId = run.Id
-		stepId, err := parseStepId(run, Parameters.Step)
+		index, err := parseIndex(Parameters.Step)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -60,8 +60,8 @@ You can also describe a single step by adding --step <step id>.`,
 			}
 			return
 		}
-		script := bl.Script{}
-		err = script.LoadFromBytes([]byte(run.Script))
+		script := bl.Template{}
+		err = script.LoadFromBytes(false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to describe steps"
 			Parameters.Err = &Error{
@@ -73,7 +73,7 @@ You can also describe a single step by adding --step <step id>.`,
 		mainT := table.NewWriter()
 		mainT.SetStyle(NoBordersStyle)
 		mainT.SetOutputMirror(os.Stdout)
-		if stepId == -1 {
+		if index == -1 {
 			mainT.AppendRow(table.Row{"Description"})
 
 			{
@@ -88,14 +88,13 @@ You can also describe a single step by adding --step <step id>.`,
 				}
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
-				//t.SetTitle(cursor + checked + " " + text.WrapText(stepRecord.Name, 70))
+				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 70))
 				t.SetStyle(NoBordersStyle)
 				t.AppendRows([]table.Row{
-					//{cursor, checked, stepRecord.StepId, stepRecord.UUID, stepRecord.Name, status, heartBeat},
+					//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", run.Id},
-					{"Cursor:", run.Cursor},
-					{"Title:", strings.TrimSpace(text.WrapText(run.Title, 70))},
-					{"UUID:", run.UUID},
+					{"Template Title:", strings.TrimSpace(text.WrapText(run.TemplateTitle, 70))},
+					{"Key:", run.Key},
 					{"Status:", runStatus},
 				})
 				mainT.AppendRow(table.Row{t.Render()})
@@ -107,7 +106,7 @@ You can also describe a single step by adding --step <step id>.`,
 		}
 
 		for i, stepRecord := range stepRecords {
-			if stepId > 0 && stepId != int64(i)+1 {
+			if index > 0 && index != int64(i)+1 {
 				continue
 			}
 			status, err := bl.TranslateStepStatus(stepRecord.Status)
@@ -119,33 +118,26 @@ You can also describe a single step by adding --step <step id>.`,
 				}
 				return
 			}
-			cursor := ""
 			checked := "[ ]"
 			heartBeat := "N/A"
 			switch stepRecord.Status {
-			case bl.StepDone:
+			case dao.StepDone:
 				checked = "True"
 			case dao.StepSkipped:
 				checked = "True"
 			}
-			if stepRecord.StepId == run.Cursor {
-				cursor = "True"
-			} else {
-				cursor = "False"
-			}
 			if stepRecord.Status == dao.StepInProgress {
-				heartBeat = fmt.Sprintf("%d", stepRecord.HeartBeat)
+				heartBeat = fmt.Sprintf("%s", stepRecord.HeartBeat)
 			}
-			step := script.Steps[stepRecord.StepId-1]
+			step := script.Steps[stepRecord.Index-1]
 			{
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
-				//t.SetTitle(cursor + checked + " " + text.WrapText(stepRecord.Name, 70))
+				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 70))
 				t.SetStyle(NoBordersStyle)
 				t.AppendRows([]table.Row{
-					//{cursor, checked, stepRecord.StepId, stepRecord.UUID, stepRecord.Name, status, heartBeat},
-					{"Id:", stepRecord.StepId},
-					{"Cursor:", cursor},
+					//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
+					{"Index:", stepRecord.Index},
 					{"Name:", strings.TrimSpace(text.WrapText(stepRecord.Name, TableWrapLen))},
 					{"UUID:", stepRecord.UUID},
 					{"Status:", status},
@@ -170,10 +162,10 @@ You can also describe a single step by adding --step <step id>.`,
 
 func init() {
 	describeCmd.AddCommand(describeRunCmd)
-	initFlags := func() {
+	initFlags := func() error {
 		describeRunCmd.ResetFlags()
-		describeRunCmd.Flags().StringVarP(&Parameters.Step, "step", "s", "", "Step Id")
-		describeRunCmd.Flags().Lookup("step").NoOptDefVal = "cursor"
+		describeRunCmd.Flags().StringVarP(&Parameters.Step, "step", "s", "", "Step Index")
+		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

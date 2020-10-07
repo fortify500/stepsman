@@ -35,7 +35,7 @@ var promptCmd = &cobra.Command{
 	Short: "Prompt is an interactive command interface",
 	Long:  `Use prompt to interact with the command with command suggestions.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		resetParameters()
+		ResetParameters()
 		var history []string
 		fmt.Println("Usage:")
 		fmt.Println("* `exit` or CTRL-D to exit this program.")
@@ -61,7 +61,7 @@ var promptCmd = &cobra.Command{
 			if strings.TrimSpace(s) != "" {
 				history = append(history, s)
 			}
-			executor(s, wasEnter)
+			Executor(s, wasEnter)
 		}
 	},
 }
@@ -70,7 +70,7 @@ func init() {
 	RootCmd.AddCommand(promptCmd)
 }
 
-func executor(s string, wasEnter bool) {
+func Executor(s string, wasEnter bool) {
 	s = strings.TrimSpace(s)
 	if s == "" && wasEnter {
 		return
@@ -81,8 +81,8 @@ func executor(s string, wasEnter bool) {
 	RootCmd.SetArgs(args.GetArgs(s))
 	wasError := Execute()
 	var describeRunCursorStep []string
-	currentRunIdStr := fmt.Sprintf("%d", Parameters.CurrentRunId)
-	if Parameters.CurrentRunId > 0 {
+	currentRunIdStr := fmt.Sprintf("%s", Parameters.CurrentRunId)
+	if Parameters.CurrentRunId != "" {
 		describeRunCursorStep = []string{"describe", "run", currentRunIdStr, "--step"}
 	}
 	runStatus := dao.RunInProgress
@@ -92,14 +92,14 @@ func executor(s string, wasEnter bool) {
 	currentCommand := Parameters.CurrentCommand
 	nextInitialInput := ""
 	getRunRunId := []string{"get", "run", currentRunIdStr}
-	resetParameters()
+	ResetParameters()
 	switch currentCommand {
 	case CommandCreateRun:
 		if !wasError {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 			RootCmd.SetArgs(getRunRunId)
 			Execute()
-			resetParameters()
+			ResetParameters()
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
 			RootCmd.SetArgs(describeRunCursorStep)
 			Execute()
@@ -110,7 +110,7 @@ func executor(s string, wasEnter bool) {
 			RootCmd.SetArgs(describeRunCursorStep)
 			Execute()
 			if runStatus == dao.RunDone {
-				resetParameters()
+				ResetParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 				RootCmd.SetArgs(getRunRunId)
 				Execute()
@@ -130,7 +130,7 @@ func executor(s string, wasEnter bool) {
 			RootCmd.SetArgs(describeRunCursorStep)
 			Execute()
 			if runStatus == dao.RunDone {
-				resetParameters()
+				ResetParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 				RootCmd.SetArgs(getRunRunId)
 				Execute()
@@ -153,16 +153,21 @@ func executor(s string, wasEnter bool) {
 	default:
 		nextInitialInput = ""
 	}
-	resetParameters()
+	ResetParameters()
 	Parameters.InitialInput = nextInitialInput
 }
 
-func resetParameters() {
+func ResetParameters() {
 	Parameters.CurrentCommand = CommandUndetermined
-	Parameters.CurrentRunId = -1
+	Parameters.CurrentRunId = ""
+	Parameters.RunKey = ""
 	Parameters.Err = nil
 	for _, flagsReInit := range Parameters.FlagsReInit {
-		flagsReInit()
+		err := flagsReInit()
+		if err != nil {
+			fmt.Println(fmt.Sprintf("internal server error: %s", err))
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -205,8 +210,8 @@ OUT:
 		}
 		for _, run := range runs {
 			s = append(s, prompt.Suggest{
-				Text:        fmt.Sprintf("%d", run.Id),
-				Description: run.Title,
+				Text:        fmt.Sprintf("%s", run.Id),
+				Description: run.TemplateTitle,
 			})
 		}
 		return s

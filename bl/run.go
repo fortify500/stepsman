@@ -16,6 +16,7 @@
 package bl
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
@@ -29,19 +30,19 @@ func ListRuns(query *dao.Query) ([]*dao.RunRecord, *dao.RangeResult, error) {
 	}
 }
 
-func GetRun(runId int64) (*dao.RunRecord, error) {
+func GetRun(id string) (*dao.RunRecord, error) {
 	if dao.IsRemote {
-		runs, err := dao.RemoteGetRuns([]int64{runId})
+		runs, err := dao.RemoteGetRuns([]string{id})
 		if err != nil {
 			return nil, err
 		}
 		return runs[0], nil
 	} else {
-		return dao.GetRun(runId)
+		return dao.GetRun(id)
 	}
 }
 
-func GetRuns(ids []int64) ([]*dao.RunRecord, error) {
+func GetRuns(ids []string) ([]*dao.RunRecord, error) {
 	if dao.IsRemote {
 		return dao.RemoteGetRuns(ids)
 	} else {
@@ -49,14 +50,20 @@ func GetRuns(ids []int64) ([]*dao.RunRecord, error) {
 	}
 }
 
-func GetCursorStep(runRecord *dao.RunRecord) (*dao.StepRecord, error) {
-	step, err := dao.GetStep(runRecord.Id, runRecord.Cursor)
-	return step, err
+func GetNotDoneAndNotSkippedStep(runRecord *dao.RunRecord) (*dao.StepRecord, error) {
+	steps, err := ListSteps(runRecord.Id)
+	for _, step := range steps {
+		//TODO: find a more efficient query
+		if step.Status != dao.StepDone && step.Status != dao.StepSkipped {
+			return step, nil
+		}
+	}
+	return nil, err
 }
 
 func UpdateRunStatus(runRecord *dao.RunRecord, newStatus dao.RunStatusType) error {
 	tx, err := dao.DB.SQL().Beginx()
-	if newStatus == dao.RunStopped {
+	if newStatus == dao.RunIdle {
 		//TODO: make a more efficient query.
 		steps, err := dao.ListStepsTx(tx, runRecord.Id)
 		if err != nil {
@@ -86,21 +93,11 @@ func UpdateRunStatus(runRecord *dao.RunRecord, newStatus dao.RunStatusType) erro
 	return err
 }
 
-func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
+func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 	title := s.Title
 	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database transaction: %w", err)
-	}
-
-	count, err := dao.GetTitleInProgressTx(tx, title)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to query database runs table count for in progress rows: %w", err)
-	}
-	if count != 0 {
-		err = dao.Rollback(tx, dao.ErrActiveRunsWithSameTitleExists)
-		return nil, err
 	}
 
 	uuid4, err := uuid.NewRandom()
@@ -108,15 +105,18 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 		err = dao.Rollback(tx, err)
 		return nil, fmt.Errorf("failed to generate uuid: %w", err)
 	}
+	jsonBytes, err := json.Marshal(s)
 	runRecord := dao.RunRecord{
-		UUID:   uuid4.String(),
-		Title:  title,
-		Cursor: 1,
-		Status: dao.RunInProgress,
-		Script: string(yamlBytes),
+		Id:              uuid4.String(),
+		Key:             key,
+		TemplateVersion: s.Version,
+		TemplateTitle:   title,
+		Status:          dao.RunIdle,
+		Template:        string(jsonBytes),
+		State:           "{}",
 	}
 
-	runRecord.Id, err = dao.DB.CreateRun(tx, &runRecord)
+	err = dao.CreateRunTx(tx, &runRecord)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return nil, fmt.Errorf("failed to create runs row: %w", err)
@@ -128,12 +128,22 @@ func (s *Script) CreateRun(yamlBytes []byte) (*dao.RunRecord, error) {
 			err = dao.Rollback(tx, err)
 			return nil, fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
 		}
+		//	"run_id" UUid NOT NULL,
+		//	"index" Bigint NOT NULL,
+		//	"uuid" UUid NOT NULL,
+		//	"status" Bigint NOT NULL,
+		//	"heartbeat" TIMESTAMP NOT NULL,
+		//	"label" Text NOT NULL,
+		//	"name" Text,
+		//	"state" jsonb,
 		stepRecord := &dao.StepRecord{
 			RunId:  runRecord.Id,
-			StepId: int64(i) + 1,
+			Index:  int64(i) + 1,
 			UUID:   uuid4.String(),
-			Name:   step.Name,
 			Status: dao.StepNotStarted,
+			Label:  step.Label,
+			Name:   step.Name,
+			State:  "{}",
 		}
 		_, err = dao.CreateStepTx(tx, stepRecord)
 		if err != nil {

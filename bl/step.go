@@ -25,10 +25,6 @@ import (
 
 const HeartBeatInterval = 10
 
-const (
-	StepDone dao.StepStatusType = 5
-)
-
 func TranslateStepStatus(status dao.StepStatusType) (string, error) {
 	switch status {
 	case dao.StepNotStarted:
@@ -39,7 +35,7 @@ func TranslateStepStatus(status dao.StepStatusType) (string, error) {
 		return "Canceled", nil
 	case dao.StepFailed:
 		return "Failed", nil
-	case StepDone:
+	case dao.StepDone:
 		return "Done", nil
 	case dao.StepSkipped:
 		return "Skipped", nil
@@ -47,13 +43,13 @@ func TranslateStepStatus(status dao.StepStatusType) (string, error) {
 		return "", fmt.Errorf("failed to translate run status: %d", status)
 	}
 }
-func ListSteps(runId int64) ([]*dao.StepRecord, error) {
+func ListSteps(runId string) ([]*dao.StepRecord, error) {
 	return dao.ListSteps(runId)
 }
 
 //func ToStep(stepRecord *dao.StepRecord) (*Step, error) {
 //	step := Step{
-//		Script: stepRecord.Script,
+//		Template: stepRecord.Template,
 //	}
 //	err := step.AdjustUnmarshalStep(true)
 //	if err != nil {
@@ -69,14 +65,14 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}
 	runId := stepRecord.RunId
-	step, err := dao.GetStepTx(tx, runId, stepRecord.StepId)
+	step, err := dao.GetStepTx(tx, runId, stepRecord.Index)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
 	}
 
 	if !doFinish && step.Status == dao.StepInProgress {
-		delta := time.Now().Sub(time.Unix(step.HeartBeat, 0))
+		delta := step.Now.Sub(step.HeartBeat)
 		if delta < 0 {
 			delta = delta * -1
 		}
@@ -92,15 +88,7 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		err = tx.Rollback()
 		return err
 	}
-	heartBeat := step.HeartBeat
-	if newStatus == dao.StepInProgress {
-		if doFinish {
-			heartBeat = 0
-		} else {
-			heartBeat = time.Now().Unix()
-		}
-	}
-	_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus, heartBeat)
+	_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database step row: %w", err)
@@ -122,7 +110,7 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 		}
 	}
 
-	if newStatus == StepDone || newStatus == dao.StepSkipped {
+	if newStatus == dao.StepDone || newStatus == dao.StepSkipped {
 		var steps []*dao.StepRecord
 
 		//TODO: need to replace with more efficient method.
@@ -132,21 +120,10 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 			return fmt.Errorf("failed to list database run rows: %w", err)
 		}
 		allDoneOrSkipped := true
-		nextCursorPosition := -1
-		for i, stepRecord := range steps {
-			if stepRecord.Status != StepDone && stepRecord.Status != dao.StepSkipped {
+		for _, stepRecord := range steps {
+			if stepRecord.Status != dao.StepDone && stepRecord.Status != dao.StepSkipped {
 				allDoneOrSkipped = false
-				if nextCursorPosition > 0 {
-					break
-				}
-			}
-			if stepRecord.StepId == stepRecord.StepId {
-				if i < len(steps) {
-					nextCursorPosition = i + 1
-				}
-				if !allDoneOrSkipped {
-					break
-				}
+				break
 			}
 		}
 		if allDoneOrSkipped {
@@ -154,12 +131,6 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 			if err != nil {
 				err = dao.Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row status: %w", err)
-			}
-		} else if nextCursorPosition > 0 {
-			_, err = dao.UpdateRunCursorTx(tx, steps[nextCursorPosition].StepId, runId)
-			if err != nil {
-				err = dao.Rollback(tx, err)
-				return fmt.Errorf("failed to update database run row cursor: %w", err)
 			}
 		}
 	}
@@ -200,7 +171,7 @@ func (s *Step) StartDo() (dao.StepStatusType, error) {
 	wg.Add(1)
 	go heartbeat()
 	defer close(heartBeatDone1) //in case of a panic
-	newStatus, err := do(s.DoType, s.Do)
+	newStatus, err := do(s.doType, s.Do)
 	if err != nil {
 		return dao.StepFailed, err
 	}

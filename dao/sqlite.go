@@ -23,18 +23,6 @@ import (
 
 type Sqlite3SqlxDB sqlx.DB
 
-func (db *Sqlite3SqlxDB) CreateRun(tx *sqlx.Tx, runRecord interface{}) (int64, error) {
-	exec, err := tx.NamedExec("INSERT INTO runs(uuid, title, cursor, status, script) values(:uuid,:title,:cursor,:status,:script)", runRecord)
-	if err != nil {
-		return -1, fmt.Errorf("failed to insert database runs row: %w", err)
-	}
-	id, err := exec.LastInsertId()
-	if err != nil {
-		return -1, fmt.Errorf("failed to retrieve database runs row autoincremented id: %w", err)
-	}
-	return id, nil
-}
-
 func (db *Sqlite3SqlxDB) VerifyDBCreation() error {
 	_, err := db.Exec("PRAGMA journal_mode = WAL")
 	if err != nil {

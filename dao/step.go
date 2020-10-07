@@ -24,50 +24,52 @@ import (
 
 type StepStatusType int64
 
-const StepNotStarted StepStatusType = 0
-
-const StepInProgress StepStatusType = 2
-
-const StepCanceled StepStatusType = 3
-
-const StepFailed StepStatusType = 4
-
-const StepSkipped StepStatusType = 6
+const (
+	StepNotStarted StepStatusType = 0
+	StepInProgress StepStatusType = 2
+	StepCanceled   StepStatusType = 3
+	StepFailed     StepStatusType = 4
+	StepSkipped    StepStatusType = 6
+	StepDone       StepStatusType = 5
+)
 
 type StepRecord struct {
-	RunId     int64 `db:"run_id"`
-	StepId    int64 `db:"step_id"`
+	RunId     string `db:"run_id"`
+	Index     int64  `db:"index"`
+	Label     string
 	UUID      string
 	Name      string
 	Status    StepStatusType
-	HeartBeat int64
+	Now       time.Time
+	HeartBeat time.Time
+	State     string
 }
 
 func CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error) {
-	return tx.NamedExec("INSERT INTO steps(run_id, step_id, uuid, name, status, heartbeat, script) values(:run_id,:step_id,:uuid,:name,:status,0,:script)", stepRecord)
+	return tx.NamedExec("INSERT INTO steps(run_id, index, label, uuid, name, status, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,to_timestamp(0),:state)", stepRecord)
 }
 
 func (s *StepRecord) UpdateHeartBeat() error {
-	_, err := DB.SQL().Exec("update steps set heartbeat=$1 where run_id=$2 and step_id=$3", time.Now().Unix(), s.RunId, s.StepId)
+	_, err := DB.SQL().Exec("update steps set heartbeat=LOCALTIMESTAMP where run_id=$1 and index=$2", s.RunId, s.Index)
 	if err != nil {
 		return fmt.Errorf("failed to update database step heartbeat: %w", err)
 	}
 	return nil
 }
 
-func GetStep(runId int64, stepId int64) (*StepRecord, error) {
-	return GetStepTx(nil, runId, stepId)
+func GetStep(runId string, index int64) (*StepRecord, error) {
+	return GetStepTx(nil, runId, index)
 }
-func GetStepTx(tx *sqlx.Tx, runId int64, stepId int64) (*StepRecord, error) {
+func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*StepRecord, error) {
 	var result *StepRecord
 
-	const query = "SELECT * FROM steps where run_id=$1 and step_id=$2"
+	const query = "SELECT *,LOCALTIMESTAMP as now FROM steps where run_id=$1 and index=$2"
 	var rows *sqlx.Rows
 	var err error
 	if tx == nil {
-		rows, err = DB.SQL().Queryx(query, runId, stepId)
+		rows, err = DB.SQL().Queryx(query, runId, index)
 	} else {
-		rows, err = tx.Queryx(query, runId, stepId)
+		rows, err = tx.Queryx(query, runId, index)
 	}
 
 	if err != nil {
@@ -88,15 +90,15 @@ func GetStepTx(tx *sqlx.Tx, runId int64, stepId int64) (*StepRecord, error) {
 	return result, nil
 }
 
-func ListSteps(runId int64) ([]*StepRecord, error) {
+func ListSteps(runId string) ([]*StepRecord, error) {
 	return ListStepsTx(nil, runId)
 }
 
-func ListStepsTx(tx *sqlx.Tx, runId int64) ([]*StepRecord, error) {
+func ListStepsTx(tx *sqlx.Tx, runId string) ([]*StepRecord, error) {
 	var result []*StepRecord
 	var rows *sqlx.Rows
 	var err error
-	const query = "SELECT * FROM steps WHERE run_id=$1"
+	const query = "SELECT *,LOCALTIMESTAMP as now FROM steps WHERE run_id=$1"
 	if tx == nil {
 		rows, err = DB.SQL().Queryx(query, runId)
 	} else {
@@ -117,6 +119,6 @@ func ListStepsTx(tx *sqlx.Tx, runId int64) ([]*StepRecord, error) {
 	return result, nil
 }
 
-func (s *StepRecord) UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatusType, heartBeat int64) (sql.Result, error) {
-	return tx.Exec("update steps set status=$1, heartbeat=$2 where run_id=$3 and step_id=$4", newStatus, heartBeat, s.RunId, s.StepId)
+func (s *StepRecord) UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatusType) (sql.Result, error) {
+	return tx.Exec("update steps set status=$1, heartbeat=LOCALTIMESTAMP where run_id=$2 and index=$3", newStatus, s.RunId, s.Index)
 }

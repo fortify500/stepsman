@@ -1,18 +1,18 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package bl
 
 import (
@@ -31,7 +31,7 @@ import (
 //var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
 
 func do(doType DoType, doI interface{}) (dao.StepStatusType, error) {
-	result := StepDone
+	result := dao.StepDone
 	//_, err := os.Stat("runs")
 	//if os.IsNotExist(err) {
 	//	if !mkdir {
@@ -88,10 +88,10 @@ func do(doType DoType, doI interface{}) (dao.StepStatusType, error) {
 				var exitError *exec.ExitError
 				if errors.As(errRun, &exitError) && exitError.ExitCode() > 0 {
 					log.Debug(fmt.Sprintf("Exit error code: %d", exitError.ExitCode()))
-					if result == StepDone {
-						result = StepDone // We don't want to fail like this
+					if result == dao.StepDone {
+						result = dao.StepDone // We don't want to fail like this
 					}
-				} else if result == StepDone {
+				} else if result == dao.StepDone {
 					result = dao.StepFailed
 				}
 				log.Debug(fmt.Errorf("command failed: %w", errRun))

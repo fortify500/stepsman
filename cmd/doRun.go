@@ -50,13 +50,13 @@ Use run <run id>.`,
 			}
 			return
 		}
-		stepRecord, err := getCursorStep(run)
+		stepRecord, err := GetNotDoneAndNotSkippedStep(run)
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		script := bl.Script{}
-		err = script.LoadFromBytes([]byte(run.Script))
+		script := bl.Template{}
+		err = script.LoadFromBytes(false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to convert step record to step"
 			Parameters.Err = &Error{
@@ -65,7 +65,7 @@ Use run <run id>.`,
 			}
 			return
 		}
-		step := script.Steps[stepRecord.StepId-1]
+		step := script.Steps[stepRecord.Index-1]
 		_, err = step.StartDo()
 		if err != nil {
 			msg := "failed to start do"

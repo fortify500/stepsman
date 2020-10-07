@@ -33,20 +33,20 @@ var listRunsCmd = &cobra.Command{
 	Short: "Runs summary.",
 	Long:  `A succinct list of runs and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		listRunsInternal(-1)
+		listRunsInternal("")
 	},
 }
 
-func listRunsInternal(runId int64) {
+func listRunsInternal(runId string) {
 	var err error
 	Parameters.CurrentCommand = CommandListRuns
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"ID", "UUID", "Title", "Cursor", "Status"})
+	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status"})
 	var runs []*dao.RunRecord
 	var runRange *dao.RangeResult
-	if runId >= 0 {
+	if runId != "" {
 		run, err := getRun(runId)
 		if err != nil {
 			Parameters.Err = err
@@ -98,7 +98,7 @@ func listRunsInternal(runId int64) {
 		}
 
 		t.AppendRows([]table.Row{
-			{run.Id, run.UUID, strings.TrimSpace(text.WrapText(run.Title, 70)), run.Cursor, status},
+			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 70)), status},
 		})
 	}
 	if runRange != nil && runRange.Total > 0 {
@@ -134,13 +134,6 @@ func parseFilters() ([]dao.Expression, bool) {
 				return nil, true
 			}
 			name = "title"
-			value = strings.TrimPrefix(trimPrefix, operator)
-		} else if strings.HasPrefix(filter, "cursor") {
-			trimPrefix := strings.TrimPrefix(filter, "cursor")
-			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
-				return nil, true
-			}
-			name = "cursor"
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, "status") {
 			trimPrefix := strings.TrimPrefix(filter, "status")
@@ -216,7 +209,6 @@ func detectStringOperator(filter string, operator string) ([]string, bool) {
 	case "id":
 	case "uuid":
 	case "title":
-	case "cursor":
 	case "status":
 	default:
 		msg := "failed to parse filter"
@@ -254,7 +246,7 @@ func detectStartsWithGTLTEquals(trimPrefix string, filter string) string {
 
 func init() {
 	listCmd.AddCommand(listRunsCmd)
-	initFlags := func() {
+	initFlags := func() error {
 		listRunsCmd.ResetFlags()
 		listRunsCmd.Flags().Int64Var(&Parameters.RangeStart, "range-start", 0, "Range Start")
 		listRunsCmd.Flags().Int64Var(&Parameters.RangeEnd, "range-end", -1, "Range End")
@@ -262,6 +254,7 @@ func init() {
 		listRunsCmd.Flags().StringArrayVar(&Parameters.SortFields, "sort-field", []string{}, "Repeat sort-field for many fields")
 		listRunsCmd.Flags().StringVar(&Parameters.SortOrder, "sort-order", "desc", "Sort order asc/desc which are a short for ascending/descending respectively")
 		listRunsCmd.Flags().StringArrayVar(&Parameters.Filters, "filter", []string{}, "Repeat filter for many filters --filter=startsWith(\"title\",\"STEP\") --filter=title=STEPSMAN\\ Hello\\ World\npossible operators:startsWith,endsWith,contains,>,<,>=,<=,=,<>")
+		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

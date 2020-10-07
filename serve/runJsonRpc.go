@@ -100,20 +100,21 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 	return runRpcRecords, nil
 }
 
-func RunRecordToRunRPCRecord(runs []*dao.RunRecord) ([]dao.RunAPIRecord, error) {
+func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord) ([]dao.RunAPIRecord, error) {
 	var runRpcRecords []dao.RunAPIRecord
-	for _, run := range runs {
-		status, err := run.Status.TranslateRunStatus()
+	for _, runRecord := range runRecords {
+		status, err := runRecord.Status.TranslateRunStatus()
 		if err != nil {
 			return nil, err
 		}
 		runRpcRecords = append(runRpcRecords, dao.RunAPIRecord{
-			Id:     run.Id,
-			UUID:   run.UUID,
-			Title:  run.Title,
-			Cursor: run.Cursor,
-			Status: status,
-			Script: run.Script,
+			Id:              runRecord.Id,
+			Key:             runRecord.Key,
+			TemplateVersion: runRecord.TemplateVersion,
+			TemplateTitle:   runRecord.TemplateTitle,
+			Status:          status,
+			Template:        runRecord.Template,
+			State:           runRecord.State,
 		})
 	}
 	return runRpcRecords, nil

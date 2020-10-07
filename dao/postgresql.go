@@ -22,16 +22,6 @@ import (
 
 type PostgreSQLSqlxDB sqlx.DB
 
-func (db *PostgreSQLSqlxDB) CreateRun(tx *sqlx.Tx, runRecord interface{}) (int64, error) {
-	stmt, err := tx.PrepareNamed("INSERT INTO runs(uuid, title, cursor, status, script) values(:uuid,:title,:cursor,:status,:script) RETURNING id")
-	if err != nil {
-		return -1, err
-	}
-	var id int64
-	err = stmt.Get(&id, runRecord)
-	return id, err
-}
-
 func (db *PostgreSQLSqlxDB) VerifyDBCreation() error {
 	err := db.Ping()
 	if err != nil {
@@ -48,44 +38,38 @@ func (db *PostgreSQLSqlxDB) SQL() *sqlx.DB {
 	return (*sqlx.DB)(db)
 }
 func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
-	_, err := tx.Exec(`CREATE SEQUENCE "public"."runs_id_seq"
-	INCREMENT 1
-	MINVALUE 1
-	MAXVALUE 9223372036854775807
-	START 1;`)
-	if err != nil {
-		return fmt.Errorf("failed to create sequence runs_id_seq: %w", err)
-	}
-	_, err = tx.Exec(`CREATE TABLE "public"."runs" ( 
-	"id" Bigint NOT NULL DEFAULT nextval('runs_id_seq'),
-	"uuid" UUid NOT NULL,
-	"title" Text,
-	"cursor" Bigint,
+	_, err := tx.Exec(`CREATE TABLE "public"."runs" ( 
+	"id" UUid NOT NULL,
 	"status" Bigint NOT NULL,
-	"script" Text,
+	"template_version" BIGINT NOT NULL,
+	"key" Text NOT NULL,
+	"template_title" Text NOT NULL ,
+	"template" jsonb,
+	"state" jsonb,
 	PRIMARY KEY ( "id" ),
-	CONSTRAINT "unique_runs_uuid" UNIQUE( "uuid" ) )`)
+	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE "public"."steps" ( 
-	"run_id" Bigint NOT NULL,
-	"step_id" Bigint NOT NULL,
+	"run_id" UUid NOT NULL,
+	"index" Bigint NOT NULL,
 	"uuid" UUid NOT NULL,
-	"name" Text,
 	"status" Bigint NOT NULL,
-	"heartbeat" Bigint NOT NULL,
-	PRIMARY KEY ( "run_id", "step_id" ) )`)
+	"heartbeat" TIMESTAMP NOT NULL,
+	"label" Text NOT NULL,
+	"name" Text,
+	"state" jsonb,
+	PRIMARY KEY ( "run_id", "index" ),
+	CONSTRAINT "foreign_key_runs" FOREIGN KEY(run_id) REFERENCES runs(id),
+    CONSTRAINT "unique_steps_uuid" UNIQUE( "uuid" ),
+    CONSTRAINT "unique_steps_label" UNIQUE( "run_id", "label" ) )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
 	}
 	_, err = tx.Exec(`CREATE INDEX "index_runs_status" ON "public"."runs" USING btree( "status" Asc NULLS Last )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_status: %w", err)
-	}
-	_, err = tx.Exec(`CREATE INDEX "index_runs_title_status" ON "public"."runs" USING btree( "title" Asc NULLS Last, "status" Asc NULLS Last )`)
-	if err != nil {
-		return fmt.Errorf("failed to create index index_runs_title_status: %w", err)
 	}
 	return nil
 }

@@ -17,12 +17,13 @@ package dao
 
 type (
 	RunAPIRecord struct {
-		Id     int64
-		UUID   string
-		Title  string
-		Cursor int64
-		Status string
-		Script string
+		Id              string
+		Key             string
+		TemplateVersion int64  `json:"template-version"`
+		TemplateTitle   string `json:"template-title"`
+		Status          string
+		Template        string
+		State           string
 	}
 )
 
@@ -64,7 +65,7 @@ type ListParams struct {
 	Query Query
 }
 
-type GetParams []int64
+type GetParams []string
 
 type GetRunsResult []RunAPIRecord
 

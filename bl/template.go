@@ -17,8 +17,10 @@ package bl
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"strings"
@@ -30,22 +32,23 @@ const (
 	DoTypeShellExecute DoType = "shell execute"
 )
 
-type Script struct {
-	Title string
-	Steps []Step
+type Template struct {
+	Title   string `json:"title"`
+	Version int64  `json:"version"`
+	Steps   []Step `json:"steps"`
 }
 
 type Step struct {
-	Name        string
-	Description string
-	Do          interface{}
-	DoType      DoType
-	Script      string
+	Name        string      `json:"name"`
+	Label       string      `json:"label"`
+	Description string      `json:"description"`
+	Do          interface{} `json:"do"`
+	doType      DoType
 	stepRecord  *dao.StepRecord
 }
 
 type StepDo struct {
-	Type DoType
+	Type DoType `json:"type"`
 }
 
 type DO interface {
@@ -53,11 +56,11 @@ type DO interface {
 }
 type StepDoShellExecute struct {
 	StepDo  `yaml:",inline"`
-	Options StepDoShellExecuteOptions
+	Options StepDoShellExecuteOptions `json:"options"`
 }
 type StepDoShellExecuteOptions struct {
-	Command   string
-	Arguments []string
+	Command   string   `json:"command"`
+	Arguments []string `json:"arguments"`
 }
 
 func (do StepDoShellExecute) Describe() string {
@@ -66,27 +69,34 @@ func (do StepDoShellExecute) Describe() string {
 	return fmt.Sprintf("%s", strings.Join(strs, " "))
 }
 
-func (s *Script) LoadFromFile(filename string) ([]byte, error) {
+func (s *Template) LoadFromFile(filename string) error {
 	yamlDocument, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	err = s.LoadFromBytes(yamlDocument)
+	err = s.LoadFromBytes(true, yamlDocument)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return yamlDocument, nil
+	return nil
 }
 
-func (s *Script) LoadFromBytes(yamlDocument []byte) error {
-	decoder := yaml.NewDecoder(bytes.NewBuffer(yamlDocument))
-	decoder.SetStrict(true)
-	err := decoder.Decode(s)
+func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
+	var err error
+	if isYaml {
+		decoder := yaml.NewDecoder(bytes.NewBuffer(yamlDocument))
+		decoder.SetStrict(true)
+		err = decoder.Decode(s)
+	} else {
+		decoder := json.NewDecoder(bytes.NewBuffer(yamlDocument))
+		decoder.DisallowUnknownFields()
+		err = decoder.Decode(s)
+	}
 	if err != nil {
 		return err
 	}
 	for i := range s.Steps {
-		err = (&s.Steps[i]).AdjustUnmarshalStep(false)
+		err = (&s.Steps[i]).AdjustUnmarshalStep()
 		if err != nil {
 			return err
 		}
@@ -94,32 +104,26 @@ func (s *Script) LoadFromBytes(yamlDocument []byte) error {
 	return nil
 }
 
-func (s *Script) Start(fileName string) (*dao.RunRecord, error) {
-	yamlBytes, err := s.LoadFromFile(fileName)
+func (s *Template) Start(key string, fileName string) (*dao.RunRecord, error) {
+	err := s.LoadFromFile(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
 
-	runRow, err := s.CreateRun(yamlBytes)
+	runRow, err := s.CreateRun(key)
 
 	return runRow, err
 }
 
-func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
-	if fillStep {
-		script := s.Script
-		err := yaml.Unmarshal([]byte(script), s)
+func (s *Step) AdjustUnmarshalStep() error {
+	if s.Label == "" {
+		random, err := uuid.NewRandom()
 		if err != nil {
 			return err
 		}
-		s.Script = script
-	} else {
-		stepBytes, err := yaml.Marshal(s)
-		if err != nil {
-			return err
-		}
-		s.Script = string(stepBytes)
+		s.Label = random.String()
 	}
+
 	if s.Do != nil {
 		stepDo := StepDo{}
 		stepDoBytes, err := yaml.Marshal(s.Do)
@@ -132,7 +136,7 @@ func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
 		if err != nil {
 			return err
 		}
-		doType := strings.ToLower(string(stepDo.Type))
+		doType := string(stepDo.Type)
 		switch DoType(doType) {
 		case "":
 			fallthrough
@@ -145,7 +149,7 @@ func (s *Step) AdjustUnmarshalStep(fillStep bool) error {
 				return err
 			}
 			s.Do = do
-			s.DoType = DoTypeShellExecute
+			s.doType = DoTypeShellExecute
 		}
 	}
 	return nil

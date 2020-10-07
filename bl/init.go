@@ -51,7 +51,7 @@ func (e *Error) Unwrap() error {
 	return e.err
 }
 
-func InitBL(daoParameters *dao.Parameters) error {
+func InitBL(daoParameters *dao.ParametersType) error {
 	err := dao.InitDAO(daoParameters)
 	if err != nil {
 		return err

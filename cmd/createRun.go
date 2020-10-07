@@ -1,24 +1,24 @@
 /*
-Copyright © 2020 stepsman authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package cmd
 
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"strings"
@@ -27,10 +27,10 @@ import (
 var createRunCmd = &cobra.Command{
 	Use:   "run",
 	Args:  cobra.MaximumNArgs(0),
-	Short: "Create a run and move the cursor to the first step",
-	Long:  `Create a run and move the cursor to the first step. You must specify a file.`,
+	Short: "Create a run",
+	Long:  `Create a run. You must specify a file.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		var t bl.Script
+		var t bl.Template
 		Parameters.CurrentCommand = CommandCreateRun
 		Parameters.CreateFileName = strings.TrimSpace(Parameters.CreateFileName)
 		strings.TrimPrefix(Parameters.CreateFileName, "\"")
@@ -43,16 +43,8 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		runRow, err := t.Start(Parameters.CreateFileName)
-		if err == dao.ErrActiveRunsWithSameTitleExists {
-			msg := "you must stop runs with the same title before creating a new run"
-			//"you must either stop runs with the same title or force an additional run (see --force-run)"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
-			return
-		} else if err != nil {
+		runRow, err := t.Start(Parameters.RunKey, Parameters.CreateFileName)
+		if err != nil {
 			msg := "failed to create run"
 			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
@@ -60,7 +52,7 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		msg := fmt.Sprintf("run created with id: %d", runRow.Id)
+		msg := fmt.Sprintf("run created with id: %s", runRow.Id)
 		fmt.Println(msg)
 		log.Info(msg)
 		Parameters.CurrentRunId = runRow.Id
@@ -69,13 +61,16 @@ var createRunCmd = &cobra.Command{
 
 func init() {
 	createCmd.AddCommand(createRunCmd)
-	initFlags := func() {
+	initFlags := func() error {
 		createRunCmd.ResetFlags()
-		createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
-		err := createRunCmd.MarkFlagRequired("file")
+		random, err := uuid.NewRandom()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
+		createRunCmd.Flags().StringVarP(&Parameters.RunKey, "key", "k", random.String(), "Run unique key. If omitted a random uuid will be used")
+		createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
+		err = createRunCmd.MarkFlagRequired("file")
+		return err
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

@@ -70,13 +70,13 @@ var jsonRpcUrl string
 
 func InitClient() {
 	protocol := "http"
-	if parameters.DatabaseSSLMode {
+	if Parameters.DatabaseSSLMode {
 		protocol += "s"
 	}
 	jsonRpcUrl = fmt.Sprintf("%s://%s:%d/v0/json-rpc",
 		protocol,
-		parameters.DatabaseHost,
-		parameters.DatabasePort)
+		Parameters.DatabaseHost,
+		Parameters.DatabasePort)
 }
 
 func remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCloser) error) error {

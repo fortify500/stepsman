@@ -19,23 +19,31 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"strings"
 )
 
 type RunStatusType int64
 
 const (
-	RunStopped    RunStatusType = 10
+	RunIdle       RunStatusType = 10
 	RunInProgress RunStatusType = 12
 	RunDone       RunStatusType = 15
 )
 
+const ID = "id"
+const KEY = "key"
+const TEMPLATE_VERSION = "template-version"
+const TEMPLATE_TITLE = "template-title"
+const STATUS = "status"
+
 type RunRecord struct {
-	Id     int64
-	UUID   string
-	Title  string
-	Cursor int64
-	Status RunStatusType
-	Script string
+	Id              string
+	Key             string
+	TemplateVersion int64  `db:"template_version"`
+	TemplateTitle   string `db:"template_title"`
+	Status          RunStatusType
+	Template        string
+	State           string
 }
 
 func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
@@ -51,16 +59,17 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 		sqlQuery = sqlNoRange + " LIMIT 20"
 	} else {
 		sqlQuery = "SELECT * FROM runs"
+
 		{
 			filterQuery := ""
 			for i, expression := range query.Filters {
 				queryExpression := ""
 				switch expression.AttributeName {
-				case "id":
-				case "uuid":
-				case "title":
-				case "cursor":
-				case "status":
+				case ID:
+				case KEY:
+				case TEMPLATE_VERSION:
+				case TEMPLATE_TITLE:
+				case STATUS:
 				default:
 					return nil, nil, fmt.Errorf("invalid attribute name in filter: %s", expression.AttributeName)
 				}
@@ -74,8 +83,7 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 					fallthrough
 				case ">=":
 					switch expression.AttributeName {
-					case "id":
-					case "cursor":
+					case TEMPLATE_VERSION:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
@@ -88,21 +96,24 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 					queryExpression += fmt.Sprintf("$%d", +i+1)
 				case "startsWith":
 					switch expression.AttributeName {
-					case "title":
+					case KEY:
+					case TEMPLATE_TITLE:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
 				case "endsWith":
 					switch expression.AttributeName {
-					case "title":
+					case KEY:
+					case TEMPLATE_TITLE:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
 				case "contains":
 					switch expression.AttributeName {
-					case "title":
+					case KEY:
+					case TEMPLATE_TITLE:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
@@ -126,11 +137,11 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 				sort := orderBy
 				for _, field := range query.Sort.Fields {
 					switch field {
-					case "id":
-					case "uuid":
-					case "title":
-					case "cursor":
-					case "status":
+					case ID:
+					case KEY:
+					case TEMPLATE_VERSION:
+					case TEMPLATE_TITLE:
+					case STATUS:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
 					}
@@ -211,17 +222,22 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	}
 }
 
-func GetRun(runId int64) (*RunRecord, error) {
-	runs, err := GetRuns([]int64{runId})
+func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
+	_, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template, state) values(:id,:key,:template_version,:template_title,:status,:template,:state)", runRecord)
+	return err
+}
+
+func GetRun(id string) (*RunRecord, error) {
+	runs, err := GetRuns([]string{id})
 	if err != nil {
 		return nil, err
 	}
 	return runs[0], nil
 }
 
-func GetRuns(ids []int64) ([]*RunRecord, error) {
+func GetRuns(ids []string) ([]*RunRecord, error) {
 	var result []*RunRecord
-	rows, err := DB.SQL().Queryx(fmt.Sprintf("SELECT * FROM runs where id IN %s", int64sListToStringInClause(ids)))
+	rows, err := DB.SQL().Queryx(fmt.Sprintf("SELECT * FROM runs where id IN %s", "('"+strings.Join(ids, "','")+"')"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
 	}
@@ -240,35 +256,25 @@ func GetRuns(ids []int64) ([]*RunRecord, error) {
 	return result, nil
 }
 
-func GetTitleInProgressTx(tx *sqlx.Tx, title string) (int, error) {
-	var count int
-	err := tx.Get(&count, "SELECT count(*) FROM runs where status=$1 and title=$2", RunInProgress, title)
-	return count, err
-}
-
-func UpdateRunStatus(runId int64, newStatus RunStatusType) (sql.Result, error) {
-	return DB.SQL().Exec("update runs set status=$1 where id=$2", newStatus, runId)
-}
-
-func UpdateRunCursorTx(tx *sqlx.Tx, stepId int64, runId int64) (sql.Result, error) {
-	return tx.Exec("update runs set cursor=$1 where id=$2", stepId, runId)
+func UpdateRunStatus(id string, newStatus RunStatusType) (sql.Result, error) {
+	return DB.SQL().Exec("update runs set status=$1 where id=$2", newStatus, id)
 }
 
 func TranslateToRunStatus(status string) (RunStatusType, error) {
 	switch status {
 	case "Stopped":
-		return RunStopped, nil
+		return RunIdle, nil
 	case "In Progress":
 		return RunInProgress, nil
 	case "Done":
 		return RunDone, nil
 	default:
-		return RunStopped, fmt.Errorf("failed to translate run status: %s", status)
+		return RunIdle, fmt.Errorf("failed to translate run status: %s", status)
 	}
 }
 func (s RunStatusType) TranslateRunStatus() (string, error) {
 	switch s {
-	case RunStopped:
+	case RunIdle:
 		return "Stopped", nil
 	case RunInProgress:
 		return "In Progress", nil

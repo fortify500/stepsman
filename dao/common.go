@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -29,7 +28,6 @@ type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation() error
 	Migrate0(tx *sqlx.Tx) error
-	CreateRun(tx *sqlx.Tx, run interface{}) (int64, error)
 }
 
 func OpenDatabase(databaseVendor string, dataSourceName string) error {
@@ -51,6 +49,9 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 		dbOpen, err := sqlx.Open(internalDriverName, dataSourceName)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
+		}
+		if DB != nil && DB.SQL() != nil {
+			defer DB.SQL().Close()
 		}
 		switch internalDriverName {
 		case "sqlite3":
@@ -74,7 +75,7 @@ func Rollback(tx *sqlx.Tx, err error) error {
 
 var IsRemote = false
 
-type Parameters struct {
+type ParametersType struct {
 	DataSourceName   string
 	DatabaseVendor   string
 	DatabaseHost     string
@@ -85,10 +86,9 @@ type Parameters struct {
 	DatabasePassword string
 }
 
-var parameters *Parameters
+var Parameters ParametersType
 
-func InitDAO(daoParameters *Parameters) error {
-	parameters = daoParameters
+func InitDAO(daoParameters *ParametersType) error {
 	switch strings.TrimSpace(daoParameters.DatabaseVendor) {
 	case "postgresql":
 		sslmode := "disable"
@@ -113,14 +113,9 @@ func InitDAO(daoParameters *Parameters) error {
 	case "remote":
 		IsRemote = true
 		InitClient()
+	default:
+		return fmt.Errorf("database vendor: %s is not supported", daoParameters.DatabaseVendor)
 	}
+	Parameters = *daoParameters
 	return nil
-}
-
-func int64sListToStringInClause(ids []int64) string {
-	var strs []string
-	for _, i := range ids {
-		strs = append(strs, strconv.FormatInt(i, 10))
-	}
-	return "(" + strings.Join(strs, ",") + ")"
 }

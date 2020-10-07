@@ -21,9 +21,11 @@ import (
 	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
 	"path"
+	"strings"
 )
 
 var wasInit = false
+var AllowChangeVendor = false
 var RootCmd = &cobra.Command{
 	Use:   "stepsman",
 	Short: "Step by step managed script",
@@ -36,28 +38,35 @@ var RootCmd = &cobra.Command{
 
 hint: "stepsman prompt" will enter interactive mode`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if Parameters.DatabaseVendor == "" {
-			msg := "you must specify a supported db-vendor (-V/--db-vendor) or set in config file"
-			return fmt.Errorf(msg)
-		}
-		if !wasInit {
-			wasInit = true
-			err := bl.InitBL(&dao.Parameters{
-				DataSourceName:   Parameters.DataSourceName,
-				DatabaseVendor:   Parameters.DatabaseVendor,
-				DatabaseHost:     Parameters.DatabaseHost,
-				DatabasePort:     Parameters.DatabasePort,
-				DatabaseName:     Parameters.DatabaseName,
-				DatabaseSSLMode:  Parameters.DatabaseSSLMode,
-				DatabaseUserName: Parameters.DatabaseUserName,
-				DatabasePassword: Parameters.DatabasePassword,
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		return PersistentPreRunE()
 	},
+}
+
+func PersistentPreRunE() error {
+	if Parameters.DatabaseVendor == "" {
+		msg := "you must specify a supported db-vendor (-V/--db-vendor) or set in config file"
+		return fmt.Errorf(msg)
+	}
+
+	if wasInit && !AllowChangeVendor && strings.TrimSpace(Parameters.DatabaseVendor) != strings.TrimSpace(dao.Parameters.DatabaseVendor) {
+		return fmt.Errorf("you cannot change database vendor after init")
+	} else if !wasInit || (AllowChangeVendor && strings.TrimSpace(Parameters.DatabaseVendor) != strings.TrimSpace(dao.Parameters.DatabaseVendor)) {
+		wasInit = true
+		err := bl.InitBL(&dao.ParametersType{
+			DataSourceName:   Parameters.DataSourceName,
+			DatabaseVendor:   Parameters.DatabaseVendor,
+			DatabaseHost:     Parameters.DatabaseHost,
+			DatabasePort:     Parameters.DatabasePort,
+			DatabaseName:     Parameters.DatabaseName,
+			DatabaseSSLMode:  Parameters.DatabaseSSLMode,
+			DatabaseUserName: Parameters.DatabaseUserName,
+			DatabasePassword: Parameters.DatabasePassword,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func init() {

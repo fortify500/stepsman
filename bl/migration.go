@@ -1,3 +1,19 @@
+/*
+ * Copyright © 2020 stepsman authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package bl
 
 import (
@@ -17,7 +33,7 @@ func MigrateDB() error {
 	}
 	{
 		var count = -1
-		err = dao.CountMigrationTx(tx, count)
+		err = dao.CountMigrationTx(tx, &count)
 		if err != nil {
 			err = dao.Rollback(tx, err)
 			return fmt.Errorf("failed to get database table migration count: %w", err)
@@ -30,7 +46,7 @@ func MigrateDB() error {
 			}
 		}
 	}
-	err = dao.GetMigration(tx, version)
+	err = dao.GetMigration(tx, &version)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to get database version: %w", err)
@@ -42,7 +58,7 @@ func MigrateDB() error {
 			err = dao.Rollback(tx, err)
 			return err
 		}
-		_, err = dao.UpdateMigration(tx)
+		_, err = dao.UpdateMigration(tx, version+1)
 		if err != nil {
 			err = dao.Rollback(tx, err)
 			return fmt.Errorf("failed to update database migration row to version 1: %w", err)
