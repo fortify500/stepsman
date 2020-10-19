@@ -13,12 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dao
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"gopkg.in/yaml.v2"
 	"strings"
 )
 
@@ -43,9 +47,36 @@ type RunRecord struct {
 	TemplateTitle   string `db:"template_title"`
 	Status          RunStatusType
 	Template        string
-	State           string
 }
 
+func (r *RunRecord) PrettyJSONTemplate() (string, error) {
+	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
+	decoder.DisallowUnknownFields()
+	var tmp interface{}
+	err := decoder.Decode(&tmp)
+	if err != nil {
+		return "", err
+	}
+	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(prettyBytes), err
+}
+func (r *RunRecord) PrettyYamlTemplate() (string, error) {
+	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
+	decoder.DisallowUnknownFields()
+	var tmp interface{}
+	err := decoder.Decode(&tmp)
+	if err != nil {
+		return "", err
+	}
+	prettyBytes, err := yaml.Marshal(&tmp)
+	if err != nil {
+		return "", err
+	}
+	return string(prettyBytes), err
+}
 func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
@@ -193,7 +224,7 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
 	}
-
+	defer rows.Close()
 	for rows.Next() {
 		var run RunRecord
 		err = rows.StructScan(&run)
@@ -223,25 +254,40 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 }
 
 func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
-	_, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template, state) values(:id,:key,:template_version,:template_title,:status,:template,:state)", runRecord)
+	_, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template) values(:id,:key,:template_version,:template_title,:status,:template)", runRecord)
 	return err
 }
 
 func GetRun(id string) (*RunRecord, error) {
-	runs, err := GetRuns([]string{id})
+	runs, err := GetRunsTx(nil, []string{id})
 	if err != nil {
 		return nil, err
 	}
 	return runs[0], nil
 }
 
-func GetRuns(ids []string) ([]*RunRecord, error) {
+func GetRunTx(tx *sqlx.Tx, id string) (*RunRecord, error) {
+	runs, err := GetRunsTx(tx, []string{id})
+	if err != nil {
+		return nil, err
+	}
+	return runs[0], nil
+}
+
+func GetRunsTx(tx *sqlx.Tx, ids []string) ([]*RunRecord, error) {
 	var result []*RunRecord
-	rows, err := DB.SQL().Queryx(fmt.Sprintf("SELECT * FROM runs where id IN %s", "('"+strings.Join(ids, "','")+"')"))
+	query := fmt.Sprintf("SELECT * FROM runs where id IN %s", "('"+strings.Join(ids, "','")+"')")
+	var rows *sqlx.Rows
+	var err error
+	if tx == nil {
+		rows, err = DB.SQL().Queryx(query)
+	} else {
+		rows, err = tx.Queryx(query)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
 	}
-
+	defer rows.Close()
 	for rows.Next() {
 		var run RunRecord
 		err = rows.StructScan(&run)
@@ -256,8 +302,8 @@ func GetRuns(ids []string) ([]*RunRecord, error) {
 	return result, nil
 }
 
-func UpdateRunStatus(id string, newStatus RunStatusType) (sql.Result, error) {
-	return DB.SQL().Exec("update runs set status=$1 where id=$2", newStatus, id)
+func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus RunStatusType) (sql.Result, error) {
+	return tx.Exec("update runs set status=$1 where id=$2", newStatus, id)
 }
 
 func TranslateToRunStatus(status string) (RunStatusType, error) {

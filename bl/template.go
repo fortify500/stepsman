@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package bl
 
 import (
@@ -21,15 +22,17 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
+	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"net/http"
 	"strings"
 )
 
 type DoType string
 
 const (
-	DoTypeShellExecute DoType = "shell execute"
+	DoTypeREST DoType = "REST"
 )
 
 type Template struct {
@@ -44,29 +47,35 @@ type Step struct {
 	Description string      `json:"description"`
 	Do          interface{} `json:"do"`
 	doType      DoType
-	stepRecord  *dao.StepRecord
 }
 
 type StepDo struct {
-	Type DoType `json:"type"`
+	Type        DoType `json:"type" mapstructure:"type"`
+	Timeout     int64
+	AutoSetDone bool `json:"auto-set-done" mapstructure:"auto-set-done" yaml:"auto-set-done"`
 }
 
 type DO interface {
-	Describe() string
+	Describe() (string, error)
 }
-type StepDoShellExecute struct {
-	StepDo  `yaml:",inline"`
-	Options StepDoShellExecuteOptions `json:"options"`
+type StepDoREST struct {
+	StepDo  `yaml:",inline" mapstructure:",squash"`
+	Options StepDoRESTOptions `json:"options"`
 }
-type StepDoShellExecuteOptions struct {
-	Command   string   `json:"command"`
-	Arguments []string `json:"arguments"`
+type StepDoRESTOptions struct {
+	Method                 string      `json:"method"`
+	Url                    string      `json:"url"`
+	Headers                http.Header `json:"headers"`
+	MaxResponseHeaderBytes int64       `json:"max-response-header-bytes" mapstructure:"max-response-header-bytes" yaml:"max-response-header-bytes"`
+	Body                   string
 }
 
-func (do StepDoShellExecute) Describe() string {
-	strs := []string{do.Options.Command}
-	strs = append(strs, do.Options.Arguments...)
-	return fmt.Sprintf("%s", strings.Join(strs, " "))
+func (do StepDoREST) Describe() (string, error) {
+	doStr, err := yaml.Marshal(do)
+	if err != nil {
+		return "", err
+	}
+	return string(doStr), nil
 }
 
 func (s *Template) LoadFromFile(filename string) error {
@@ -124,33 +133,100 @@ func (s *Step) AdjustUnmarshalStep() error {
 		s.Label = random.String()
 	}
 
-	if s.Do != nil {
-		stepDo := StepDo{}
-		stepDoBytes, err := yaml.Marshal(s.Do)
-		if err != nil {
-			return err
+	if s.Do == nil {
+		return nil
+	} else {
+		var doType interface{}
+		switch s.Do.(type) {
+		case map[interface{}]interface{}:
+			doMap := s.Do.(map[interface{}]interface{})
+			switch doMap["type"].(type) {
+			case string:
+			default:
+				return fmt.Errorf("failed to adjust step do options, invalid do type - type value")
+			}
+			doType = DoType(doMap["type"].(string))
+		case map[string]interface{}:
+			doMap := s.Do.(map[string]interface{})
+			switch doMap["type"].(type) {
+			case string:
+			default:
+				return fmt.Errorf("failed to adjust step do options, invalid do type - string type value")
+			}
+			doType = DoType(doMap["type"].(string))
+		case map[string]string:
+			doMap := s.Do.(map[string]string)
+			doType = DoType(doMap["type"])
+		default:
+			return fmt.Errorf("failed to adjust step do options, invalid do type")
 		}
-		decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
-		decoder.SetStrict(false)
-		err = decoder.Decode(&stepDo)
-		if err != nil {
-			return err
-		}
-		doType := string(stepDo.Type)
-		switch DoType(doType) {
-		case "":
-			fallthrough
-		case DoTypeShellExecute:
-			do := StepDoShellExecute{}
-			decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
-			decoder.SetStrict(true)
-			err = decoder.Decode(&do)
+
+		switch doType {
+		case DoTypeREST:
+			do := StepDoREST{}
+			var md mapstructure.Metadata
+			decoder, err := mapstructure.NewDecoder(
+				&mapstructure.DecoderConfig{
+					Metadata: &md,
+					Result:   &do,
+				})
 			if err != nil {
 				return err
 			}
+			err = decoder.Decode(s.Do)
+			if err != nil {
+				return err
+			}
+			if len(md.Unused) > 0 {
+				return fmt.Errorf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
+			}
 			s.Do = do
-			s.doType = DoTypeShellExecute
+		default:
+			return fmt.Errorf("unsupported do type: %s", doType)
 		}
 	}
+	//stepDo := StepDo{}
+	//
+	//
+	//switch DoType(doType) {
+	//case "":
+	//	fallthrough
+	//case DoTypeREST:
+	//	do := StepDoREST{}
+	//	decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
+	//	decoder.SetStrict(true)
+	//	err = decoder.Decode(&do)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	s.Do = do
+	//	s.doType = DoTypeREST
+	//}
+	//
+	//stepDoBytes, err := yaml.Marshal(s.Do)
+	//if err != nil {
+	//	return err
+	//}
+	//decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
+	//decoder.SetStrict(false)
+	//err = decoder.Decode(&stepDo)
+	//if err != nil {
+	//	return err
+	//}
+	//doType := string(stepDo.Type)
+	//switch DoType(doType) {
+	//case "":
+	//	fallthrough
+	//case DoTypeREST:
+	//	do := StepDoREST{}
+	//	decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
+	//	decoder.SetStrict(true)
+	//	err = decoder.Decode(&do)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	s.Do = do
+	//	s.doType = DoTypeREST
+	//}
 	return nil
 }

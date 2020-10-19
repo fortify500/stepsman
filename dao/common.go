@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dao
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"os"
@@ -26,7 +28,9 @@ var DB DBI
 
 type DBI interface {
 	SQL() *sqlx.DB
-	VerifyDBCreation() error
+	VerifyDBCreation(tx *sqlx.Tx) error
+	CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error)
+	ListStepsTx(tx *sqlx.Tx, runId string, rows *sqlx.Rows, err error) (*sqlx.Rows, error)
 	Migrate0(tx *sqlx.Tx) error
 }
 
@@ -36,9 +40,11 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 	switch strings.TrimSpace(databaseVendor) {
 	case "sqlite":
 		internalDriverName = "sqlite3"
-		_, err = os.Stat(dataSourceName)
-		if err != nil {
-			return fmt.Errorf("failed to verify sqlite file existance: %s", dataSourceName)
+		if dataSourceName != ":memory:" {
+			_, err = os.Stat(dataSourceName)
+			if err != nil {
+				return fmt.Errorf("failed to verify sqlite file existance: %s", dataSourceName)
+			}
 		}
 	case "postgresql":
 		internalDriverName = "pgx"
@@ -56,10 +62,22 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 		switch internalDriverName {
 		case "sqlite3":
 			DB = (*Sqlite3SqlxDB)(dbOpen)
+			_, err := DB.SQL().Exec("PRAGMA journal_mode = WAL")
+			if err != nil {
+				return fmt.Errorf("failed to set journal mode: %w", err)
+			}
+			_, err = DB.SQL().Exec("PRAGMA synchronous = NORMAL")
+			if err != nil {
+				return fmt.Errorf("failed to set synchronous mode: %w", err)
+			}
 		case "pgx":
 			DB = (*PostgreSQLSqlxDB)(dbOpen)
 		default:
 			return fmt.Errorf("unsupported internal database driver name: %s", internalDriverName)
+		}
+		err = DB.SQL().Ping()
+		if err != nil {
+			return fmt.Errorf("failed to ping an open database connection: %w", err)
 		}
 	}
 	return err
@@ -76,14 +94,16 @@ func Rollback(tx *sqlx.Tx, err error) error {
 var IsRemote = false
 
 type ParametersType struct {
-	DataSourceName   string
-	DatabaseVendor   string
-	DatabaseHost     string
-	DatabasePort     int64
-	DatabaseName     string
-	DatabaseSSLMode  bool
-	DatabaseUserName string
-	DatabasePassword string
+	DataSourceName      string
+	DatabaseVendor      string
+	DatabaseHost        string
+	DatabasePort        int64
+	DatabaseName        string
+	DatabaseSSLMode     bool
+	DatabaseUserName    string
+	DatabasePassword    string
+	DatabaseSchema      string
+	DatabaseAutoMigrate bool
 }
 
 var Parameters ParametersType
@@ -95,14 +115,21 @@ func InitDAO(daoParameters *ParametersType) error {
 		if daoParameters.DatabaseSSLMode {
 			sslmode = "enable"
 		}
-		daoParameters.DataSourceName = fmt.Sprintf("host=%s port=%d user=%s "+
-			"password=%s dbname=%s sslmode=%s",
+
+		var connectionString string
+		if daoParameters.DatabaseSchema != "" {
+			connectionString = "host=%[1]s port=%[2]d user=%[3]s password=%[4]s dbname=%[5]s sslmode=%[6]s search_path=%[7]s"
+		} else {
+			connectionString = "host=%[1]s port=%[2]d user=%[3]s password=%[4]s dbname=%[5]s sslmode=%[6]s"
+		}
+		daoParameters.DataSourceName = fmt.Sprintf(connectionString,
 			daoParameters.DatabaseHost,
 			daoParameters.DatabasePort,
 			daoParameters.DatabaseUserName,
 			daoParameters.DatabasePassword,
 			daoParameters.DatabaseName,
-			sslmode)
+			sslmode,
+			daoParameters.DatabaseSchema)
 		fallthrough
 	case "sqlite":
 		IsRemote = false

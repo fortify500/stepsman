@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dao
 
 import (
@@ -64,7 +65,6 @@ func RemoteListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 					TemplateTitle:   record.TemplateTitle,
 					Status:          status,
 					Template:        record.Template,
-					State:           record.State,
 				})
 			}
 		}
@@ -111,7 +111,6 @@ func RemoteGetRuns(ids []string) ([]*RunRecord, error) {
 					TemplateTitle:   record.TemplateTitle,
 					Status:          status,
 					Template:        record.Template,
-					State:           record.State,
 				})
 			}
 		}

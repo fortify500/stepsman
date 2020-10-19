@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -44,28 +45,33 @@ const (
 	CommandCreateRun
 	CommandDescribeRun
 	CommandDoRun
-	CommandListRun
+	CommandListSteps
 	CommandListRuns
-	CommandSkipRun
-	CommandStopRun
+	CommandGetRun
+	CommandUpdateRun
+	CommandUpdateStep
 )
 
 type AllParameters struct {
 	// Flags
-	CfgFile          string
-	DatabaseVendor   string
-	DataSourceName   string
-	DatabaseHost     string
-	DatabasePort     int64
-	DatabaseName     string
-	DatabaseSSLMode  bool
-	DatabaseUserName string
-	DatabasePassword string
-	CreateFileName   string
-	RunKey           string
-	ServerPort       int64
-	Step             string
-	Run              string
+	CfgFile             string
+	DatabaseVendor      string
+	DataSourceName      string
+	DatabaseHost        string
+	DatabasePort        int64
+	DatabaseName        string
+	DatabaseSSLMode     bool
+	DatabaseAutoMigrate bool
+	DatabaseUserName    string
+	DatabasePassword    string
+	DatabaseSchema      string
+	CreateFileName      string
+	RunKey              string
+	ServerPort          int64
+	Step                string
+	OnlyTemplateType    string
+	Run                 string
+	Status              string
 	//Query
 	RangeStart       int64
 	RangeEnd         int64
@@ -74,12 +80,14 @@ type AllParameters struct {
 	SortOrder        string
 	Filters          []string
 	// Others
-	InitialInput   string
-	CurrentCommand CommandType
-	CurrentRunId   string
-	CurrentRun     *dao.RunRecord
-	FlagsReInit    []func() error
-	Err            error
+	InPromptMode     bool
+	InitialInput     string
+	CurrentCommand   CommandType
+	CurrentStepIndex string
+	CurrentRunId     string
+	CurrentRun       *dao.RunRecord
+	FlagsReInit      []func() error
+	Err              error
 }
 
 var Parameters = AllParameters{
@@ -142,7 +150,7 @@ func InitConfig() {
 		viper.AddConfigPath(StoreDir)
 		viper.SetConfigName(".stepsman")
 	}
-
+	viper.SetEnvPrefix("STEPSMAN")
 	viper.AutomaticEnv() // read in environment variables that match
 	LumberJack = &lumberjack.Logger{
 		Filename:   path.Join(StoreDir, "stepsman.log"),
@@ -170,29 +178,35 @@ func InitConfig() {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
 
-	if viper.IsSet("db-vendor") {
-		Parameters.DatabaseVendor = viper.GetString("db-vendor")
+	if viper.IsSet("DB_VENDOR") {
+		Parameters.DatabaseVendor = viper.GetString("DB_VENDOR")
 	}
-	if viper.IsSet("db-file-name") {
-		Parameters.DataSourceName = viper.GetString("db-file-name")
+	if viper.IsSet("DB_FILE_NAME") {
+		Parameters.DataSourceName = viper.GetString("DB_FILE_NAME")
 	}
-	if viper.IsSet("db-host") {
-		Parameters.DatabaseHost = viper.GetString("db-host")
+	if viper.IsSet("DB_HOST") {
+		Parameters.DatabaseHost = viper.GetString("DB_HOST")
 	}
-	if viper.IsSet("db-port") {
-		Parameters.DatabasePort = viper.GetInt64("db-port")
+	if viper.IsSet("DB_PORT") {
+		Parameters.DatabasePort = viper.GetInt64("DB_PORT")
 	}
-	if viper.IsSet("db-name") {
-		Parameters.DatabaseName = viper.GetString("db-name")
+	if viper.IsSet("DB_NAME") {
+		Parameters.DatabaseName = viper.GetString("DB_NAME")
 	}
-	if viper.IsSet("db-user-name") {
-		Parameters.DatabaseUserName = viper.GetString("db-user-name")
+	if viper.IsSet("DB_USER_NAME") {
+		Parameters.DatabaseUserName = viper.GetString("DB_USER_NAME")
 	}
-	if viper.IsSet("db-password") {
-		Parameters.DatabasePassword = viper.GetString("db-password")
+	if viper.IsSet("DB_SCHEMA") {
+		Parameters.DatabaseSchema = viper.GetString("DB_SCHEMA")
 	}
-	if viper.IsSet("db-enable-ssl") {
-		Parameters.DatabaseSSLMode = viper.GetBool("db-enable-ssl")
+	if viper.IsSet("DB_PASSWORD") {
+		Parameters.DatabasePassword = viper.GetString("DB_PASSWORD")
+	}
+	if viper.IsSet("DB_ENABLE_SSL") {
+		Parameters.DatabaseSSLMode = viper.GetBool("DB_ENABLE_SSL")
+	}
+	if viper.IsSet("DB_AUTO_MIGRATE") {
+		Parameters.DatabaseAutoMigrate = viper.GetBool("DB_AUTO_MIGRATE")
 	}
 
 	_, err = os.Stat(StoreDir)
@@ -210,18 +224,6 @@ func InitConfig() {
 	}
 }
 
-func GetNotDoneAndNotSkippedStep(run *dao.RunRecord) (*dao.StepRecord, error) {
-	step, err := bl.GetNotDoneAndNotSkippedStep(run)
-	if err != nil {
-		msg := fmt.Sprintf("failed to get step with [run id]: [%s]", run.Id)
-		return nil, &Error{
-			Technical: fmt.Errorf(msg+": %w", err),
-			Friendly:  msg,
-		}
-	}
-	return step, nil
-}
-
 func getRun(id string) (*dao.RunRecord, error) {
 	run, err := bl.GetRun(id)
 	if err != nil {
@@ -234,6 +236,17 @@ func getRun(id string) (*dao.RunRecord, error) {
 	return run, nil
 }
 
+func parseStepUUID(idStr string) (string, error) {
+	uuid4, err := uuid.Parse(idStr)
+	if err != nil {
+		msg := "failed to parse step uuid"
+		return "", &Error{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
+	}
+	return strings.ToLower(uuid4.String()), nil
+}
 func parseRunId(idStr string) (string, error) {
 	uuid4, err := uuid.Parse(idStr)
 	if err != nil {

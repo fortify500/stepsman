@@ -114,7 +114,6 @@ func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord) ([]dao.RunAPIRecord, e
 			TemplateTitle:   runRecord.TemplateTitle,
 			Status:          status,
 			Template:        runRecord.Template,
-			State:           runRecord.State,
 		})
 	}
 	return runRpcRecords, nil

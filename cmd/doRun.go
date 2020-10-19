@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -20,6 +21,7 @@ import (
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
+	"strings"
 )
 
 var doRunCmd = &cobra.Command{
@@ -31,6 +33,11 @@ Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandDoRun
 		runId, err := parseRunId(args[0])
+		if err != nil {
+			Parameters.Err = err
+			return
+		}
+		index, err := parseIndex(Parameters.Step)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -50,7 +57,7 @@ Use run <run id>.`,
 			}
 			return
 		}
-		stepRecord, err := GetNotDoneAndNotSkippedStep(run)
+		stepRecord, err := dao.GetStep(args[0], index)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -66,7 +73,7 @@ Use run <run id>.`,
 			return
 		}
 		step := script.Steps[stepRecord.Index-1]
-		_, err = step.StartDo()
+		err = step.StartDo(stepRecord)
 		if err != nil {
 			msg := "failed to start do"
 			Parameters.Err = &Error{
@@ -80,9 +87,17 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
+		Parameters.CurrentStepIndex = strings.TrimSpace(Parameters.Step)
 	},
 }
 
 func init() {
 	doCmd.AddCommand(doRunCmd)
+	initFlags := func() error {
+		doRunCmd.ResetFlags()
+		doRunCmd.Flags().StringVarP(&Parameters.Step, "step", "s", "", "Step Index")
+		err := doRunCmd.MarkFlagRequired("step")
+		return err
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

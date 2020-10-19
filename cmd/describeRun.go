@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -88,13 +89,13 @@ You can also describe a single step by adding --step <Index>.`,
 				}
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
-				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 70))
+				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 120))
 				t.SetStyle(NoBordersStyle)
 				t.AppendRows([]table.Row{
 					//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", run.Id},
-					{"Template Title:", strings.TrimSpace(text.WrapText(run.TemplateTitle, 70))},
 					{"Key:", run.Key},
+					{"Template Title:", strings.TrimSpace(text.WrapText(run.TemplateTitle, 120))},
 					{"Status:", runStatus},
 				})
 				mainT.AppendRow(table.Row{t.Render()})
@@ -123,8 +124,6 @@ You can also describe a single step by adding --step <Index>.`,
 			switch stepRecord.Status {
 			case dao.StepDone:
 				checked = "True"
-			case dao.StepSkipped:
-				checked = "True"
 			}
 			if stepRecord.Status == dao.StepInProgress {
 				heartBeat = fmt.Sprintf("%s", stepRecord.HeartBeat)
@@ -133,12 +132,13 @@ You can also describe a single step by adding --step <Index>.`,
 			{
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
-				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 70))
+				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 120))
 				t.SetStyle(NoBordersStyle)
 				t.AppendRows([]table.Row{
 					//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Index:", stepRecord.Index},
 					{"Name:", strings.TrimSpace(text.WrapText(stepRecord.Name, TableWrapLen))},
+					{"Label:", strings.TrimSpace(text.WrapText(stepRecord.Label, TableWrapLen))},
 					{"UUID:", stepRecord.UUID},
 					{"Status:", status},
 					{"Heartbeat:", heartBeat},
@@ -148,9 +148,29 @@ You can also describe a single step by adding --step <Index>.`,
 				if step.Do != nil {
 					do, ok := step.Do.(bl.DO)
 					if ok {
-						t.AppendRow(table.Row{"Do:", strings.TrimSpace(text.WrapText(do.Describe(), 70))})
+						describe, err := do.Describe()
+						if err != nil {
+							msg := "failed to describe step"
+							Parameters.Err = &Error{
+								Technical: fmt.Errorf(msg+": %w", err),
+								Friendly:  msg,
+							}
+							return
+						}
+						t.AppendRow(table.Row{"Do:", strings.TrimSpace(text.WrapText(describe, 120))})
 					}
 				}
+
+				yamlState, err := stepRecord.PrettyJSONState()
+				if err != nil {
+					msg := "failed to describe steps"
+					Parameters.Err = &Error{
+						Technical: fmt.Errorf(msg+": %w", err),
+						Friendly:  msg,
+					}
+					return
+				}
+				t.AppendRow(table.Row{"State:", strings.TrimSpace(text.WrapText(yamlState, 120))})
 				t.AppendRow(table.Row{"", ""})
 				mainT.AppendRow(table.Row{t.Render()})
 			}

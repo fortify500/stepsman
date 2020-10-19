@@ -47,7 +47,7 @@ steps:
           authorization: >
             base64.encode(concat("privilegedUser:", "{{ vault["privilegedUser"] }}"))
     on:
-      done:
+      pre-done:
         decisions:
           - decision_1
         rules:
@@ -78,7 +78,7 @@ steps:
   - name: "end of run"
     label: end
     on:
-      done:
+      pre-done:
         rules:
           - then:
             set-run-status: done

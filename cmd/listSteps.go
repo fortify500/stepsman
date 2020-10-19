@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -32,11 +33,11 @@ var listStepsCmd = &cobra.Command{
 	Short: "List the steps of a run.",
 	Long:  `List the steps of a run and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Parameters.CurrentCommand = CommandListRun
+		Parameters.CurrentCommand = CommandListSteps
 		t := table.NewWriter()
 		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"", "", "Index", "UUID", "Title", "Status", "HeartBeat"})
+		t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "HeartBeat"})
 		runId, err := parseRunId(Parameters.Run)
 		if err != nil {
 			Parameters.Err = err
@@ -72,14 +73,12 @@ var listStepsCmd = &cobra.Command{
 			switch step.Status {
 			case dao.StepDone:
 				checked = "[V]"
-			case dao.StepSkipped:
-				checked = "[V]"
 			}
 			if step.Status == dao.StepInProgress {
 				heartBeat = fmt.Sprintf("%s", step.HeartBeat)
 			}
 			t.AppendRows([]table.Row{
-				{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 70)), status, heartBeat},
+				{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, heartBeat},
 			})
 		}
 		t.Render()

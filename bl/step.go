@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package bl
 
 import (
@@ -25,22 +26,35 @@ import (
 
 const HeartBeatInterval = 10
 
+func MustTranslateStepStatus(status dao.StepStatusType) string {
+	stepStatus, err := TranslateStepStatus(status)
+	if err != nil {
+		log.Error(err)
+	}
+	return stepStatus
+}
 func TranslateStepStatus(status dao.StepStatusType) (string, error) {
 	switch status {
-	case dao.StepNotStarted:
-		return "Not Started", nil
+	case dao.StepIdle:
+		return "Idle", nil
 	case dao.StepInProgress:
 		return "In Progress", nil
-	case dao.StepCanceled:
-		return "Canceled", nil
-	case dao.StepFailed:
-		return "Failed", nil
 	case dao.StepDone:
 		return "Done", nil
-	case dao.StepSkipped:
-		return "Skipped", nil
 	default:
-		return "", fmt.Errorf("failed to translate run status: %d", status)
+		return "Error", fmt.Errorf("failed to translate step status: %d", status)
+	}
+}
+func TranslateToStepStatus(status string) (dao.StepStatusType, error) {
+	switch status {
+	case "Idle":
+		return dao.StepIdle, nil
+	case "In Progress":
+		return dao.StepInProgress, nil
+	case "Done":
+		return dao.StepDone, nil
+	default:
+		return dao.StepIdle, fmt.Errorf("failed to translate statys to step status")
 	}
 }
 func ListSteps(runId string) ([]*dao.StepRecord, error) {
@@ -59,79 +73,58 @@ func ListSteps(runId string) ([]*dao.StepRecord, error) {
 //	return &step, nil
 //}
 
-func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, doFinish bool) error {
+func UpdateStepStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, doFinish bool) error {
 	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}
-	runId := stepRecord.RunId
-	step, err := dao.GetStepTx(tx, runId, stepRecord.Index)
+	runId := prevStepRecord.RunId
+	stepRecord, err := dao.GetStepTx(tx, runId, prevStepRecord.Index)
 	if err != nil {
 		err = dao.Rollback(tx, err)
-		return fmt.Errorf("failed to update database step row: %w", err)
+		return fmt.Errorf("failed to update database stepRecord row: %w", err)
 	}
 
-	if !doFinish && step.Status == dao.StepInProgress {
-		delta := step.Now.Sub(step.HeartBeat)
+	// if we are starting check if the stepRecord is already in-progress.
+	if !doFinish && stepRecord.Status == dao.StepInProgress {
+		delta := stepRecord.Now.(time.Time).Sub(stepRecord.HeartBeat.(time.Time))
 		if delta < 0 {
 			delta = delta * -1
 		}
 		// +5 for slow downs
 		if delta <= (HeartBeatInterval+5)*time.Second {
-			err = dao.Rollback(tx, fmt.Errorf("step is already in progress and has a heartbeat with an interval of %d", HeartBeatInterval))
-			return fmt.Errorf("failed to update database step row: %w", err)
+			err = dao.Rollback(tx, fmt.Errorf("stepRecord is already in progress and has a heartbeat with an interval of %d: %w", HeartBeatInterval, ErrStepAlreadyInProgress))
+			return fmt.Errorf("failed to update database stepRecord row: %w", err)
 		}
 	}
+
 	// don't change done if the status did not change.
-	// must be after (because we want to raise StepInProgress=StepInProgress error
 	if newStatus == stepRecord.Status {
 		err = tx.Rollback()
-		return err
+		return ErrStatusNotChanged
 	}
 	_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus)
 	if err != nil {
 		err = dao.Rollback(tx, err)
-		return fmt.Errorf("failed to update database step row: %w", err)
+		return fmt.Errorf("failed to update database stepRecord row: %w", err)
 	}
 
-	if newStatus != dao.StepNotStarted {
+	if newStatus != dao.StepIdle {
 		var run *dao.RunRecord
-		run, err = GetRun(runId)
+		run, err = dao.GetRunTx(tx, runId)
 		if err != nil {
 			err = dao.Rollback(tx, err)
-			return fmt.Errorf("failed to update database step row: %w", err)
+			return fmt.Errorf("failed to update database stepRecord row: %w", err)
 		}
-		if run.Status != dao.RunInProgress {
-			_, err = dao.UpdateRunStatus(run.Id, dao.RunInProgress)
+		if run.Status == dao.RunIdle {
+			_, err = dao.UpdateRunStatusTx(tx, run.Id, dao.RunInProgress)
 			if err != nil {
 				err = dao.Rollback(tx, err)
 				return fmt.Errorf("failed to update database run row: %w", err)
 			}
-		}
-	}
-
-	if newStatus == dao.StepDone || newStatus == dao.StepSkipped {
-		var steps []*dao.StepRecord
-
-		//TODO: need to replace with more efficient method.
-		steps, err = dao.ListStepsTx(tx, runId)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return fmt.Errorf("failed to list database run rows: %w", err)
-		}
-		allDoneOrSkipped := true
-		for _, stepRecord := range steps {
-			if stepRecord.Status != dao.StepDone && stepRecord.Status != dao.StepSkipped {
-				allDoneOrSkipped = false
-				break
-			}
-		}
-		if allDoneOrSkipped {
-			_, err = dao.UpdateRunStatus(runId, dao.RunDone)
-			if err != nil {
-				err = dao.Rollback(tx, err)
-				return fmt.Errorf("failed to update database run row status: %w", err)
-			}
+		} else if run.Status == dao.RunDone {
+			err = dao.Rollback(tx, ErrRunIsAlreadyDone)
+			return fmt.Errorf("failed to update database stepRecord status: %w", err)
 		}
 	}
 
@@ -139,14 +132,14 @@ func UpdateStepStatus(stepRecord *dao.StepRecord, newStatus dao.StepStatusType, 
 	if err != nil {
 		return fmt.Errorf("failed to commit database transaction: %w", err)
 	}
-	stepRecord.Status = newStatus
+	*prevStepRecord = *stepRecord
 	return nil
 }
 
-func (s *Step) StartDo() (dao.StepStatusType, error) {
-	err := UpdateStepStatus(s.stepRecord, dao.StepInProgress, false)
+func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
+	err := UpdateStepStatus(stepRecord, dao.StepInProgress, false)
 	if err != nil {
-		return dao.StepFailed, err
+		return err
 	}
 	var wg sync.WaitGroup
 	heartBeatDone1 := make(chan int)
@@ -160,7 +153,7 @@ func (s *Step) StartDo() (dao.StepStatusType, error) {
 			case <-heartBeatDone2:
 				break OUT
 			case <-time.After(HeartBeatInterval * time.Second):
-				errBeat := s.stepRecord.UpdateHeartBeat()
+				errBeat := stepRecord.UpdateHeartBeat()
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
 				}
@@ -171,12 +164,9 @@ func (s *Step) StartDo() (dao.StepStatusType, error) {
 	wg.Add(1)
 	go heartbeat()
 	defer close(heartBeatDone1) //in case of a panic
-	newStatus, err := do(s.doType, s.Do)
-	if err != nil {
-		return dao.StepFailed, err
-	}
+	_ = do(s.doType, s.Do)
 	close(heartBeatDone2)
 	wg.Wait()
-	err = UpdateStepStatus(s.stepRecord, newStatus, true)
-	return newStatus, err
+	err = UpdateStepStatus(stepRecord, dao.StepDone, true)
+	return err
 }

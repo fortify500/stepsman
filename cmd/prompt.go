@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -35,7 +36,8 @@ var promptCmd = &cobra.Command{
 	Short: "Prompt is an interactive command interface",
 	Long:  `Use prompt to interact with the command with command suggestions.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		ResetParameters()
+		Parameters.InPromptMode = true
+		ResetCommandParameters()
 		var history []string
 		fmt.Println("Usage:")
 		fmt.Println("* `exit` or CTRL-D to exit this program.")
@@ -80,10 +82,11 @@ func Executor(s string, wasEnter bool) {
 	}
 	RootCmd.SetArgs(args.GetArgs(s))
 	wasError := Execute()
-	var describeRunCursorStep []string
-	currentRunIdStr := fmt.Sprintf("%s", Parameters.CurrentRunId)
+	var describeCurrentStep []string
+	currentRunIdStr := Parameters.CurrentRunId
+	currentStepIndexStr := Parameters.CurrentStepIndex
 	if Parameters.CurrentRunId != "" {
-		describeRunCursorStep = []string{"describe", "run", currentRunIdStr, "--step"}
+		describeCurrentStep = []string{"describe", "run", currentRunIdStr, "--step", currentStepIndexStr}
 	}
 	runStatus := dao.RunInProgress
 	if Parameters.CurrentRun != nil {
@@ -92,25 +95,25 @@ func Executor(s string, wasEnter bool) {
 	currentCommand := Parameters.CurrentCommand
 	nextInitialInput := ""
 	getRunRunId := []string{"get", "run", currentRunIdStr}
-	ResetParameters()
+	ResetCommandParameters()
 	switch currentCommand {
 	case CommandCreateRun:
 		if !wasError {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 			RootCmd.SetArgs(getRunRunId)
 			Execute()
-			ResetParameters()
-			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
-			RootCmd.SetArgs(describeRunCursorStep)
+			ResetCommandParameters()
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeCurrentStep, " ")))
+			RootCmd.SetArgs(describeCurrentStep)
 			Execute()
 		}
 	case CommandDoRun:
 		if !wasError {
-			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
-			RootCmd.SetArgs(describeRunCursorStep)
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeCurrentStep, " ")))
+			RootCmd.SetArgs(describeCurrentStep)
 			Execute()
 			if runStatus == dao.RunDone {
-				ResetParameters()
+				ResetCommandParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 				RootCmd.SetArgs(getRunRunId)
 				Execute()
@@ -121,16 +124,16 @@ func Executor(s string, wasEnter bool) {
 			if runStatus == dao.RunDone {
 				nextInitialInput = strings.Join(getRunRunId, " ")
 			} else {
-				nextInitialInput = strings.Join(describeRunCursorStep, " ")
+				nextInitialInput = strings.Join(describeCurrentStep, " ")
 			}
 		}
-	case CommandSkipRun:
+	case CommandUpdateStep:
 		if !wasError {
-			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeRunCursorStep, " ")))
-			RootCmd.SetArgs(describeRunCursorStep)
+			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeCurrentStep, " ")))
+			RootCmd.SetArgs(describeCurrentStep)
 			Execute()
 			if runStatus == dao.RunDone {
-				ResetParameters()
+				ResetCommandParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 				RootCmd.SetArgs(getRunRunId)
 				Execute()
@@ -141,10 +144,10 @@ func Executor(s string, wasEnter bool) {
 			if runStatus == dao.RunDone {
 				nextInitialInput = strings.Join(getRunRunId, " ")
 			} else {
-				nextInitialInput = strings.Join(describeRunCursorStep, " ")
+				nextInitialInput = strings.Join(describeCurrentStep, " ")
 			}
 		}
-	case CommandStopRun:
+	case CommandUpdateRun:
 		if !wasError {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 			RootCmd.SetArgs(getRunRunId)
@@ -153,13 +156,14 @@ func Executor(s string, wasEnter bool) {
 	default:
 		nextInitialInput = ""
 	}
-	ResetParameters()
+	ResetCommandParameters()
 	Parameters.InitialInput = nextInitialInput
 }
 
-func ResetParameters() {
+func ResetCommandParameters() {
 	Parameters.CurrentCommand = CommandUndetermined
 	Parameters.CurrentRunId = ""
+	Parameters.CurrentStepIndex = ""
 	Parameters.RunKey = ""
 	Parameters.Err = nil
 	for _, flagsReInit := range Parameters.FlagsReInit {

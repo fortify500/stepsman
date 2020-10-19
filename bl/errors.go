@@ -13,18 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package cmd
 
-import (
-	"github.com/spf13/cobra"
+package bl
+
+import "fmt"
+
+var (
+	ErrStatusNotChanged      = fmt.Errorf("status did not change")
+	ErrStepAlreadyInProgress = fmt.Errorf("step is already in progress")
+	ErrRunIsAlreadyDone      = fmt.Errorf("run is already done, no change is possible")
 )
-
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Runs summary or a list of a run steps.",
-	Long:  `A succinct list of runs or a succinct list of steps of a run.`,
-}
-
-func init() {
-	RootCmd.AddCommand(listCmd)
-}

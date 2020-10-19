@@ -13,18 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
 	"github.com/spf13/cobra"
 )
 
-var skipCmd = &cobra.Command{
-	Use:   "skip",
-	Short: "Skip a step of a run.",
-	Long:  `Skip a step of a run.`,
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "update a step of a run.",
+	Long:  `update a step of a run.`,
 }
 
 func init() {
-	RootCmd.AddCommand(skipCmd)
+	RootCmd.AddCommand(updateCmd)
 }

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -22,15 +23,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var stopRunCmd = &cobra.Command{
+var updateRunCmd = &cobra.Command{
 	Use:   "run",
 	Args:  cobra.ExactArgs(1),
 	Short: "A brief description of your command",
-	Long: `Changes the status of a run to Stopped.
+	Long: `Changes the status of a run to updateped.
 Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Parameters.CurrentCommand = CommandStopRun
+		Parameters.CurrentCommand = CommandUpdateRun
 		runId, err := parseRunId(args[0])
+		if err != nil {
+			Parameters.Err = err
+			return
+		}
+		status, err := dao.TranslateToRunStatus(Parameters.Status)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -40,8 +46,7 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		Parameters.CurrentRunId = run.Id
-		err = bl.UpdateRunStatus(run, dao.RunIdle)
+		err = bl.UpdateRunStatus(run, status)
 		if err != nil {
 			msg := "failed to update run status"
 			Parameters.Err = &Error{
@@ -50,9 +55,17 @@ Use run <run id>.`,
 			}
 			return
 		}
+		Parameters.CurrentRunId = run.Id
 	},
 }
 
 func init() {
-	stopCmd.AddCommand(stopRunCmd)
+	updateCmd.AddCommand(updateRunCmd)
+	initFlags := func() error {
+		updateRunCmd.ResetFlags()
+		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s", bl.MustTranslateStepStatus(dao.StepIdle), bl.MustTranslateStepStatus(dao.StepInProgress), bl.MustTranslateStepStatus(dao.StepDone)))
+		err := updateRunCmd.MarkFlagRequired("status")
+		return err
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

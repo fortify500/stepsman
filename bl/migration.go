@@ -21,17 +21,20 @@ import (
 	"github.com/fortify500/stepsman/dao"
 )
 
-func MigrateDB() error {
+const CodeDatabaseVersion = 1
+
+func MigrateDB(autoMigrate bool) error {
 	var version = -1
-	err := dao.DB.VerifyDBCreation()
-	if err != nil {
-		return fmt.Errorf("failed to verify database table creation: %w", err)
-	}
+	var err error
 	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
 	}
-	{
+	if autoMigrate {
+		err = dao.DB.VerifyDBCreation(tx)
+		if err != nil {
+			return fmt.Errorf("failed to verify database table creation: %w", err)
+		}
 		var count = -1
 		err = dao.CountMigrationTx(tx, &count)
 		if err != nil {
@@ -51,19 +54,29 @@ func MigrateDB() error {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to get database version: %w", err)
 	}
-	switch version {
-	case 0:
-		dao.DB.Migrate0(tx)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return err
-		}
-		_, err = dao.UpdateMigration(tx, version+1)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return fmt.Errorf("failed to update database migration row to version 1: %w", err)
-		}
+	if version > CodeDatabaseVersion {
+		err = dao.Rollback(tx, fmt.Errorf("database version is greater then this distribution code version - aborting"))
+		return err
 	}
+	if autoMigrate {
+		switch version {
+		case 0:
+			dao.DB.Migrate0(tx)
+			if err != nil {
+				err = dao.Rollback(tx, err)
+				return err
+			}
+			_, err = dao.UpdateMigration(tx, version+1)
+			if err != nil {
+				err = dao.Rollback(tx, err)
+				return fmt.Errorf("failed to update database migration row to version 1: %w", err)
+			}
+		}
+	} else if version < CodeDatabaseVersion {
+		err = dao.Rollback(tx, fmt.Errorf("database version is lower then this distribution code version and db-auto-migrate=false - aborting"))
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("failed to commit migration transaction: %w", err)

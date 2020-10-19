@@ -13,21 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dao
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 )
 
 type PostgreSQLSqlxDB sqlx.DB
 
-func (db *PostgreSQLSqlxDB) VerifyDBCreation() error {
-	err := db.Ping()
-	if err != nil {
-		return fmt.Errorf("failed to open a database connection: %w", err)
-	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS "public"."migration" ( 
+func (db *PostgreSQLSqlxDB) VerifyDBCreation(tx *sqlx.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS "public"."migration" ( 
 	"id" Bigint NOT NULL,
 	"version" Bigint NOT NULL,
 	PRIMARY KEY ( "id" ) );`)
@@ -39,23 +37,23 @@ func (db *PostgreSQLSqlxDB) SQL() *sqlx.DB {
 }
 func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE "public"."runs" ( 
-	"id" UUid NOT NULL,
+	"id" uuid NOT NULL,
 	"status" Bigint NOT NULL,
 	"template_version" BIGINT NOT NULL,
 	"key" Text NOT NULL,
 	"template_title" Text NOT NULL ,
 	"template" jsonb,
-	"state" jsonb,
 	PRIMARY KEY ( "id" ),
 	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE "public"."steps" ( 
-	"run_id" UUid NOT NULL,
+	"run_id" uuid NOT NULL,
 	"index" Bigint NOT NULL,
-	"uuid" UUid NOT NULL,
+	"uuid" uuid NOT NULL,
 	"status" Bigint NOT NULL,
+	"status_uuid" uuid NOT NULL,
 	"heartbeat" TIMESTAMP NOT NULL,
 	"label" Text NOT NULL,
 	"name" Text,
@@ -72,4 +70,13 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 		return fmt.Errorf("failed to create index index_runs_status: %w", err)
 	}
 	return nil
+}
+
+func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error) {
+	return tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),:state)", stepRecord)
+}
+
+func (db *PostgreSQLSqlxDB) ListStepsTx(tx *sqlx.Tx, runId string, rows *sqlx.Rows, err error) (*sqlx.Rows, error) {
+	rows, err = tx.Queryx("SELECT *,CURRENT_TIMESTAMP as now FROM steps WHERE run_id=$1", runId)
+	return rows, err
 }

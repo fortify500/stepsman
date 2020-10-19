@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dao
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -23,20 +25,8 @@ import (
 
 type Sqlite3SqlxDB sqlx.DB
 
-func (db *Sqlite3SqlxDB) VerifyDBCreation() error {
-	_, err := db.Exec("PRAGMA journal_mode = WAL")
-	if err != nil {
-		return fmt.Errorf("failed to set journal mode: %w", err)
-	}
-	_, err = db.Exec("PRAGMA synchronous = NORMAL")
-	if err != nil {
-		return fmt.Errorf("failed to set synchronous mode: %w", err)
-	}
-	err = db.Ping()
-	if err != nil {
-		return fmt.Errorf("failed to open a database connection: %w", err)
-	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS migration (
+func (db *Sqlite3SqlxDB) VerifyDBCreation(tx *sqlx.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS migration (
     id INTEGER PRIMARY KEY NOT NULL,
 	version INTEGER NOT NULL
     );`)
@@ -48,33 +38,14 @@ func (db *Sqlite3SqlxDB) SQL() *sqlx.DB {
 }
 func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE runs (
-                                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                                     uuid TEXT NOT NULL,
-	                                 title TEXT,
-	                                 cursor INTEGER,
+                                     id TEXT PRIMARY KEY NOT NULL,
+                                     key TEXT NOT NULL,
+	                                 template_title TEXT,
+	                                 template_version INTEGER NOT NULL,
 	                                 status INTEGER NOT NULL,
-	                                 script TEXT
+	                                 template TEXT
                                      )`)
-	if err != nil {
-		return fmt.Errorf("failed to create database runs table: %w", err)
-	}
-	_, err = tx.Exec(`CREATE TABLE steps (
-                                     run_id INTEGER NOT NULL,
-                                     step_id INTEGER NOT NULL,
-                                     uuid TEXT NOT NULL,
-	                                 name TEXT,
-	                                 status INTEGER NOT NULL,
-	                                 heartbeat INTEGER NOT NULL,
-	                                 PRIMARY KEY (run_id, step_id)
-                                     )`)
-	if err != nil {
-		return fmt.Errorf("failed to create database steps table: %w", err)
-	}
-	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_uuid ON runs (uuid)`)
-	if err != nil {
-		return fmt.Errorf("failed to create index idx_runs_title_status: %w", err)
-	}
-	_, err = tx.Exec(`CREATE INDEX idx_runs_title_status ON runs (title, status)`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_key ON runs (key)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_title_status: %w", err)
 	}
@@ -82,5 +53,40 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_status: %w", err)
 	}
+	if err != nil {
+		return fmt.Errorf("failed to create database runs table: %w", err)
+	}
+	_, err = tx.Exec(`CREATE TABLE steps (
+                                     run_id TEXT NOT NULL,
+                                     "index" INTEGER NOT NULL,
+                                     uuid TEXT NOT NULL,
+	                                 name TEXT,
+	                                 label TEXT NOT NULL,
+	                                 status INTEGER NOT NULL,
+	                                 status_uuid TEXT NOT NULL,
+	                                 heartbeat TIMESTAMP NOT NULL,
+	                                 state text,
+	                                 PRIMARY KEY (run_id, "index")
+                                     )`)
+	if err != nil {
+		return fmt.Errorf("failed to create database steps table: %w", err)
+	}
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_uuid ON steps (uuid)`)
+	if err != nil {
+		return fmt.Errorf("failed to create index idx_steps_uuid: %w", err)
+	}
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_run_id_label ON steps (run_id, label)`)
+	if err != nil {
+		return fmt.Errorf("failed to create index idx_steps_run_id_label: %w", err)
+	}
 	return nil
+}
+func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error) {
+	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,0,:state)"
+	return tx.NamedExec(query, stepRecord)
+}
+
+func (db *Sqlite3SqlxDB) ListStepsTx(tx *sqlx.Tx, runId string, rows *sqlx.Rows, err error) (*sqlx.Rows, error) {
+	rows, err = tx.Queryx("SELECT *,CURRENT_TIMESTAMP as now FROM steps WHERE run_id=$1", runId)
+	return rows, err
 }

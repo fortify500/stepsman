@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -33,13 +34,13 @@ var listRunsCmd = &cobra.Command{
 	Short: "Runs summary.",
 	Long:  `A succinct list of runs and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		Parameters.CurrentCommand = CommandListRuns
 		listRunsInternal("")
 	},
 }
 
 func listRunsInternal(runId string) {
 	var err error
-	Parameters.CurrentCommand = CommandListRuns
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
@@ -98,7 +99,7 @@ func listRunsInternal(runId string) {
 		}
 
 		t.AppendRows([]table.Row{
-			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 70)), status},
+			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 120)), status},
 		})
 	}
 	if runRange != nil && runRange.Total > 0 {

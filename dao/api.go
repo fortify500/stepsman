@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dao
 
 type (
@@ -23,7 +24,6 @@ type (
 		TemplateTitle   string `json:"template-title"`
 		Status          string
 		Template        string
-		State           string
 	}
 )
 

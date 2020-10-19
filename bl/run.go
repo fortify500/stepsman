@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package bl
 
 import (
@@ -46,42 +47,23 @@ func GetRuns(ids []string) ([]*dao.RunRecord, error) {
 	if dao.IsRemote {
 		return dao.RemoteGetRuns(ids)
 	} else {
-		return dao.GetRuns(ids)
+		return dao.GetRunsTx(nil, ids)
 	}
-}
-
-func GetNotDoneAndNotSkippedStep(runRecord *dao.RunRecord) (*dao.StepRecord, error) {
-	steps, err := ListSteps(runRecord.Id)
-	for _, step := range steps {
-		//TODO: find a more efficient query
-		if step.Status != dao.StepDone && step.Status != dao.StepSkipped {
-			return step, nil
-		}
-	}
-	return nil, err
 }
 
 func UpdateRunStatus(runRecord *dao.RunRecord, newStatus dao.RunStatusType) error {
 	tx, err := dao.DB.SQL().Beginx()
-	if newStatus == dao.RunIdle {
-		//TODO: make a more efficient query.
-		steps, err := dao.ListStepsTx(tx, runRecord.Id)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return fmt.Errorf("failed to update database run status: %w", err)
-		}
-		for _, stepRecord := range steps {
-			if stepRecord.Status == dao.StepInProgress {
-				err = dao.Rollback(tx, err)
-				return fmt.Errorf("failed to update database run status: %w", err)
-			}
-		}
-
-	} else {
-		err = dao.Rollback(tx, fmt.Errorf("not allowed to set status done or in progress directly"))
+	runRecord, err = dao.GetRunTx(tx, runRecord.Id)
+	if err != nil {
+		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
-	_, err = dao.UpdateRunStatus(runRecord.Id, newStatus)
+	if newStatus == runRecord.Status {
+		return nil
+	}
+	// if idle and a step is started it will change to in progress
+	// if done then it is ok, there are steps in progress but new steps will not be started.
+	_, err = dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
@@ -106,6 +88,9 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 		return nil, fmt.Errorf("failed to generate uuid: %w", err)
 	}
 	jsonBytes, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
 	runRecord := dao.RunRecord{
 		Id:              uuid4.String(),
 		Key:             key,
@@ -113,7 +98,6 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 		TemplateTitle:   title,
 		Status:          dao.RunIdle,
 		Template:        string(jsonBytes),
-		State:           "{}",
 	}
 
 	err = dao.CreateRunTx(tx, &runRecord)
@@ -137,15 +121,16 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 		//	"name" Text,
 		//	"state" jsonb,
 		stepRecord := &dao.StepRecord{
-			RunId:  runRecord.Id,
-			Index:  int64(i) + 1,
-			UUID:   uuid4.String(),
-			Status: dao.StepNotStarted,
-			Label:  step.Label,
-			Name:   step.Name,
-			State:  "{}",
+			RunId:      runRecord.Id,
+			Index:      int64(i) + 1,
+			UUID:       uuid4.String(),
+			Status:     dao.StepIdle,
+			StatusUUID: uuid4.String(),
+			Label:      step.Label,
+			Name:       step.Name,
+			State:      "{}",
 		}
-		_, err = dao.CreateStepTx(tx, stepRecord)
+		_, err = dao.DB.CreateStepTx(tx, stepRecord)
 		if err != nil {
 			err = dao.Rollback(tx, err)
 			return nil, fmt.Errorf("failed to insert database steps row: %w", err)

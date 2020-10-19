@@ -4,18 +4,23 @@ steps:
     description: > # optional
       Execute: echo "hello world" > stepsman_hello.world
     do: # optional
+      type: REST # heartbeats of set InProgress and finaly set Done. However, this doesn't mean events cannot already start for path_1_step_?
+      timeout: 180 # seconds. default 10. if the callee does not set in-progress again.
+      auto-set-done: false # default is true, so that the flow will set in-progress or finally done, mainly for tracking, but has no effect overall.
       options:
-        command: "/bin/sh" # test is a command line program which returns exit values based on supplied parameters
-        arguments:
-          - "-c"
-          - 'echo "Hello World" > stepsman_hello.world'
+        method: GET
+        url: >
+          {{ env.flow}}/send-emails/path_1_step_1
+        headers:
+          authorization:
+            - >
+              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+          tenant:
+            - >
+              {{ context["tenant"] }}
+          namespace:
+            - 351d87f0-9d4a-411b-9a98-7d55a9792eac
   - name: "execute test" # mandatory
     description: > # optional
       check that stepshello.world was created
-    do: # optional
-      type: "shell execute"
-      options:
-        command: "/bin/sh" # test is a command line program which returns exit values based on supplied parameters
-        arguments:
-          - "-c"
-          - 'test -f stepsman_hello.world ; echo "Exit Code: $?"'
+    

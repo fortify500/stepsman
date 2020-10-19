@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package cmd
 
 import (
@@ -22,40 +23,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var skipRunCmd = &cobra.Command{
-	Use:   "run",
+var updateStepCmd = &cobra.Command{
+	Use:   "step",
 	Args:  cobra.ExactArgs(1),
-	Short: "Skip a step of a run.",
-	Long: `Skip a step of a run.
+	Short: "update a step of a run.",
+	Long: `update a step of a run.
 Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Parameters.CurrentCommand = CommandSkipRun
-		runId, err := parseRunId(args[0])
+		Parameters.CurrentCommand = CommandUpdateStep
+		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		run, err := getRun(runId)
+		stepRecord, err := dao.GetStepByUUID(stepUUID)
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		Parameters.CurrentRunId = run.Id
-		Parameters.CurrentRun = run
-		if run.Status == dao.RunDone {
-			msg := "run is already done"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg),
-				Friendly:  msg,
-			}
-			return
-		}
-		stepRecord, err := GetNotDoneAndNotSkippedStep(run)
+		status, err := bl.TranslateToStepStatus(Parameters.Status)
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		err = bl.UpdateStepStatus(stepRecord, dao.StepSkipped, false)
+		err = bl.UpdateStepStatus(stepRecord, status, false)
 		if err != nil {
 			msg := "failed to update step status"
 			Parameters.Err = &Error{
@@ -64,14 +55,18 @@ Use run <run id>.`,
 			}
 			return
 		}
-		Parameters.CurrentRun, err = getRun(runId)
-		if err != nil {
-			Parameters.Err = err
-			return
-		}
+
+		Parameters.CurrentStepIndex = fmt.Sprintf("%d", stepRecord.Index)
 	},
 }
 
 func init() {
-	skipCmd.AddCommand(skipRunCmd)
+	updateCmd.AddCommand(updateStepCmd)
+	initFlags := func() error {
+		updateStepCmd.ResetFlags()
+		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s", bl.MustTranslateStepStatus(dao.StepIdle), bl.MustTranslateStepStatus(dao.StepInProgress), bl.MustTranslateStepStatus(dao.StepDone)))
+		err := updateStepCmd.MarkFlagRequired("status")
+		return err
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }
