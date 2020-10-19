@@ -27,6 +27,7 @@ import (
 	"time"
 )
 
+//goland:noinspection GoDeprecation,SpellCheckingInspection
 var Transport = http.Transport{
 	Proxy: nil,
 	DialContext: (&net.Dialer{
@@ -80,6 +81,7 @@ func InitClient() {
 		Parameters.DatabasePort)
 }
 
+//goland:noinspection GoUnhandledErrorResult
 func remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCloser) error) error {
 	newRequest, err := http.NewRequest("POST", jsonRpcUrl, bytes.NewBuffer(request))
 	if err != nil {

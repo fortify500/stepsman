@@ -26,7 +26,7 @@ func CountMigrationTx(tx *sqlx.Tx, count *int) error {
 }
 
 func UpdateMigration(tx *sqlx.Tx, version int) (sql.Result, error) {
-	return tx.Exec("update migration set version=1 where id=1")
+	return tx.Exec("update migration set version=$1 where id=1", version)
 }
 
 func GetMigration(tx *sqlx.Tx, version *int) error {

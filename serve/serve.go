@@ -62,27 +62,32 @@ func Serve(port int64, logWriter io.Writer) {
 	signal.Notify(InterruptServe, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		for range InterruptServe {
-			logrus.Info("shutting down..")
+		<-InterruptServe
+		logrus.Info("shutting down..")
 
-			// first shutdownValve
-			shutdownValve.Shutdown(20 * time.Second)
+		// first shutdownValve
+		err := shutdownValve.Shutdown(20 * time.Second)
+		if err != nil {
+			logrus.Error(fmt.Errorf("failed to start shutting down valve: %w", err))
+		}
+		// create context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 
-			// create context with timeout
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-
-			// start http shutdown
-			srv.Shutdown(ctx)
-
-			// verify, in worst case call cancel via defer
-			select {
-			case <-time.After(21 * time.Second):
-				logrus.Error("not all connections done")
-			case <-ctx.Done():
-
-			}
+		// start http shutdown
+		err = srv.Shutdown(ctx)
+		if err != nil {
+			logrus.Error(fmt.Errorf("failed to start shutting down service: %w", err))
+		}
+		// verify, in worst case call cancel via defer
+		select {
+		case <-time.After(21 * time.Second):
+			logrus.Error("not all connections done")
+		case <-ctx.Done():
 		}
 	}()
-	srv.ListenAndServe()
+	err := srv.ListenAndServe()
+	if err != nil {
+		logrus.Error(fmt.Errorf("failed to start listening and serving: %w", err))
+	}
 }

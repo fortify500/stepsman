@@ -61,7 +61,7 @@ func MigrateDB(autoMigrate bool) error {
 	if autoMigrate {
 		switch version {
 		case 0:
-			dao.DB.Migrate0(tx)
+			err = dao.DB.Migrate0(tx)
 			if err != nil {
 				err = dao.Rollback(tx, err)
 				return err

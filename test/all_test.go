@@ -77,7 +77,7 @@ func TestLocal(t *testing.T) {
 					t.Error(cmd.Parameters.Err)
 				}
 			}
-			w.Close()
+			_ = w.Close()
 			out, _ := ioutil.ReadAll(r)
 			os.Stdout = rescueStdout
 			var re = regexp.MustCompile(`.*\:\s(.*\-.*\-.*\-.*\-.*).*`)

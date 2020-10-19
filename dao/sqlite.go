@@ -53,9 +53,6 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_status: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to create database runs table: %w", err)
-	}
 	_, err = tx.Exec(`CREATE TABLE steps (
                                      run_id TEXT NOT NULL,
                                      "index" INTEGER NOT NULL,

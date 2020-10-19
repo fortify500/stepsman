@@ -58,9 +58,9 @@ func do(doType DoType, doI interface{}) error {
 				body = ioutil.NopCloser(strings.NewReader(do.Options.Body))
 			}
 			var netTransport = &http.Transport{
-				Dial: (&net.Dialer{
+				DialContext: (&net.Dialer{
 					Timeout: time.Duration(timeout) * time.Second,
-				}).Dial,
+				}).DialContext,
 				TLSHandshakeTimeout:    time.Duration(timeout) * time.Second,
 				ResponseHeaderTimeout:  time.Duration(timeout) * time.Second,
 				MaxResponseHeaderBytes: maxResponseHeaderBytes,
@@ -69,13 +69,13 @@ func do(doType DoType, doI interface{}) error {
 				Transport: netTransport,
 				Timeout:   time.Second * time.Duration(timeout),
 			}
-			url, err := url.Parse(do.Options.Url)
+			doUrl, err := url.Parse(do.Options.Url)
 			if err != nil {
 				return err
 			}
 			request := &http.Request{
 				Method: do.Options.Method,
-				URL:    url,
+				URL:    doUrl,
 				Header: do.Options.Headers,
 				Body:   body,
 			}
