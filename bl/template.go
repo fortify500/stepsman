@@ -46,13 +46,14 @@ type Step struct {
 	Label       string      `json:"label"`
 	Description string      `json:"description"`
 	Do          interface{} `json:"do"`
+	StepDo      StepDo
 	doType      DoType
 }
 
 type StepDo struct {
-	Type        DoType `json:"type" mapstructure:"type"`
-	Timeout     int64
-	AutoSetDone bool `json:"auto-set-done" mapstructure:"auto-set-done" yaml:"auto-set-done"`
+	Type             DoType `json:"type" mapstructure:"type"`
+	HeartBeatTimeout int64  `json:"heartbeat-timeout" mapstructure:"heartbeat-timeout" yaml:"heartbeat-timeout"`
+	AutoSetDone      bool   `json:"auto-set-done" mapstructure:"auto-set-done" yaml:"auto-set-done"`
 }
 
 type DO interface {
@@ -63,6 +64,7 @@ type StepDoREST struct {
 	Options StepDoRESTOptions `json:"options"`
 }
 type StepDoRESTOptions struct {
+	Timeout                int64       `json:"timeout"`
 	Method                 string      `json:"method"`
 	Url                    string      `json:"url"`
 	Headers                http.Header `json:"headers"`
@@ -181,6 +183,7 @@ func (s *Step) AdjustUnmarshalStep() error {
 				return fmt.Errorf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
 			}
 			s.Do = do
+			s.StepDo = do.StepDo
 		default:
 			return fmt.Errorf("unsupported do type: %s", doType)
 		}

@@ -27,6 +27,7 @@ import (
 )
 
 //var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
+const DEFAULT_DO_REST_TIMEOUT = 60
 
 func do(doType DoType, doI interface{}) error {
 	//_, err := os.Stat("runs")
@@ -45,9 +46,9 @@ func do(doType DoType, doI interface{}) error {
 		switch doType {
 		case DoTypeREST:
 			do := doI.(StepDoREST)
-			var timeout int64 = 60
-			if do.Timeout > 0 {
-				timeout = do.Timeout
+			var timeout int64 = DEFAULT_DO_REST_TIMEOUT
+			if do.Options.Timeout > 0 {
+				timeout = do.Options.Timeout
 			}
 			var maxResponseHeaderBytes int64 = 1024 * 1024 * 10
 			if do.Options.MaxResponseHeaderBytes > 0 {

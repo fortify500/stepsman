@@ -5,9 +5,10 @@ steps:
       Execute: echo "hello world" > stepsman_hello.world
     do: # optional
       type: REST # heartbeats of set InProgress and finaly set Done. However, this doesn't mean events cannot already start for path_1_step_?
-      timeout: 180 # seconds. default 10. if the callee does not set in-progress again.
+      heartbeat-timeout: 180 # seconds. default 10. if the callee does not set in-progress again.
       auto-set-done: false # default is true, so that the flow will set in-progress or finally done, mainly for tracking, but has no effect overall.
       options:
+        timeout: 180
         method: GET
         url: >
           {{ env.flow}}/send-emails/path_1_step_1

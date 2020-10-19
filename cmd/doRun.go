@@ -62,8 +62,8 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		script := bl.Template{}
-		err = script.LoadFromBytes(false, []byte(run.Template))
+		template := bl.Template{}
+		err = template.LoadFromBytes(false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to convert step record to step"
 			Parameters.Err = &Error{
@@ -72,7 +72,7 @@ Use run <run id>.`,
 			}
 			return
 		}
-		step := script.Steps[stepRecord.Index-1]
+		step := template.Steps[stepRecord.Index-1]
 		err = step.StartDo(stepRecord)
 		if err != nil {
 			msg := "failed to start do"

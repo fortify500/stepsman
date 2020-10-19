@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const HeartBeatInterval = 10
+const DefaultHeartBeatInterval int64 = 10
 
 func MustTranslateStepStatus(status dao.StepStatusType) string {
 	stepStatus, err := TranslateStepStatus(status)
@@ -61,19 +61,7 @@ func ListSteps(runId string) ([]*dao.StepRecord, error) {
 	return dao.ListSteps(runId)
 }
 
-//func ToStep(stepRecord *dao.StepRecord) (*Step, error) {
-//	step := Step{
-//		Template: stepRecord.Template,
-//	}
-//	err := step.AdjustUnmarshalStep(true)
-//	if err != nil {
-//		return nil, err
-//	}
-//	step.stepRecord = stepRecord
-//	return &step, nil
-//}
-
-func UpdateStepStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, doFinish bool) error {
+func (s *Step) UpdateStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, doFinish bool) error {
 	tx, err := dao.DB.SQL().Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to start a database transaction: %w", err)
@@ -91,9 +79,9 @@ func UpdateStepStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusTy
 		if delta < 0 {
 			delta = delta * -1
 		}
-		// +5 for slow downs
-		if delta <= (HeartBeatInterval+5)*time.Second {
-			err = dao.Rollback(tx, fmt.Errorf("stepRecord is already in progress and has a heartbeat with an interval of %d: %w", HeartBeatInterval, ErrStepAlreadyInProgress))
+		heartBeatInterval := s.GetHeartBeatInterval()
+		if delta <= heartBeatInterval {
+			err = dao.Rollback(tx, fmt.Errorf("stepRecord is already in progress and has a heartbeat with an interval of %d: %w", heartBeatInterval, ErrStepAlreadyInProgress))
 			return fmt.Errorf("failed to update database stepRecord row: %w", err)
 		}
 	}
@@ -136,8 +124,14 @@ func UpdateStepStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusTy
 	return nil
 }
 
+func (s *Step) GetHeartBeatInterval() time.Duration {
+	if s.StepDo.HeartBeatTimeout > 0 {
+		return time.Duration(s.StepDo.HeartBeatTimeout) * time.Second
+	}
+	return time.Duration(DefaultHeartBeatInterval) * time.Second
+}
 func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
-	err := UpdateStepStatus(stepRecord, dao.StepInProgress, false)
+	err := s.UpdateStatus(stepRecord, dao.StepInProgress, false)
 	if err != nil {
 		return err
 	}
@@ -152,7 +146,7 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 				break OUT
 			case <-heartBeatDone2:
 				break OUT
-			case <-time.After(HeartBeatInterval * time.Second):
+			case <-time.After(s.GetHeartBeatInterval()):
 				errBeat := stepRecord.UpdateHeartBeat()
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
@@ -167,6 +161,6 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 	_ = do(s.doType, s.Do)
 	close(heartBeatDone2)
 	wg.Wait()
-	err = UpdateStepStatus(stepRecord, dao.StepDone, true)
+	err = s.UpdateStatus(stepRecord, dao.StepDone, true)
 	return err
 }

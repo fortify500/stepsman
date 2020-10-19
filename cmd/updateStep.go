@@ -46,7 +46,23 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		err = bl.UpdateStepStatus(stepRecord, status, false)
+		run, err := getRun(stepRecord.RunId)
+		if err != nil {
+			Parameters.Err = err
+			return
+		}
+		template := bl.Template{}
+		err = template.LoadFromBytes(false, []byte(run.Template))
+		if err != nil {
+			msg := "failed to convert step record to step"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
+			return
+		}
+		step := template.Steps[stepRecord.Index-1]
+		err = step.UpdateStatus(stepRecord, status, false)
 		if err != nil {
 			msg := "failed to update step status"
 			Parameters.Err = &Error{

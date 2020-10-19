@@ -38,8 +38,9 @@ steps:
       type: REST # 200 is synchronous done, 201 means asynchronous process(InProgress)
       # the callee is supposed to perform heartbeats (PUT InProgress) and set resolution: Done, Failed
       # any other http status is an automatic fail.
-      timeout: 180 # seconds. default 60. if the callee
+      heartbeat-timeout: 180 # seconds. default 60. if the callee
       options:
+        timeout: 180
         method: POST
         body: >
           {}
