@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const DefaultHeartBeatInterval int64 = 10
+const DefaultHeartBeatInterval = 10 * time.Second
 
 func MustTranslateStepStatus(status dao.StepStatusType) string {
 	stepStatus, err := TranslateStepStatus(status)
@@ -74,7 +74,7 @@ func (s *Step) UpdateStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepSt
 	}
 
 	// if we are starting check if the stepRecord is already in-progress.
-	if !doFinish && stepRecord.Status == dao.StepInProgress {
+	if !s.StepDo.DisableAutoDone && !doFinish && stepRecord.Status == dao.StepInProgress {
 		delta := stepRecord.Now.(time.Time).Sub(stepRecord.HeartBeat.(time.Time))
 		if delta < 0 {
 			delta = delta * -1
@@ -128,12 +128,16 @@ func (s *Step) GetHeartBeatInterval() time.Duration {
 	if s.StepDo.HeartBeatTimeout > 0 {
 		return time.Duration(s.StepDo.HeartBeatTimeout) * time.Second
 	}
-	return time.Duration(DefaultHeartBeatInterval) * time.Second
+	return DefaultHeartBeatInterval
 }
 func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 	err := s.UpdateStatus(stepRecord, dao.StepInProgress, false)
 	if err != nil {
 		return err
+	}
+	heartbeatInterval := s.GetHeartBeatInterval() / 2
+	if heartbeatInterval < DefaultHeartBeatInterval {
+		heartbeatInterval = DefaultHeartBeatInterval
 	}
 	var wg sync.WaitGroup
 	heartBeatDone1 := make(chan int)
@@ -146,7 +150,7 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 				break OUT
 			case <-heartBeatDone2:
 				break OUT
-			case <-time.After(s.GetHeartBeatInterval()):
+			case <-time.After(heartbeatInterval):
 				errBeat := stepRecord.UpdateHeartBeat()
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
@@ -161,6 +165,8 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 	_ = do(s.doType, s.Do)
 	close(heartBeatDone2)
 	wg.Wait()
-	err = s.UpdateStatus(stepRecord, dao.StepDone, true)
+	if !s.StepDo.DisableAutoDone {
+		err = s.UpdateStatus(stepRecord, dao.StepDone, true)
+	}
 	return err
 }
