@@ -5,22 +5,12 @@ steps:
       Execute: echo "hello world" > stepsman_hello.world
     do: # optional
       type: REST # heartbeats of set InProgress and finaly set Done. However, this doesn't mean events cannot already start for path_1_step_?
-      heartbeat-timeout: 180 # seconds. default 10. if the callee does not set in-progress again.
-      disable-auto-done: true # default is false, so that the flow will remain in-progress or attempt to set done. Used if you want an async call which you will set done yourself.
+      heartbeat-timeout: 50 # seconds. default 10. if the callee does not set in-progress again.
+      disable-auto-done: false # default is false, so that the flow will remain in-progress or attempt to set done. Used if you want an async call which you will set done yourself.
       options:
-        timeout: 180
+        timeout: 50
         method: GET
-        url: >
-          {{ env.flow}}/send-emails/path_1_step_1
-        headers:
-          authorization:
-            - >
-              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
-          tenant:
-            - >
-              {{ context["tenant"] }}
-          namespace:
-            - 351d87f0-9d4a-411b-9a98-7d55a9792eac
+        url: https://jsonplaceholder.typicode.com/todos/1
   - name: "execute test" # mandatory
     description: > # optional
       check that stepshello.world was created

@@ -79,8 +79,11 @@ func (s *StepRecord) PrettyYamlState() (string, error) {
 	return string(prettyBytes), err
 }
 
-func (s *StepRecord) UpdateHeartBeat() error {
-	_, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where run_id=$1 and \"index\"=$2", s.RunId, s.Index)
+func (s *StepRecord) UpdateHeartBeat(uuid string) error {
+	if s.StatusUUID != uuid {
+		return fmt.Errorf("cannot update heartbeat for a different status_uuid in order to prevent a race condition")
+	}
+	_, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where run_id=$1 and \"index\"=$2 and status_uuid=$3", s.RunId, s.Index, s.StatusUUID)
 	if err != nil {
 		return fmt.Errorf("failed to update database step heartbeat: %w", err)
 	}

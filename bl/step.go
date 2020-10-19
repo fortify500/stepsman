@@ -74,7 +74,7 @@ func (s *Step) UpdateStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepSt
 	}
 
 	// if we are starting check if the stepRecord is already in-progress.
-	if !s.StepDo.DisableAutoDone && !doFinish && stepRecord.Status == dao.StepInProgress {
+	if !s.stepDo.DisableAutoDone && !doFinish && stepRecord.Status == dao.StepInProgress {
 		delta := stepRecord.Now.(time.Time).Sub(stepRecord.HeartBeat.(time.Time))
 		if delta < 0 {
 			delta = delta * -1
@@ -125,8 +125,8 @@ func (s *Step) UpdateStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepSt
 }
 
 func (s *Step) GetHeartBeatInterval() time.Duration {
-	if s.StepDo.HeartBeatTimeout > 0 {
-		return time.Duration(s.StepDo.HeartBeatTimeout) * time.Second
+	if s.stepDo.HeartBeatTimeout > 0 {
+		return time.Duration(s.stepDo.HeartBeatTimeout) * time.Second
 	}
 	return DefaultHeartBeatInterval
 }
@@ -151,7 +151,7 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 			case <-heartBeatDone2:
 				break OUT
 			case <-time.After(heartbeatInterval):
-				errBeat := stepRecord.UpdateHeartBeat()
+				errBeat := stepRecord.UpdateHeartBeat(stepRecord.StatusUUID)
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
 				}
@@ -165,7 +165,7 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 	_ = do(s.doType, s.Do)
 	close(heartBeatDone2)
 	wg.Wait()
-	if !s.StepDo.DisableAutoDone {
+	if !s.stepDo.DisableAutoDone {
 		err = s.UpdateStatus(stepRecord, dao.StepDone, true)
 	}
 	return err

@@ -72,6 +72,7 @@ type AllParameters struct {
 	OnlyTemplateType    string
 	Run                 string
 	Status              string
+	StatusUUID          string
 	//Query
 	RangeStart       int64
 	RangeEnd         int64

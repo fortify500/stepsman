@@ -45,8 +45,8 @@ type Step struct {
 	Name        string      `json:"name"`
 	Label       string      `json:"label"`
 	Description string      `json:"description"`
-	Do          interface{} `json:"do"`
-	StepDo      StepDo
+	Do          interface{} `json:"do,omitempty"`
+	stepDo      StepDo
 	doType      DoType
 }
 
@@ -138,7 +138,7 @@ func (s *Step) AdjustUnmarshalStep() error {
 	if s.Do == nil {
 		return nil
 	} else {
-		var doType interface{}
+		var doType DoType
 		switch s.Do.(type) {
 		case map[interface{}]interface{}:
 			doMap := s.Do.(map[interface{}]interface{})
@@ -182,13 +182,14 @@ func (s *Step) AdjustUnmarshalStep() error {
 			if len(md.Unused) > 0 {
 				return fmt.Errorf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
 			}
+			s.stepDo = do.StepDo
 			s.Do = do
-			s.StepDo = do.StepDo
 		default:
 			return fmt.Errorf("unsupported do type: %s", doType)
 		}
+		s.doType = doType
 	}
-	//stepDo := StepDo{}
+	//stepDo := stepDo{}
 	//
 	//
 	//switch DoType(doType) {

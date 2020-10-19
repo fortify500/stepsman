@@ -41,11 +41,6 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		status, err := bl.TranslateToStepStatus(Parameters.Status)
-		if err != nil {
-			Parameters.Err = err
-			return
-		}
 		run, err := getRun(stepRecord.RunId)
 		if err != nil {
 			Parameters.Err = err
@@ -62,16 +57,25 @@ Use run <run id>.`,
 			return
 		}
 		step := template.Steps[stepRecord.Index-1]
-		err = step.UpdateStatus(stepRecord, status, false)
-		if err != nil {
-			msg := "failed to update step status"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
+		if Parameters.Status != "" {
+			status, err := bl.TranslateToStepStatus(Parameters.Status)
+			if err != nil {
+				Parameters.Err = err
+				return
 			}
-			return
+			err = step.UpdateStatus(stepRecord, status, false)
+			if err != nil {
+				msg := "failed to update step status"
+				Parameters.Err = &Error{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
+				return
+			}
 		}
-
+		if Parameters.StatusUUID != "" {
+			stepRecord.UpdateHeartBeat(Parameters.StatusUUID)
+		}
 		Parameters.CurrentStepIndex = fmt.Sprintf("%d", stepRecord.Index)
 	},
 }
@@ -81,8 +85,8 @@ func init() {
 	initFlags := func() error {
 		updateStepCmd.ResetFlags()
 		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s", bl.MustTranslateStepStatus(dao.StepIdle), bl.MustTranslateStepStatus(dao.StepInProgress), bl.MustTranslateStepStatus(dao.StepDone)))
-		err := updateStepCmd.MarkFlagRequired("status")
-		return err
+		updateStepCmd.Flags().StringVarP(&Parameters.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
+		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }
