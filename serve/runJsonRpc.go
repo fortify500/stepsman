@@ -21,6 +21,7 @@ import (
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
+	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
 	"github.com/osamingo/jsonrpc"
 )
@@ -44,14 +45,23 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 			return nil, errResult
 		}
 	}
-	runs, runsRange, err := bl.ListRuns(&p.Query)
+	query := dao.ListQuery(p)
+	runs, runsRange, err := bl.ListRuns(&query)
 	if err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
 		}
 	}
-	runRpcRecords, err := RunRecordToRunRPCRecord(runs)
+	translateStatus := false
+	if query.ReturnAttributes != nil {
+		for _, attribute := range query.ReturnAttributes {
+			if attribute == "status" {
+				translateStatus = true
+			}
+		}
+	}
+	runRpcRecords, err := RunRecordToRunRPCRecord(runs, translateStatus)
 	if err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
@@ -83,14 +93,19 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 			return nil, errResult
 		}
 	}
-	runs, err := bl.GetRuns(p)
+	vetErr := VetIds(p.Ids)
+	if vetErr != nil {
+		return nil, vetErr
+	}
+	query := dao.GetQuery(p)
+	runs, err := bl.GetRuns(&query)
 	if err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
 		}
 	}
-	runRpcRecords, err := RunRecordToRunRPCRecord(runs)
+	runRpcRecords, err := RunRecordToRunRPCRecord(runs, true)
 	if err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
@@ -100,12 +115,27 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 	return runRpcRecords, nil
 }
 
-func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord) ([]dao.RunAPIRecord, error) {
+func VetIds(ids []string) *jsonrpc.Error {
+	if ids != nil {
+		for _, id := range ids {
+			_, err := uuid.Parse(id)
+			if err != nil {
+				return jsonrpc.ErrInvalidParams()
+			}
+		}
+	}
+	return nil
+}
+func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) ([]dao.RunAPIRecord, error) {
 	var runRpcRecords []dao.RunAPIRecord
 	for _, runRecord := range runRecords {
-		status, err := runRecord.Status.TranslateRunStatus()
-		if err != nil {
-			return nil, err
+		var status string
+		var err error
+		if translateStatus {
+			status, err = runRecord.Status.TranslateRunStatus()
+			if err != nil {
+				return nil, err
+			}
 		}
 		runRpcRecords = append(runRpcRecords, dao.RunAPIRecord{
 			Id:              runRecord.Id,

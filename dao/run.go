@@ -36,6 +36,7 @@ const (
 
 const ID = "id"
 const KEY = "key"
+const TEMPLATE = "template"
 const TEMPLATE_VERSION = "template-version"
 const TEMPLATE_TITLE = "template-title"
 const STATUS = "status"
@@ -77,7 +78,7 @@ func (r *RunRecord) PrettyYamlTemplate() (string, error) {
 	}
 	return string(prettyBytes), err
 }
-func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
+func ListRuns(query *ListQuery) ([]*RunRecord, *RangeResult, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
 	var err error
@@ -90,6 +91,13 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 		sqlQuery = sqlNoRange + " LIMIT 20"
 	} else {
 		sqlQuery = "SELECT * FROM runs"
+		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
+			attributesStr, err := buildReturnAttirbutesStrAndVet(query.ReturnAttributes)
+			if err != nil {
+				return nil, nil, err
+			}
+			sqlQuery = fmt.Sprintf("SELECT %s FROM runs", attributesStr)
+		}
 
 		{
 			filterQuery := ""
@@ -253,13 +261,50 @@ func ListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
 	}
 }
 
+func buildReturnAttirbutesStrAndVet(attributes []string) (string, error) {
+	if attributes == nil || len(attributes) == 0 {
+		return "*", nil
+	}
+	set := make(map[string]bool)
+	for _, attribute := range attributes {
+		switch attribute {
+		case ID:
+		case KEY:
+		case TEMPLATE_VERSION:
+		case TEMPLATE_TITLE:
+		case STATUS:
+		case TEMPLATE:
+		default:
+			return "", fmt.Errorf("invalid attribute name in return-attributes: %s", attribute)
+		}
+		set[attribute] = true
+	}
+	var sb strings.Builder
+	first := true
+	for str, _ := range set {
+		if !first {
+			sb.WriteString(",")
+		} else {
+			first = false
+		}
+		_, err := sb.WriteString(str)
+		if err != nil {
+			return "", fmt.Errorf("failed to concatenate return-attribtues")
+		}
+	}
+	return sb.String(), nil
+}
+
 func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
 	_, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template) values(:id,:key,:template_version,:template_title,:status,:template)", runRecord)
 	return err
 }
 
 func GetRun(id string) (*RunRecord, error) {
-	runs, err := GetRunsTx(nil, []string{id})
+	runs, err := GetRunsTx(nil, &GetQuery{
+		Ids:              []string{id},
+		ReturnAttributes: nil,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -267,18 +312,23 @@ func GetRun(id string) (*RunRecord, error) {
 }
 
 func GetRunTx(tx *sqlx.Tx, id string) (*RunRecord, error) {
-	runs, err := GetRunsTx(tx, []string{id})
+	runs, err := GetRunsTx(tx, &GetQuery{
+		Ids:              []string{id},
+		ReturnAttributes: nil,
+	})
 	if err != nil {
 		return nil, err
 	}
 	return runs[0], nil
 }
 
-func GetRunsTx(tx *sqlx.Tx, ids []string) ([]*RunRecord, error) {
+func GetRunsTx(tx *sqlx.Tx, getQuery *GetQuery) ([]*RunRecord, error) {
 	var result []*RunRecord
-	query := fmt.Sprintf("SELECT * FROM runs where id IN %s", "('"+strings.Join(ids, "','")+"')")
 	var rows *sqlx.Rows
 	var err error
+	attributesStr, err := buildReturnAttirbutesStrAndVet(getQuery.ReturnAttributes)
+	query := fmt.Sprintf("SELECT %s FROM runs where id IN %s", attributesStr, "('"+strings.Join(getQuery.Ids, "','")+"')")
+
 	if tx == nil {
 		rows, err = DB.SQL().Queryx(query)
 	} else {
@@ -296,7 +346,7 @@ func GetRunsTx(tx *sqlx.Tx, ids []string) ([]*RunRecord, error) {
 		}
 		result = append(result, &run)
 	}
-	if result == nil || len(result) != len(ids) {
+	if result == nil || len(result) != len(getQuery.Ids) {
 		return nil, ErrRecordNotFound
 	}
 	return result, nil

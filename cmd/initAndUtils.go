@@ -73,7 +73,7 @@ type AllParameters struct {
 	Run                 string
 	Status              string
 	StatusUUID          string
-	//Query
+	//ListQuery
 	RangeStart       int64
 	RangeEnd         int64
 	RangeReturnTotal bool

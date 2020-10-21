@@ -28,11 +28,11 @@ type ListRunsResponse struct {
 	ID      string         `json:"id,omitempty"`
 }
 
-func RemoteListRuns(query *Query) ([]*RunRecord, *RangeResult, error) {
+func RemoteListRuns(query *ListQuery) ([]*RunRecord, *RangeResult, error) {
 	result := make([]*RunRecord, 0)
 	params := ListParams{}
 	if query != nil {
-		params.Query = *query
+		params = ListParams(*query)
 	}
 	request, err := NewMarshaledJSONRPCRequest("1", LIST_RUNS, &params)
 	if err != nil {
@@ -81,9 +81,9 @@ type GetRunsResponse struct {
 	ID      string        `json:"id,omitempty"`
 }
 
-func RemoteGetRuns(ids []string) ([]*RunRecord, error) {
+func RemoteGetRuns(query *GetQuery) ([]*RunRecord, error) {
 	result := make([]*RunRecord, 0)
-	request, err := NewMarshaledJSONRPCRequest("1", GET_RUNS, &ids)
+	request, err := NewMarshaledJSONRPCRequest("1", GET_RUNS, query)
 	if err != nil {
 		return nil, err
 	}

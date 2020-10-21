@@ -23,7 +23,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ListRuns(query *dao.Query) ([]*dao.RunRecord, *dao.RangeResult, error) {
+func ListRuns(query *dao.ListQuery) ([]*dao.RunRecord, *dao.RangeResult, error) {
 	if dao.IsRemote {
 		return dao.RemoteListRuns(query)
 	} else {
@@ -33,7 +33,10 @@ func ListRuns(query *dao.Query) ([]*dao.RunRecord, *dao.RangeResult, error) {
 
 func GetRun(id string) (*dao.RunRecord, error) {
 	if dao.IsRemote {
-		runs, err := dao.RemoteGetRuns([]string{id})
+		runs, err := dao.RemoteGetRuns(&dao.GetQuery{
+			Ids:              []string{id},
+			ReturnAttributes: nil,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -43,11 +46,11 @@ func GetRun(id string) (*dao.RunRecord, error) {
 	}
 }
 
-func GetRuns(ids []string) ([]*dao.RunRecord, error) {
+func GetRuns(query *dao.GetQuery) ([]*dao.RunRecord, error) {
 	if dao.IsRemote {
-		return dao.RemoteGetRuns(ids)
+		return dao.RemoteGetRuns(query)
 	} else {
-		return dao.GetRunsTx(nil, ids)
+		return dao.GetRunsTx(nil, query)
 	}
 }
 

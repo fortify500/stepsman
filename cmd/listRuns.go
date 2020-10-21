@@ -55,7 +55,7 @@ func listRunsInternal(runId string) {
 		}
 		runs = append(runs, run)
 	} else {
-		query := dao.Query{
+		query := dao.ListQuery{
 			Range: dao.RangeQuery{
 				Range: dao.Range{
 					Start: Parameters.RangeStart,

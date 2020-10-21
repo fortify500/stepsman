@@ -18,12 +18,12 @@ package dao
 
 type (
 	RunAPIRecord struct {
-		Id              string
-		Key             string
-		TemplateVersion int64  `json:"template-version"`
-		TemplateTitle   string `json:"template-title"`
-		Status          string
-		Template        string
+		Id              string `json:"id,omitempty"`
+		Key             string `json:"key,omitempty"`
+		TemplateVersion int64  `json:"template-version,omitempty"`
+		TemplateTitle   string `json:"template-title,omitempty"`
+		Status          string `json:"status,omitempty"`
+		Template        string `json:"template,omitempty"`
 	}
 )
 
@@ -55,17 +55,21 @@ type Expression struct {
 	Value         string
 }
 
-type Query struct {
-	Range   RangeQuery
-	Sort    Sort
-	Filters []Expression
+type ListQuery struct {
+	Range            RangeQuery
+	Sort             Sort
+	Filters          []Expression
+	ReturnAttributes []string `json:"return-attributes,omitempty"`
 }
 
-type ListParams struct {
-	Query Query
+type ListParams ListQuery
+
+type GetQuery struct {
+	Ids              []string `json:"ids,omitempty"`
+	ReturnAttributes []string `json:"return-attributes,omitempty"`
 }
 
-type GetParams []string
+type GetParams GetQuery
 
 type GetRunsResult []RunAPIRecord
 
