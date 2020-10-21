@@ -34,8 +34,15 @@ type StepStatusType int64
 const (
 	StepIdle       StepStatusType = 0
 	StepInProgress StepStatusType = 2
+	StepFailed     StepStatusType = 4
 	StepDone       StepStatusType = 5
 )
+
+type StepState struct {
+	DoType string      `json:"do-type,omitempty" mapstructure:"do-type" yaml:"do-type,omitempty"`
+	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
+	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
+}
 
 type StepRecord struct {
 	RunId      string `db:"run_id"`
@@ -83,7 +90,15 @@ func (s *StepRecord) UpdateHeartBeat(uuid string) error {
 	if s.StatusUUID != uuid {
 		return fmt.Errorf("cannot update heartbeat for a different status_uuid in order to prevent a race condition")
 	}
-	_, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where run_id=$1 and \"index\"=$2 and status_uuid=$3", s.RunId, s.Index, s.StatusUUID)
+	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where run_id=$1 and \"index\"=$2 and status_uuid=$3", s.RunId, s.Index, s.StatusUUID)
+	if err == nil {
+		affected, err := res.RowsAffected()
+		if err == nil {
+			if affected < 1 {
+				err = fmt.Errorf("no rows where affecting, suggesting status_uuid has changed (but possibly the record have been deleted)")
+			}
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to update database step heartbeat: %w", err)
 	}
@@ -230,4 +245,17 @@ func (s *StepRecord) UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatu
 	}
 	s.StatusUUID = uuid4.String()
 	return tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP where run_id=$2 and \"index\"=$3", newStatus, s.RunId, s.Index)
+}
+
+func (s *StepRecord) UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatusType, newState *StepState) (sql.Result, error) {
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate uuid: %w", err)
+	}
+	newStateStr, err := json.Marshal(newState)
+	if err != nil {
+		return nil, err
+	}
+	s.StatusUUID = uuid4.String()
+	return tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP where run_id=$3 and \"index\"=$4", newStatus, newStateStr, s.RunId, s.Index)
 }

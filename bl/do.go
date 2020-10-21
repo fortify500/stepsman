@@ -17,11 +17,16 @@
 package bl
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/fortify500/stepsman/dao"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -29,115 +34,91 @@ import (
 //var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
 const DEFAULT_DO_REST_TIMEOUT = 60
 
-func do(doType DoType, doI interface{}) error {
-	//_, err := os.Stat("runs")
-	//if os.IsNotExist(err) {
-	//	if !mkdir {
-	//		return ErrNoRunsDirectory
-	//	}
-	//	err = os.MkdirAll("runs", 0700)
-	//	if err != nil {
-	//		return fmt.Errorf("failed to create the runs directory: %w", err)
-	//	}
-	//} else if err != nil {
-	//	return fmt.Errorf("failed to determine existence of runs directory: %w", err)
-	//}
+type StepStateRest struct {
+	Body        interface{} `json:"body,omitempty" mapstructure:"body" yaml:"body,omitempty"`
+	ContentType string      `json:"content-type,omitempty" mapstructure:"content-type" yaml:"content-type,omitempty"`
+}
+
+var emptyMap = make(map[string]string)
+
+func do(doType DoType, doI interface{}, prevState *dao.StepState) (*dao.StepState, error) {
+	var newState dao.StepState
+	newState = *prevState
+	newState.Error = ""
+	newState.Result = emptyMap
 	if doI != nil {
 		switch doType {
 		case DoTypeREST:
 			do := doI.(StepDoREST)
-			var timeout int64 = DEFAULT_DO_REST_TIMEOUT
-			if do.Options.Timeout > 0 {
-				timeout = do.Options.Timeout
+			var response *http.Response
+			{
+				var timeout = DEFAULT_DO_REST_TIMEOUT * time.Second
+				if do.Options.Timeout > 0 {
+					timeout = time.Duration(do.Options.Timeout) * time.Second
+				}
+				var maxResponseHeaderBytes int64 = 1024 * 1024 * 10
+				if do.Options.MaxResponseHeaderBytes > 0 {
+					maxResponseHeaderBytes = do.Options.MaxResponseHeaderBytes
+				}
+				var body io.ReadCloser = nil
+				if len(do.Options.Body) > 0 {
+					body = ioutil.NopCloser(strings.NewReader(do.Options.Body))
+				}
+				var netTransport = &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: timeout,
+					}).DialContext,
+					TLSHandshakeTimeout:    timeout,
+					ResponseHeaderTimeout:  timeout * time.Second,
+					MaxResponseHeaderBytes: maxResponseHeaderBytes,
+				}
+				var netClient = &http.Client{
+					Transport: netTransport,
+					Timeout:   timeout,
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), timeout)
+				defer cancel()
+				request, err := http.NewRequestWithContext(ctx, do.Options.Method, do.Options.Url, body)
+				if err != nil {
+					newState.Error = err.Error()
+					return &newState, err
+				}
+				for k, v := range do.Options.Headers {
+					request.Header[k] = v
+				}
+				response, err = netClient.Do(request)
+				if err != nil {
+					newState.Error = err.Error()
+					return &newState, err
+				}
 			}
-			var maxResponseHeaderBytes int64 = 1024 * 1024 * 10
-			if do.Options.MaxResponseHeaderBytes > 0 {
-				maxResponseHeaderBytes = do.Options.MaxResponseHeaderBytes
-			}
-			var body io.ReadCloser = nil
-			if len(do.Options.Body) > 0 {
-				body = ioutil.NopCloser(strings.NewReader(do.Options.Body))
-			}
-			var netTransport = &http.Transport{
-				DialContext: (&net.Dialer{
-					Timeout: time.Duration(timeout) * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout:    time.Duration(timeout) * time.Second,
-				ResponseHeaderTimeout:  time.Duration(timeout) * time.Second,
-				MaxResponseHeaderBytes: maxResponseHeaderBytes,
-			}
-			var netClient = &http.Client{
-				Transport: netTransport,
-				Timeout:   time.Second * time.Duration(timeout),
-			}
-			doUrl, err := url.Parse(do.Options.Url)
+			result := StepStateRest{}
+			defer response.Body.Close()
+			bodyBytes, err := ioutil.ReadAll(response.Body)
 			if err != nil {
-				return err
+				newState.Error = err.Error()
+				return &newState, err
 			}
-			request := &http.Request{
-				Method: do.Options.Method,
-				URL:    doUrl,
-				Header: do.Options.Headers,
-				Body:   body,
+			result.ContentType = "text/plain"
+			result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
+			switch result.ContentType {
+			case "application/json":
+				err = json.Unmarshal(bodyBytes, &result.Body)
+				if err != nil {
+					newState.Error = err.Error()
+					return &newState, err
+				}
+			default:
+				result.Body = string(bodyBytes)
 			}
-			_, err = netClient.Do(request)
-			if err != nil {
-				return err
-			}
-			//termination := make(chan os.Signal, 1)
-			//signal.Notify(termination, os.Interrupt)
-			//signal.Notify(termination, syscall.SIGTERM)
-			//defer signal.Stop(termination)
-			//ctx, cancel := context.WithCancel(context.Background())
-			//defer cancel()
-			//cmd := exec.CommandContext(ctx, do.Options.Command, do.Options.Arguments...)
-			//cmd.Env = os.Environ()
-			// if we want that the terminal will not send to the group and close both us and the child
-			//if cmd.SysProcAttr != nil {
-			//	cmd.SysProcAttr.Setpgid = true
-			//	cmd.SysProcAttr.Pgid = 0
-			//} else {
-			//	cmd.SysProcAttr = &syscall.SysProcAttr{
-			//		Setsid: true,
-			//	}
-			//}
-			//	cmd.Stdin = os.Stdin
-			//	cmd.Stdout = os.Stdout
-			//	cmd.Stderr = os.Stderr
-			//	var wg sync.WaitGroup
-			//	go func() {
-			//		defer wg.Done()
-			//		defer cancel()
-			//		select {
-			//		case <-ctx.Done():
-			//			break
-			//		case <-termination:
-			//			result = dao.StepDone
-			//			break
-			//		}
-			//	}()
-			//	wg.Add(1)
-			//	errRun := cmd.Run()
-			//	cancel()
-			//	wg.Wait()
-			//	if errRun != nil {
-			//		var exitError *exec.ExitError
-			//		if errors.As(errRun, &exitError) && exitError.ExitCode() > 0 {
-			//			log.Debug(fmt.Sprintf("Exit error code: %d", exitError.ExitCode()))
-			//			//TODO: we need to fill the state here when there will be state handling
-			//			if result == dao.StepDone {
-			//				result = dao.StepDone
-			//			}
-			//		} else if result == dao.StepDone {
-			//			result = dao.StepDone
-			//		}
-			//		log.Debug(fmt.Errorf("command failed: %w", errRun))
-			//
-			//	} else {
-			//		log.Debug(fmt.Sprintf("Exit error code: %d", 0))
-			//	}
+			newState.Result = result
+			log.Debug(fmt.Sprintf("response status:%d, body:%s", response.StatusCode, result.Body))
+		default:
+			err := fmt.Errorf("unsupported do type: %s", doType)
+			newState.Error = err.Error()
+			return &newState, err
 		}
 	}
 
-	return nil
+	return &newState, nil
 }

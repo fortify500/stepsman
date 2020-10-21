@@ -6,9 +6,9 @@ steps:
     label: starting
     do: # optional
       type: REST # heartbeats of set InProgress and finaly set Done. However, this doesn't mean events cannot already start for path_1_step_?
-      heartbeat-timeout: 50 # seconds. default 10. if the callee does not set in-progress again.
+      heartbeat-timeout: 50 # seconds. the do will send heartbeats when calling the url. Currently only synchronous calls are supported.
       options:
-        timeout: 50
+        timeout: 40 #make sense it would be less than the heartbeat-timeout
         method: GET
         url: https://jsonplaceholder.typicode.com/todos/1
   - name: "execute test" # mandatory

@@ -188,48 +188,5 @@ func (s *Step) AdjustUnmarshalStep() error {
 		}
 		s.doType = doType
 	}
-	//stepDo := stepDo{}
-	//
-	//
-	//switch DoType(doType) {
-	//case "":
-	//	fallthrough
-	//case DoTypeREST:
-	//	do := StepDoREST{}
-	//	decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
-	//	decoder.SetStrict(true)
-	//	err = decoder.Decode(&do)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	s.Do = do
-	//	s.doType = DoTypeREST
-	//}
-	//
-	//stepDoBytes, err := yaml.Marshal(s.Do)
-	//if err != nil {
-	//	return err
-	//}
-	//decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
-	//decoder.SetStrict(false)
-	//err = decoder.Decode(&stepDo)
-	//if err != nil {
-	//	return err
-	//}
-	//doType := string(stepDo.Type)
-	//switch DoType(doType) {
-	//case "":
-	//	fallthrough
-	//case DoTypeREST:
-	//	do := StepDoREST{}
-	//	decoder := yaml.NewDecoder(bytes.NewBuffer(stepDoBytes))
-	//	decoder.SetStrict(true)
-	//	err = decoder.Decode(&do)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	s.Do = do
-	//	s.doType = DoTypeREST
-	//}
 	return nil
 }
