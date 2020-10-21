@@ -37,7 +37,7 @@ var listStepsCmd = &cobra.Command{
 		t := table.NewWriter()
 		t.SetStyle(NoBordersStyle)
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "HeartBeat"})
+		t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "HeartBeat"})
 		runId, err := parseRunId(Parameters.Run)
 		if err != nil {
 			Parameters.Err = err
@@ -78,7 +78,7 @@ var listStepsCmd = &cobra.Command{
 				heartBeat = fmt.Sprintf("%s", step.HeartBeat)
 			}
 			t.AppendRows([]table.Row{
-				{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, heartBeat},
+				{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusUUID, heartBeat},
 			})
 		}
 		t.Render()

@@ -84,6 +84,6 @@ func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.
 }
 
 func (db *Sqlite3SqlxDB) ListStepsTx(tx *sqlx.Tx, runId string, rows *sqlx.Rows, err error) (*sqlx.Rows, error) {
-	rows, err = tx.Queryx("SELECT *,CURRENT_TIMESTAMP as now FROM steps WHERE run_id=$1", runId)
+	rows, err = tx.Queryx("SELECT *,CURRENT_TIMESTAMP as now FROM steps WHERE run_id=$1 order by \"index\" asc", runId)
 	return rows, err
 }

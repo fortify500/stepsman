@@ -112,6 +112,11 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 			err = dao.Rollback(tx, err)
 			return nil, fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
 		}
+		statusUuid4, err := uuid.NewRandom()
+		if err != nil {
+			err = dao.Rollback(tx, err)
+			return nil, fmt.Errorf("failed to create runs row and generate status uuid4: %w", err)
+		}
 		//	"run_id" UUid NOT NULL,
 		//	"index" Bigint NOT NULL,
 		//	"uuid" UUid NOT NULL,
@@ -125,7 +130,7 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 			Index:      int64(i) + 1,
 			UUID:       uuid4.String(),
 			Status:     dao.StepIdle,
-			StatusUUID: uuid4.String(),
+			StatusUUID: statusUuid4.String(),
 			Label:      step.Label,
 			Name:       step.Name,
 			State:      "{}",

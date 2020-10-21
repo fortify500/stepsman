@@ -53,7 +53,6 @@ type Step struct {
 type StepDo struct {
 	Type             DoType `json:"type" mapstructure:"type"`
 	HeartBeatTimeout int64  `json:"heartbeat-timeout" mapstructure:"heartbeat-timeout" yaml:"heartbeat-timeout"`
-	DisableAutoDone  bool   `json:"disable-auto-done" mapstructure:"disable-auto-done" yaml:"disable-auto-done"`
 }
 
 type DO interface {
