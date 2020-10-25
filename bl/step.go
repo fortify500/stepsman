@@ -31,7 +31,7 @@ const DefaultHeartBeatInterval = 10 * time.Second
 func MustTranslateStepStatus(status dao.StepStatusType) string {
 	stepStatus, err := TranslateStepStatus(status)
 	if err != nil {
-		log.Error(err)
+		log.Panic(err)
 	}
 	return stepStatus
 }

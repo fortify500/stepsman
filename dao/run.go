@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/yaml.v2"
+	"log"
 	"strings"
 )
 
@@ -379,4 +380,11 @@ func (s RunStatusType) TranslateRunStatus() (string, error) {
 	default:
 		return "", fmt.Errorf("failed to translate run status: %d", s)
 	}
+}
+func (s RunStatusType) MustTranslateRunStatus() string {
+	status, err := s.TranslateRunStatus()
+	if err != nil {
+		log.Panic(err)
+	}
+	return status
 }

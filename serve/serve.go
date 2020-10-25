@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/valve"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"io"
 	"net/http"
 	"os"
@@ -60,34 +61,37 @@ func Serve(port int64, logWriter io.Writer) {
 
 	InterruptServe = make(chan os.Signal, 1)
 	signal.Notify(InterruptServe, os.Interrupt, syscall.SIGTERM)
-
+	exit := make(chan int, 1)
 	go func() {
+		viper.SetDefault("SHUTDOWN_INTERVAL", time.Duration(120))
 		<-InterruptServe
+		shutdownInterval := viper.GetDuration("SHUTDOWN_INTERVAL")
 		logrus.Info("shutting down..")
-
-		// first shutdownValve
-		err := shutdownValve.Shutdown(20 * time.Second)
-		if err != nil {
-			logrus.Error(fmt.Errorf("failed to start shutting down valve: %w", err))
-		}
 		// create context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownInterval*time.Second)
 		defer cancel()
 
 		// start http shutdown
-		err = srv.Shutdown(ctx)
+		err := srv.Shutdown(ctx)
 		if err != nil {
 			logrus.Error(fmt.Errorf("failed to start shutting down service: %w", err))
 		}
-		// verify, in worst case call cancel via defer
-		select {
-		case <-time.After(21 * time.Second):
-			logrus.Error("not all connections done")
-		case <-ctx.Done():
+		//  shutdownValve is for long running jobs if any.
+		err = shutdownValve.Shutdown(shutdownInterval * time.Second)
+		if err != nil {
+			logrus.Error(fmt.Errorf("failed to start shutting down valve: %w", err))
 		}
+		exit <- 0
 	}()
 	err := srv.ListenAndServe()
+	if err == http.ErrServerClosed {
+		err = nil
+	}
 	if err != nil {
 		logrus.Error(fmt.Errorf("failed to start listening and serving: %w", err))
+		go func() {
+			InterruptServe <- syscall.SIGINT
+		}()
 	}
+	<-exit
 }

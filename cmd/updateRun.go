@@ -46,7 +46,7 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		err = bl.UpdateRunStatus(run, status)
+		err = bl.UpdateRunStatus(runId, status)
 		if err != nil {
 			msg := "failed to update run status"
 			Parameters.Err = &Error{

@@ -53,19 +53,28 @@ func GetRuns(query *dao.GetQuery) ([]*dao.RunRecord, error) {
 		return dao.GetRunsTx(nil, query)
 	}
 }
-
-func UpdateRunStatus(runRecord *dao.RunRecord, newStatus dao.RunStatusType) error {
+func UpdateRunStatus(runId string, newStatus dao.RunStatusType) error {
+	if dao.IsRemote {
+		return dao.RemoteUpdateRun(&dao.UpdateQuery{
+			Id: runId,
+			Changes: map[string]interface{}{
+				"status": newStatus.MustTranslateRunStatus(),
+			},
+		})
+	} else {
+		return UpdateRunStatusLocal(runId, newStatus)
+	}
+}
+func UpdateRunStatusLocal(runId string, newStatus dao.RunStatusType) error {
 	tx, err := dao.DB.SQL().Beginx()
-	runRecord, err = dao.GetRunTx(tx, runRecord.Id)
+	runRecord, err := dao.GetRunTx(tx, runId)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
 	}
 	if newStatus == runRecord.Status {
-		return nil
+		return dao.Rollback(tx, err)
 	}
-	// if idle and a step is started it will change to in progress
-	// if done then it is ok, there are steps in progress but new steps will not be started.
 	_, err = dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
 	if err != nil {
 		err = dao.Rollback(tx, err)

@@ -54,12 +54,14 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		}
 	}
 	translateStatus := false
-	if query.ReturnAttributes != nil {
+	if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
 		for _, attribute := range query.ReturnAttributes {
 			if attribute == "status" {
 				translateStatus = true
 			}
 		}
+	} else {
+		translateStatus = true
 	}
 	runRpcRecords, err := RunRecordToRunRPCRecord(runs, translateStatus)
 	if err != nil {
@@ -147,4 +149,58 @@ func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) 
 		})
 	}
 	return runRpcRecords, nil
+}
+
+type (
+	UpdateRunHandler struct{}
+)
+
+func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	err := valve.Lever(c).Open()
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	defer valve.Lever(c).Close()
+	var p dao.UpdateRunParams
+	if params != nil {
+		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+			return nil, errResult
+		}
+	}
+	vetErr := VetIds([]string{p.Id})
+	if vetErr != nil {
+		return nil, vetErr
+	}
+	if len(p.Changes) > 0 {
+		if len(p.Changes) != 1 {
+			return nil, jsonrpc.ErrInvalidParams()
+		}
+		val, ok := p.Changes["status"]
+		if !ok {
+			return nil, jsonrpc.ErrInvalidParams()
+		}
+		statusStr, ok := val.(string)
+		if !ok {
+			return nil, jsonrpc.ErrInvalidParams()
+		}
+		newStatus, err := dao.TranslateToRunStatus(statusStr)
+		if err != nil {
+			return nil, &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInvalidParams,
+				Message: err.Error(),
+			}
+		}
+		err = bl.UpdateRunStatus(p.Id, newStatus)
+		if err != nil {
+			return nil, &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+	}
+
+	return &dao.UpdateRunsResult{}, nil
 }

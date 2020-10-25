@@ -118,3 +118,23 @@ func RemoteGetRuns(query *GetQuery) ([]*RunRecord, error) {
 	})
 	return result, err
 }
+
+func RemoteUpdateRun(query *UpdateQuery) error {
+	request, err := NewMarshaledJSONRPCRequest("1", UPDATE_RUN, query)
+	if err != nil {
+		return err
+	}
+	return remoteJRPCCall(request, func(body *io.ReadCloser) error {
+		var jsonRPCResult GetRunsResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}

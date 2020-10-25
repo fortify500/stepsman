@@ -28,8 +28,9 @@ type (
 )
 
 const (
-	LIST_RUNS = "listRuns"
-	GET_RUNS  = "getRuns"
+	LIST_RUNS  = "listRuns"
+	GET_RUNS   = "getRuns"
+	UPDATE_RUN = "updateRun"
 )
 
 type Range struct {
@@ -77,3 +78,12 @@ type ListRunsResult struct {
 	Range RangeResult    `json:"range,omitempty"`
 	Data  []RunAPIRecord `json:"data,omitempty"`
 }
+
+type UpdateQuery struct {
+	Id      string `json:"id,omitempty"`
+	Changes map[string]interface{}
+}
+
+type UpdateRunParams UpdateQuery
+
+type UpdateRunsResult struct{}

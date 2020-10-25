@@ -20,12 +20,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/cmd"
+	"github.com/fortify500/stepsman/dao"
+	"github.com/fortify500/stepsman/serve"
 	"github.com/gobs/args"
 	"github.com/google/uuid"
 	"io/ioutil"
 	"os"
 	"regexp"
+	"sync"
 	"testing"
+	"time"
 )
 
 func setup() {
@@ -99,47 +103,42 @@ BreakOut:
 	}
 }
 
-//func TestRemotePostgreSQL(t *testing.T) {
-//	testCases := []struct {
-//		databaseVendor string
-//		command        string
-//	}{
-//		{"postgresql", "serve -V %s"},
-//	}
-//	for _, tc := range testCases {
-//		command := fmt.Sprintf(tc.command, tc.databaseVendor)
-//		cmd.ResetCommandParameters()
-//		cmd.RootCmd.SetArgs(args.GetArgs(command))
-//		var wg sync.WaitGroup
-//		wg.Add(1)
-//		go func() {
-//			err := cmd.RootCmd.Execute()
-//			if err != nil {
-//				t.Error(err)
-//			}
-//			wg.Done()
-//		}()
-//		fmt.Println("start")
-//		t.Run(tc.command, func(t *testing.T) {
-//			t.Run("testtest", func(t *testing.T) {
-//				t.Parallel()
-//				fmt.Println("hello world")
-//				time.Sleep(5 * time.Second)
-//				fmt.Println("hello world3")
-//			})
-//			t.Run("testtest", func(t *testing.T) {
-//				t.Parallel()
-//			})
-//			t.Run("testtest", func(t *testing.T) {
-//				t.Parallel()
-//				fmt.Println("hello world2")
-//			})
-//		})
-//		serve.InterruptServe <- os.Interrupt
-//		wg.Wait()
-//		fmt.Println("end")
-//	}
-//}
+func TestRemotePostgreSQL(t *testing.T) {
+	testCases := []struct {
+		databaseVendor string
+		command        string
+	}{
+		{"postgresql", "serve -V %s"},
+	}
+	for _, tc := range testCases {
+		command := fmt.Sprintf(tc.command, tc.databaseVendor)
+		cmd.ResetCommandParameters()
+		cmd.RootCmd.SetArgs(args.GetArgs(command))
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			err := cmd.RootCmd.Execute()
+			if err != nil {
+				t.Error(err)
+			}
+			wg.Done()
+		}()
+		time.Sleep(time.Duration(2) * time.Second)
+		dao.Parameters.DatabaseSSLMode = false
+		dao.Parameters.DatabasePort = 3333
+		dao.InitClient()
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListRuns"), func(t *testing.T) {
+			_, _, err := dao.RemoteListRuns(&dao.ListQuery{})
+			if err != nil {
+				t.Error(err)
+			}
+		})
+
+		serve.InterruptServe <- os.Interrupt
+		wg.Wait()
+		fmt.Println("end")
+	}
+}
 func TestMain(m *testing.M) {
 	setup()
 	code := m.Run()
