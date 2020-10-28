@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"sync"
@@ -63,8 +64,8 @@ func TranslateToStepStatus(status string) (dao.StepStatusType, error) {
 		return dao.StepIdle, fmt.Errorf("failed to translate statys to step status")
 	}
 }
-func ListSteps(runId string) ([]*dao.StepRecord, error) {
-	return dao.ListSteps(runId)
+func ListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
+	return dao.ListSteps(query)
 }
 
 func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, newState *dao.StepState, doFinish bool) (*dao.StepRecord, error) {

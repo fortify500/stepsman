@@ -21,6 +21,8 @@ const (
 	RPCGetRuns   = "getRuns"
 	RPCUpdateRun = "updateRun"
 	RPCCreateRun = "createRun"
+
+	RPCListSteps = "listSteps"
 )
 
 type (
@@ -31,6 +33,18 @@ type (
 		TemplateTitle   string `json:"template-title,omitempty"`
 		Status          string `json:"status,omitempty"`
 		Template        string `json:"template,omitempty"`
+	}
+
+	StepAPIRecord struct {
+		RunId      string `json:"run-id,omitempty"`
+		Index      int64  `json:"index,omitempty"`
+		Label      string
+		UUID       string
+		Name       string
+		Status     string      `json:"status,omitempty"`
+		StatusUUID string      `json:"status-uuid,omitempty"`
+		HeartBeat  interface{} `json:"heartbeat,omitempty"`
+		State      string
 	}
 )
 
@@ -90,4 +104,9 @@ type CreateRunsResult RunAPIRecord
 type CreateRunParams struct {
 	Key      string      `json:"key,omitempty"`
 	Template interface{} `json:"template,omitempty"`
+}
+
+type ListStepsResult struct {
+	Range RangeResult     `json:"range,omitempty"`
+	Data  []StepAPIRecord `json:"data,omitempty"`
 }

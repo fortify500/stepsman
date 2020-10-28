@@ -21,9 +21,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/yaml.v2"
+	"strings"
 	"time"
 )
 
@@ -183,45 +185,242 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*StepRecord, error) {
 	return result, nil
 }
 
-func ListSteps(runId string) ([]*StepRecord, error) {
+func ListSteps(query *api.ListQuery) ([]*StepRecord, *api.RangeResult, error) {
 	tx, err := DB.SQL().Beginx()
 	if err != nil {
-		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
+		return nil, nil, fmt.Errorf("failed to start a database transaction: %w", err)
 	}
-	stepRecords, err := ListStepsTx(tx, runId)
+	stepRecords, rangeResult, err := ListStepsTx(tx, query)
 	if err != nil {
 		err = Rollback(tx, err)
-		return nil, err
+		return nil, nil, err
 	}
 	err = tx.Commit()
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
+		return nil, nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
 	}
-	return stepRecords, nil
+	return stepRecords, rangeResult, nil
 }
 
-func ListStepsTx(tx *sqlx.Tx, runId string) ([]*StepRecord, error) {
+func buildStepsReturnAttirbutesStrAndVet(attributes []string) (string, error) {
+	if attributes == nil || len(attributes) == 0 {
+		return "*", nil
+	}
+	set := make(map[string]bool)
+	for _, attribute := range attributes {
+		switch attribute {
+		case RunId:
+		case Index:
+		case UUID:
+		case Status:
+		case StatusUUID:
+		case HeartBeat:
+		case Label:
+		case Name:
+		case State:
+		default:
+			return "", fmt.Errorf("invalid attribute name in return-attributes: %s", attribute)
+		}
+		set[attribute] = true
+	}
+	var sb strings.Builder
+	first := true
+	for str := range set {
+		if !first {
+			sb.WriteString(",")
+		} else {
+			first = false
+		}
+		_, err := sb.WriteString(str)
+		if err != nil {
+			return "", fmt.Errorf("failed to concatenate return-attribtues")
+		}
+	}
+	return sb.String(), nil
+}
+
+func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeResult, error) {
 	var result []*StepRecord
 	var rows *sqlx.Rows
 	var err error
-	rows, err = DB.ListStepsTx(tx, runId, rows, err)
+	var count int64 = -1
+	sqlQuery := ""
+	sqlNoRange := ""
+	params := make([]interface{}, 0)
+	sqlQuery = "SELECT *,CURRENT_TIMESTAMP as now FROM steps"
+	if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
+		attributesStr, err := buildStepsReturnAttirbutesStrAndVet(query.ReturnAttributes)
+		if err != nil {
+			return nil, nil, err
+		}
+		sqlQuery = fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM steps", attributesStr)
+	}
+
+	{
+		filterQuery := ""
+		for i, expression := range query.Filters {
+			queryExpression := ""
+			attributeName := expression.AttributeName
+			switch expression.AttributeName {
+			case RunId:
+				attributeName = "run_id"
+			case Index:
+			case UUID:
+			case Status:
+			case StatusUUID:
+				attributeName = "status_uuid"
+			case Label:
+			case Name:
+			default:
+				return nil, nil, fmt.Errorf("invalid attribute name in filter: %s", expression.AttributeName)
+			}
+			queryExpression = fmt.Sprintf("\"%s\"", attributeName)
+			switch expression.Operator {
+			case "<":
+				fallthrough
+			case ">":
+				fallthrough
+			case "<=":
+				fallthrough
+			case ">=":
+				switch expression.AttributeName {
+				case Index:
+				default:
+					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+				}
+				queryExpression += expression.Operator
+				queryExpression += fmt.Sprintf("$%d", +i+1)
+			case "<>":
+				fallthrough
+			case "=":
+				queryExpression += expression.Operator
+				queryExpression += fmt.Sprintf("$%d", +i+1)
+			case "startsWith":
+				switch expression.AttributeName {
+				case Label:
+				case Name:
+				default:
+					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+				}
+				queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
+			case "endsWith":
+				switch expression.AttributeName {
+				case Label:
+				case Name:
+				default:
+					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+				}
+				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
+			case "contains":
+				switch expression.AttributeName {
+				case Label:
+				case Name:
+				default:
+					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+				}
+				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i+1)
+			default:
+				return nil, nil, fmt.Errorf("invalud operator in filter: %s", expression.Operator)
+			}
+			params = append(params, expression.Value)
+			if filterQuery != "" {
+				filterQuery += " AND "
+			}
+			filterQuery += queryExpression
+		}
+		if filterQuery != "" {
+			sqlQuery += " WHERE " + filterQuery
+		}
+	}
+	{
+		if len(query.Sort.Fields) > 0 {
+			const orderBy = " ORDER BY "
+			sort := orderBy
+			for _, field := range query.Sort.Fields {
+				fieldDB := field
+				switch field {
+				case RunId:
+					fieldDB = "run_id"
+				case Index:
+				case UUID:
+				case Status:
+				case StatusUUID:
+					fieldDB = "status_uuid"
+				case Label:
+				case Name:
+				default:
+					return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
+				}
+				if sort != orderBy {
+					sort += ","
+				}
+				sort += fmt.Sprintf("\"%s\"", fieldDB)
+			}
+			switch query.Sort.Order {
+			case "desc":
+			case "asc":
+			default:
+				return nil, nil, fmt.Errorf("invalid sort order: %s", query.Sort.Order)
+			}
+			sqlQuery += sort + " " + query.Sort.Order
+		} else {
+			sqlQuery += " ORDER BY id DESC"
+		}
+	}
+	sqlNoRange = sqlQuery
+	{
+		if query.Range.End >= query.Range.Start && query.Range.Start > 0 {
+			offset := query.Range.Start - 1
+			limit := query.Range.End - query.Range.Start + 1
+			sqlQuery += fmt.Sprintf(" OFFSET %d LIMIT %d", offset, limit)
+		}
+	}
+	if query != nil && query.Range.ReturnTotal {
+		err = tx.Get(&count, "select count(*) from ("+sqlNoRange+") C", params...)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to query count database steps table: %w", err)
+		}
+		rows, err = tx.Queryx(sqlQuery, params...)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to query database steps table: %w", err)
+		}
+	} else {
+		rows, err = tx.Queryx(sqlQuery, params...)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query database steps table: %w", err)
+		return nil, nil, fmt.Errorf("failed to query database steps table: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var step StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row: %w", err)
+			return nil, nil, fmt.Errorf("failed to parse database steps row: %w", err)
 		}
 		err = adjustStepNow(step)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row: %w", err)
+			return nil, nil, fmt.Errorf("failed to parse database steps row: %w", err)
 		}
 		result = append(result, &step)
 	}
-	return result, nil
+	{
+		rangeResult := api.RangeResult{
+			Range: api.Range{
+				Start: 0,
+				End:   -1,
+			},
+			Total: count,
+		}
+		if len(result) > 0 {
+			if query != nil && query.Range.End >= query.Range.Start && query.Range.Start > 0 {
+				rangeResult.Start = query.Range.Start
+			} else {
+				rangeResult.Start = 1
+			}
+			rangeResult.End = rangeResult.Start + int64(len(result)) - 1
+		}
+		return result, &rangeResult, nil
+	}
 }
 
 func adjustStepNow(step StepRecord) error {

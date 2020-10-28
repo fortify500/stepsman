@@ -17,7 +17,6 @@
 package bl
 
 import (
-	"fmt"
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	_ "github.com/jackc/pgx/stdlib"
@@ -30,19 +29,19 @@ type Error struct {
 	err  error
 }
 
-func WrapBLError(msg string, code int64, err error, args []interface{}) error {
-	var errMsg string
-	if err != nil {
-		errMsg = fmt.Errorf(msg, args...).Error()
-	} else {
-		errMsg = fmt.Sprintf(msg, args)
-	}
-	return &Error{
-		msg:  errMsg,
-		code: code,
-		err:  err,
-	}
-}
+//func WrapBLError(msg string, code int64, err error, args []interface{}) error {
+//	var errMsg string
+//	if err != nil {
+//		errMsg = fmt.Errorf(msg, args...).Error()
+//	} else {
+//		errMsg = fmt.Sprintf(msg, args)
+//	}
+//	return &Error{
+//		msg:  errMsg,
+//		code: code,
+//		err:  err,
+//	}
+//}
 func (e *Error) Error() string {
 	return e.msg
 }

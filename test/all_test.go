@@ -83,7 +83,7 @@ BreakOut:
 				_ = w.Close()
 				out, _ := ioutil.ReadAll(r)
 				os.Stdout = rescueStdout
-				var re = regexp.MustCompile(`.*\:\s(.*\-.*\-.*\-.*\-.*).*`)
+				var re = regexp.MustCompile(`.*:\s(.*-.*-.*-.*-.*).*`)
 
 				if tc.parseRunId {
 					for _, match := range re.FindStringSubmatch(string(out)) {

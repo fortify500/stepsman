@@ -55,5 +55,8 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 		log.Fatal(err)
 	}
 
+	if err := mr.RegisterMethod(api.RPCListSteps, ListStepsHandler{}, api.ListParams{}, api.ListStepsResult{}); err != nil {
+		log.Fatal(err)
+	}
 	return mr
 }

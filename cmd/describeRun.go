@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -47,12 +48,31 @@ You can also describe a single step by adding --step <Index>.`,
 			return
 		}
 		Parameters.CurrentRunId = run.Id
+		expressions := []api.Expression{{
+			AttributeName: dao.RunId,
+			Operator:      "=",
+			Value:         runId,
+		}}
 		index, err := parseIndex(Parameters.Step)
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		stepRecords, err := bl.ListSteps(run.Id)
+		if index > 0 {
+			expressions = append(expressions, api.Expression{
+				AttributeName: dao.Index,
+				Operator:      "=",
+				Value:         Parameters.Step,
+			})
+		}
+		stepRecords, _, err := bl.ListSteps(&api.ListQuery{
+			Sort: api.Sort{
+				Fields: []string{dao.Index},
+				Order:  "asc",
+			},
+			Filters:          expressions,
+			ReturnAttributes: nil,
+		})
 		if err != nil {
 			msg := "failed to describe steps"
 			Parameters.Err = &Error{

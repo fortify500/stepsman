@@ -75,8 +75,3 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error) {
 	return tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),:state)", stepRecord)
 }
-
-func (db *PostgreSQLSqlxDB) ListStepsTx(tx *sqlx.Tx, runId string, rows *sqlx.Rows, err error) (*sqlx.Rows, error) {
-	rows, err = tx.Queryx("SELECT *,CURRENT_TIMESTAMP as now FROM steps WHERE run_id=$1 order by index asc", runId)
-	return rows, err
-}

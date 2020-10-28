@@ -237,6 +237,29 @@ func getRun(id string) (*dao.RunRecord, error) {
 	return run, nil
 }
 
+func detectStartsWithGTLTEquals(trimPrefix string, filter string) string {
+	if strings.HasPrefix(trimPrefix, "<=") {
+		return "<="
+	} else if strings.HasPrefix(trimPrefix, ">=") {
+		return ">="
+	} else if strings.HasPrefix(trimPrefix, "<>") {
+		return "<>"
+	} else if strings.HasPrefix(trimPrefix, ">") {
+		return ">"
+	} else if strings.HasPrefix(trimPrefix, "<") {
+		return "<"
+	} else if strings.HasPrefix(trimPrefix, "=") {
+		return "="
+	} else {
+		msg := "failed to parse filter"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+" %s", filter),
+			Friendly:  msg,
+		}
+		return ""
+	}
+}
+
 func parseStepUUID(idStr string) (string, error) {
 	uuid4, err := uuid.Parse(idStr)
 	if err != nil {

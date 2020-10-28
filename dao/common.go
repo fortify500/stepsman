@@ -24,13 +24,29 @@ import (
 	"strings"
 )
 
+const (
+	Id              = "id"
+	RunId           = "run-id"
+	Key             = "key"
+	Template        = "template"
+	TemplateVersion = "template-version"
+	TemplateTitle   = "template-title"
+	Status          = "status"
+	Index           = "index"
+	UUID            = "uuid"
+	StatusUUID      = "status-uuid"
+	HeartBeat       = "heartbeat"
+	State           = "state"
+	Label           = "label"
+	Name            = "name"
+)
+
 var DB DBI
 
 type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation(tx *sqlx.Tx) error
 	CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error)
-	ListStepsTx(tx *sqlx.Tx, runId string, rows *sqlx.Rows, err error) (*sqlx.Rows, error)
 	Migrate0(tx *sqlx.Tx) error
 }
 

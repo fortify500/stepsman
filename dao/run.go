@@ -36,13 +36,6 @@ const (
 	RunDone       RunStatusType = 15
 )
 
-const ID = "id"
-const KEY = "key"
-const TEMPLATE = "template"
-const TEMPLATE_VERSION = "template-version"
-const TEMPLATE_TITLE = "template-title"
-const STATUS = "status"
-
 type RunRecord struct {
 	Id              string
 	Key             string
@@ -94,7 +87,7 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 	} else {
 		sqlQuery = "SELECT * FROM runs"
 		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-			attributesStr, err := buildReturnAttirbutesStrAndVet(query.ReturnAttributes)
+			attributesStr, err := buildRunsReturnAttirbutesStrAndVet(query.ReturnAttributes)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -105,16 +98,19 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 			filterQuery := ""
 			for i, expression := range query.Filters {
 				queryExpression := ""
+				attributeName := expression.AttributeName
 				switch expression.AttributeName {
-				case ID:
-				case KEY:
-				case TEMPLATE_VERSION:
-				case TEMPLATE_TITLE:
-				case STATUS:
+				case Id:
+				case Key:
+				case TemplateVersion:
+					attributeName = "template_version"
+				case TemplateTitle:
+					attributeName = "template_title"
+				case Status:
 				default:
 					return nil, nil, fmt.Errorf("invalid attribute name in filter: %s", expression.AttributeName)
 				}
-				queryExpression = expression.AttributeName
+				queryExpression = fmt.Sprintf("\"%s\"", attributeName)
 				switch expression.Operator {
 				case "<":
 					fallthrough
@@ -124,7 +120,7 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 					fallthrough
 				case ">=":
 					switch expression.AttributeName {
-					case TEMPLATE_VERSION:
+					case TemplateVersion:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
@@ -137,24 +133,24 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 					queryExpression += fmt.Sprintf("$%d", +i+1)
 				case "startsWith":
 					switch expression.AttributeName {
-					case KEY:
-					case TEMPLATE_TITLE:
+					case Key:
+					case TemplateTitle:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
 				case "endsWith":
 					switch expression.AttributeName {
-					case KEY:
-					case TEMPLATE_TITLE:
+					case Key:
+					case TemplateTitle:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
 				case "contains":
 					switch expression.AttributeName {
-					case KEY:
-					case TEMPLATE_TITLE:
+					case Key:
+					case TemplateTitle:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
@@ -177,19 +173,22 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 				const orderBy = " ORDER BY "
 				sort := orderBy
 				for _, field := range query.Sort.Fields {
+					fieldDB := field
 					switch field {
-					case ID:
-					case KEY:
-					case TEMPLATE_VERSION:
-					case TEMPLATE_TITLE:
-					case STATUS:
+					case Id:
+					case Key:
+					case TemplateVersion:
+						fieldDB = "template_version"
+					case TemplateTitle:
+						fieldDB = "template_title"
+					case Status:
 					default:
 						return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
 					}
 					if sort != orderBy {
 						sort += ","
 					}
-					sort += field
+					sort += fmt.Sprintf("\"%s\"", fieldDB)
 				}
 				switch query.Sort.Order {
 				case "desc":
@@ -263,19 +262,19 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 	}
 }
 
-func buildReturnAttirbutesStrAndVet(attributes []string) (string, error) {
+func buildRunsReturnAttirbutesStrAndVet(attributes []string) (string, error) {
 	if attributes == nil || len(attributes) == 0 {
 		return "*", nil
 	}
 	set := make(map[string]bool)
 	for _, attribute := range attributes {
 		switch attribute {
-		case ID:
-		case KEY:
-		case TEMPLATE_VERSION:
-		case TEMPLATE_TITLE:
-		case STATUS:
-		case TEMPLATE:
+		case Id:
+		case Key:
+		case TemplateVersion:
+		case TemplateTitle:
+		case Status:
+		case Template:
 		default:
 			return "", fmt.Errorf("invalid attribute name in return-attributes: %s", attribute)
 		}
@@ -328,7 +327,7 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetQuery) ([]*RunRecord, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
 	var err error
-	attributesStr, err := buildReturnAttirbutesStrAndVet(getQuery.ReturnAttributes)
+	attributesStr, err := buildRunsReturnAttirbutesStrAndVet(getQuery.ReturnAttributes)
 	query := fmt.Sprintf("SELECT %s FROM runs where id IN %s", attributesStr, "('"+strings.Join(getQuery.Ids, "','")+"')")
 
 	if tx == nil {

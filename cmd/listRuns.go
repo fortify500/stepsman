@@ -72,7 +72,7 @@ func listRunsInternal(runId string) {
 		}
 		if len(Parameters.Filters) > 0 {
 			var exitErr bool
-			query.Filters, exitErr = parseFilters()
+			query.Filters, exitErr = parseRunsFilters()
 			if exitErr {
 				return
 			}
@@ -110,35 +110,42 @@ func listRunsInternal(runId string) {
 	t.Render()
 }
 
-func parseFilters() ([]api.Expression, bool) {
+func parseRunsFilters() ([]api.Expression, bool) {
 	expressions := make([]api.Expression, len(Parameters.Filters))
 	for i, filter := range Parameters.Filters {
 		name := ""
 		value := ""
 		operator := ""
 		if strings.HasPrefix(filter, "id") {
-			trimPrefix := strings.TrimPrefix(filter, "id")
+			trimPrefix := strings.TrimPrefix(filter, dao.Id)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
 			name = "id"
 			value = strings.TrimPrefix(trimPrefix, operator)
-		} else if strings.HasPrefix(filter, "uuid") {
-			trimPrefix := strings.TrimPrefix(filter, "uuid")
+		} else if strings.HasPrefix(filter, dao.Key) {
+			trimPrefix := strings.TrimPrefix(filter, dao.Key)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
 			name = "uuid"
 			value = strings.TrimPrefix(trimPrefix, operator)
-		} else if strings.HasPrefix(filter, "title") {
-			trimPrefix := strings.TrimPrefix(filter, "title")
+		} else if strings.HasPrefix(filter, dao.TemplateTitle) {
+			trimPrefix := strings.TrimPrefix(filter, dao.TemplateTitle)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
 			name = "title"
 			value = strings.TrimPrefix(trimPrefix, operator)
-		} else if strings.HasPrefix(filter, "status") {
-			trimPrefix := strings.TrimPrefix(filter, "status")
+		} else if strings.HasPrefix(filter, dao.TemplateVersion) {
+			trimPrefix := strings.TrimPrefix(filter, dao.TemplateVersion)
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = "title"
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, dao.Status) {
+			trimPrefix := strings.TrimPrefix(filter, dao.Status)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
@@ -146,7 +153,7 @@ func parseFilters() ([]api.Expression, bool) {
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, "startsWith(") && strings.HasSuffix(filter, ")") {
 			operator = "startsWith"
-			fields, errDone := detectStringOperator(filter, operator)
+			fields, errDone := detectRunsStringOperator(filter, operator)
 			if errDone {
 				return nil, true
 			}
@@ -154,7 +161,7 @@ func parseFilters() ([]api.Expression, bool) {
 			value = fields[1]
 		} else if strings.HasPrefix(filter, "endsWith(") && strings.HasSuffix(filter, ")") {
 			operator = "endsWith"
-			fields, errDone := detectStringOperator(filter, operator)
+			fields, errDone := detectRunsStringOperator(filter, operator)
 			if errDone {
 				return nil, true
 			}
@@ -162,7 +169,7 @@ func parseFilters() ([]api.Expression, bool) {
 			value = fields[1]
 		} else if strings.HasPrefix(filter, "contains(") && strings.HasSuffix(filter, ")") {
 			operator = "contains"
-			fields, errDone := detectStringOperator(filter, operator)
+			fields, errDone := detectRunsStringOperator(filter, operator)
 			if errDone {
 				return nil, true
 			}
@@ -185,7 +192,7 @@ func parseFilters() ([]api.Expression, bool) {
 	return expressions, false
 }
 
-func detectStringOperator(filter string, operator string) ([]string, bool) {
+func detectRunsStringOperator(filter string, operator string) ([]string, bool) {
 	trimmed := strings.TrimPrefix(filter, operator+"(")
 	trimmed = strings.TrimSuffix(trimmed, ")")
 	r := csv.NewReader(strings.NewReader(trimmed))
@@ -208,10 +215,10 @@ func detectStringOperator(filter string, operator string) ([]string, bool) {
 		return nil, true
 	}
 	switch fields[0] {
-	case "id":
-	case "uuid":
-	case "title":
-	case "status":
+	case dao.Id:
+	case dao.Key:
+	case dao.TemplateTitle:
+	case dao.Status:
 	default:
 		msg := "failed to parse filter"
 		Parameters.Err = &Error{
@@ -221,29 +228,6 @@ func detectStringOperator(filter string, operator string) ([]string, bool) {
 		return nil, true
 	}
 	return fields, false
-}
-
-func detectStartsWithGTLTEquals(trimPrefix string, filter string) string {
-	if strings.HasPrefix(trimPrefix, "<=") {
-		return "<="
-	} else if strings.HasPrefix(trimPrefix, ">=") {
-		return ">="
-	} else if strings.HasPrefix(trimPrefix, "<>") {
-		return "<>"
-	} else if strings.HasPrefix(trimPrefix, ">") {
-		return ">"
-	} else if strings.HasPrefix(trimPrefix, "<") {
-		return "<"
-	} else if strings.HasPrefix(trimPrefix, "=") {
-		return "="
-	} else {
-		msg := "failed to parse filter"
-		Parameters.Err = &Error{
-			Technical: fmt.Errorf(msg+" %s", filter),
-			Friendly:  msg,
-		}
-		return ""
-	}
 }
 
 func init() {
