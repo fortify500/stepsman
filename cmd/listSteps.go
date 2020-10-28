@@ -126,7 +126,7 @@ func listStepsInternal() {
 		return
 	}
 	for _, step := range steps {
-		status, err := bl.TranslateStepStatus(step.Status)
+		status, err := step.Status.TranslateStepStatus()
 		if err != nil {
 			msg := "failed to list steps"
 			Parameters.Err = &Error{

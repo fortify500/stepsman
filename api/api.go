@@ -41,9 +41,10 @@ type (
 		Label      string
 		UUID       string
 		Name       string
-		Status     string      `json:"status,omitempty"`
-		StatusUUID string      `json:"status-uuid,omitempty"`
-		HeartBeat  interface{} `json:"heartbeat,omitempty"`
+		Status     string `json:"status,omitempty"`
+		StatusUUID string `json:"status-uuid,omitempty"`
+		HeartBeat  string `json:"heartbeat,omitempty"`
+		Now        string
 		State      string
 	}
 )

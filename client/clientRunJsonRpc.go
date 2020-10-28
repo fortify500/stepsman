@@ -21,6 +21,7 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
 	"io"
+	"time"
 )
 
 type ListRunsResponse struct {
@@ -188,4 +189,75 @@ func RemoteCreateRun(params *api.CreateRunParams) (string, string, dao.RunStatus
 		return "", "", dao.RunIdle, err
 	}
 	return runId, key, status, nil
+}
+
+type ListStepsResponse struct {
+	Version string              `json:"jsonrpc"`
+	Result  api.ListStepsResult `json:"result,omitempty"`
+	Error   JSONRPCError        `json:"error,omitempty"`
+	ID      string              `json:"id,omitempty"`
+}
+
+func RemoteListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
+	result := make([]*dao.StepRecord, 0)
+	params := api.ListParams{}
+	if query != nil {
+		params = api.ListParams(*query)
+	}
+	request, err := NewMarshaledJSONRPCRequest("1", api.RPCListSteps, &params)
+	if err != nil {
+		return nil, nil, err
+	}
+	var rangeResult *api.RangeResult
+	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
+		var jsonRPCResult ListStepsResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return err
+		}
+		if jsonRPCResult.Result.Data != nil &&
+			jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
+			jsonRPCResult.Result.Range.Start > 0 {
+			for _, record := range jsonRPCResult.Result.Data {
+				status, err := dao.TranslateToStepStatus(record.Status)
+				if err != nil {
+					return err
+				}
+				var now time.Time
+				var heartbeat time.Time
+				if record.Now != "" {
+					now, err = time.Parse(time.RFC3339, record.Now)
+					if err != nil {
+						return err
+					}
+				}
+				if record.HeartBeat != "" {
+					heartbeat, err = time.Parse(time.RFC3339, record.HeartBeat)
+					if err != nil {
+						return err
+					}
+				}
+				result = append(result, &dao.StepRecord{
+					RunId:      record.RunId,
+					Index:      record.Index,
+					Label:      record.Label,
+					UUID:       record.UUID,
+					Name:       record.Name,
+					Status:     status,
+					StatusUUID: record.StatusUUID,
+					Now:        now,
+					HeartBeat:  heartbeat,
+					State:      record.State,
+				})
+			}
+		}
+		rangeResult = &jsonRPCResult.Result.Range
+		return err
+	})
+	return result, rangeResult, err
 }

@@ -36,6 +36,7 @@ const (
 	UUID            = "uuid"
 	StatusUUID      = "status-uuid"
 	HeartBeat       = "heartbeat"
+	Now             = "now"
 	State           = "state"
 	Label           = "label"
 	Name            = "name"

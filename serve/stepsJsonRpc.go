@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/valve"
 	"github.com/intel-go/fastjson"
 	"github.com/osamingo/jsonrpc"
+	"time"
 )
 
 type (
@@ -36,7 +37,7 @@ func StepRecordToStepRPCRecord(stepsRecords []*dao.StepRecord, translateStatus b
 		var status string
 		var err error
 		if translateStatus {
-			status, err = bl.TranslateStepStatus(stepRecord.Status)
+			status, err = stepRecord.Status.TranslateStepStatus()
 			if err != nil {
 				return nil, err
 			}
@@ -49,7 +50,8 @@ func StepRecordToStepRPCRecord(stepsRecords []*dao.StepRecord, translateStatus b
 			Name:       stepRecord.Name,
 			Status:     status,
 			StatusUUID: stepRecord.StatusUUID,
-			HeartBeat:  stepRecord.HeartBeat,
+			HeartBeat:  stepRecord.HeartBeat.(time.Time).Format(time.RFC3339),
+			Now:        stepRecord.Now.(time.Time).Format(time.RFC3339),
 			State:      stepRecord.State,
 		})
 	}

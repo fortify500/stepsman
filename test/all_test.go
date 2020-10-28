@@ -184,7 +184,7 @@ BreakOut:
 				t.Error(err)
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
 			runs, err := client.RemoteGetRuns(&api.GetQuery{
 				Ids:              []string{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
@@ -208,7 +208,7 @@ BreakOut:
 				t.Error(err)
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
 			runs, err := client.RemoteGetRuns(&api.GetQuery{
 				Ids:              []string{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
@@ -221,6 +221,21 @@ BreakOut:
 			}
 			if runs[0].Status != dao.RunIdle {
 				t.Error(fmt.Errorf("status should be idle, got: %s", runs[0].Status.MustTranslateRunStatus()))
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
+			steps, _, err := client.RemoteListSteps(&api.ListQuery{
+				Filters: []api.Expression{{
+					AttributeName: dao.RunId,
+					Operator:      "=",
+					Value:         createdRunId,
+				}},
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
 			}
 		})
 		serve.InterruptServe <- os.Interrupt

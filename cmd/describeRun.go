@@ -130,7 +130,7 @@ You can also describe a single step by adding --step <Index>.`,
 			if index > 0 && index != int64(i)+1 {
 				continue
 			}
-			status, err := bl.TranslateStepStatus(stepRecord.Status)
+			status, err := stepRecord.Status.TranslateStepStatus()
 			if err != nil {
 				msg := "failed to describe steps"
 				Parameters.Err = &Error{

@@ -63,7 +63,7 @@ func init() {
 	updateCmd.AddCommand(updateRunCmd)
 	initFlags := func() error {
 		updateRunCmd.ResetFlags()
-		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s", bl.MustTranslateStepStatus(dao.StepIdle), bl.MustTranslateStepStatus(dao.StepInProgress), bl.MustTranslateStepStatus(dao.StepFailed), bl.MustTranslateStepStatus(dao.StepDone)))
+		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s", dao.StepIdle.MustTranslateStepStatus(), dao.StepInProgress.MustTranslateStepStatus(), dao.StepFailed.MustTranslateStepStatus(), dao.StepDone.MustTranslateStepStatus()))
 		err := updateRunCmd.MarkFlagRequired("status")
 		return err
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"strings"
 	"time"
@@ -218,6 +219,7 @@ func buildStepsReturnAttirbutesStrAndVet(attributes []string) (string, error) {
 		case Label:
 		case Name:
 		case State:
+		case Now:
 		default:
 			return "", fmt.Errorf("invalid attribute name in return-attributes: %s", attribute)
 		}
@@ -364,7 +366,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeRe
 			}
 			sqlQuery += sort + " " + query.Sort.Order
 		} else {
-			sqlQuery += " ORDER BY id DESC"
+			sqlQuery += " ORDER BY run_id,\"index\" asc"
 		}
 	}
 	sqlNoRange = sqlQuery
@@ -457,4 +459,40 @@ func (s *StepRecord) UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus S
 	}
 	s.StatusUUID = uuid4.String()
 	return tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP where run_id=$3 and \"index\"=$4", newStatus, newStateStr, s.RunId, s.Index)
+}
+
+func (s StepStatusType) MustTranslateStepStatus() string {
+	stepStatus, err := s.TranslateStepStatus()
+	if err != nil {
+		logrus.Panic(err)
+	}
+	return stepStatus
+}
+func (s StepStatusType) TranslateStepStatus() (string, error) {
+	switch s {
+	case StepIdle:
+		return "Idle", nil
+	case StepInProgress:
+		return "In Progress", nil
+	case StepFailed:
+		return "Failed", nil
+	case StepDone:
+		return "Done", nil
+	default:
+		return "Error", fmt.Errorf("failed to translate step status: %d", s)
+	}
+}
+func TranslateToStepStatus(status string) (StepStatusType, error) {
+	switch status {
+	case "Idle":
+		return StepIdle, nil
+	case "In Progress":
+		return StepInProgress, nil
+	case "Failed":
+		return StepFailed, nil
+	case "Done":
+		return StepDone, nil
+	default:
+		return StepIdle, fmt.Errorf("failed to translate statys to step status")
+	}
 }

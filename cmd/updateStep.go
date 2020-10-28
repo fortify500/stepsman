@@ -58,7 +58,7 @@ Use run <run id>.`,
 		}
 		step := template.Steps[stepRecord.Index-1]
 		if Parameters.Status != "" {
-			status, err := bl.TranslateToStepStatus(Parameters.Status)
+			status, err := dao.TranslateToStepStatus(Parameters.Status)
 			if err != nil {
 				Parameters.Err = err
 				return
@@ -92,7 +92,7 @@ func init() {
 	updateCmd.AddCommand(updateStepCmd)
 	initFlags := func() error {
 		updateStepCmd.ResetFlags()
-		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s", bl.MustTranslateStepStatus(dao.StepIdle), bl.MustTranslateStepStatus(dao.StepInProgress), bl.MustTranslateStepStatus(dao.StepFailed), bl.MustTranslateStepStatus(dao.StepDone)))
+		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s", dao.StepIdle.MustTranslateStepStatus(), dao.StepInProgress.MustTranslateStepStatus(), dao.StepFailed.MustTranslateStepStatus(), dao.StepDone.MustTranslateStepStatus()))
 		updateStepCmd.Flags().StringVarP(&Parameters.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
 		return nil
 	}

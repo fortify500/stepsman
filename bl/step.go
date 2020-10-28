@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"sync"
@@ -29,42 +30,10 @@ import (
 
 const DefaultHeartBeatInterval = 10 * time.Second
 
-func MustTranslateStepStatus(status dao.StepStatusType) string {
-	stepStatus, err := TranslateStepStatus(status)
-	if err != nil {
-		log.Panic(err)
-	}
-	return stepStatus
-}
-func TranslateStepStatus(status dao.StepStatusType) (string, error) {
-	switch status {
-	case dao.StepIdle:
-		return "Idle", nil
-	case dao.StepInProgress:
-		return "In Progress", nil
-	case dao.StepFailed:
-		return "Failed", nil
-	case dao.StepDone:
-		return "Done", nil
-	default:
-		return "Error", fmt.Errorf("failed to translate step status: %d", status)
-	}
-}
-func TranslateToStepStatus(status string) (dao.StepStatusType, error) {
-	switch status {
-	case "Idle":
-		return dao.StepIdle, nil
-	case "In Progress":
-		return dao.StepInProgress, nil
-	case "Failed":
-		return dao.StepFailed, nil
-	case "Done":
-		return dao.StepDone, nil
-	default:
-		return dao.StepIdle, fmt.Errorf("failed to translate statys to step status")
-	}
-}
 func ListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
+	if dao.IsRemote {
+		return client.RemoteListSteps(query)
+	}
 	return dao.ListSteps(query)
 }
 
