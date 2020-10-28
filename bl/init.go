@@ -18,6 +18,7 @@ package bl
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/mattn/go-sqlite3"
@@ -62,6 +63,8 @@ func InitBL(daoParameters *dao.ParametersType) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		client.InitClient(dao.Parameters.DatabaseSSLMode, dao.Parameters.DatabaseHost, dao.Parameters.DatabasePort)
 	}
 	return nil
 }

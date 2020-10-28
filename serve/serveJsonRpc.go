@@ -19,7 +19,7 @@ package serve
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/fortify500/stepsman/dao"
+	"github.com/fortify500/stepsman/api"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 )
@@ -40,15 +40,20 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 
 	mr := jsonrpc.NewMethodRepository()
 
-	if err := mr.RegisterMethod(dao.LIST_RUNS, ListRunsHandler{}, dao.ListParams{}, dao.ListRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(api.RPCListRuns, ListRunsHandler{}, api.ListParams{}, api.ListRunsResult{}); err != nil {
 		log.Fatal(err)
 	}
-	if err := mr.RegisterMethod(dao.GET_RUNS, GetRunsHandler{}, dao.GetParams{}, dao.GetRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(api.RPCGetRuns, GetRunsHandler{}, api.GetParams{}, api.GetRunsResult{}); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := mr.RegisterMethod(dao.UPDATE_RUN, UpdateRunHandler{}, dao.UpdateRunParams{}, dao.UpdateRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(api.RPCUpdateRun, UpdateRunHandler{}, api.UpdateRunParams{}, api.UpdateRunsResult{}); err != nil {
 		log.Fatal(err)
 	}
+
+	if err := mr.RegisterMethod(api.RPCCreateRun, CreateRunHandler{}, api.CreateRunParams{}, api.CreateRunsResult{}); err != nil {
+		log.Fatal(err)
+	}
+
 	return mr
 }

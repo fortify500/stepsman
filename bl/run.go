@@ -19,13 +19,15 @@ package bl
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
+	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 )
 
-func ListRuns(query *dao.ListQuery) ([]*dao.RunRecord, *dao.RangeResult, error) {
+func ListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
-		return dao.RemoteListRuns(query)
+		return client.RemoteListRuns(query)
 	} else {
 		return dao.ListRuns(query)
 	}
@@ -33,7 +35,7 @@ func ListRuns(query *dao.ListQuery) ([]*dao.RunRecord, *dao.RangeResult, error) 
 
 func GetRun(id string) (*dao.RunRecord, error) {
 	if dao.IsRemote {
-		runs, err := dao.RemoteGetRuns(&dao.GetQuery{
+		runs, err := client.RemoteGetRuns(&api.GetQuery{
 			Ids:              []string{id},
 			ReturnAttributes: nil,
 		})
@@ -46,16 +48,16 @@ func GetRun(id string) (*dao.RunRecord, error) {
 	}
 }
 
-func GetRuns(query *dao.GetQuery) ([]*dao.RunRecord, error) {
+func GetRuns(query *api.GetQuery) ([]*dao.RunRecord, error) {
 	if dao.IsRemote {
-		return dao.RemoteGetRuns(query)
+		return client.RemoteGetRuns(query)
 	} else {
 		return dao.GetRunsTx(nil, query)
 	}
 }
 func UpdateRunStatus(runId string, newStatus dao.RunStatusType) error {
 	if dao.IsRemote {
-		return dao.RemoteUpdateRun(&dao.UpdateQuery{
+		return client.RemoteUpdateRun(&api.UpdateQuery{
 			Id: runId,
 			Changes: map[string]interface{}{
 				"status": newStatus.MustTranslateRunStatus(),

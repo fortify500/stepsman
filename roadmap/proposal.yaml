@@ -4,17 +4,18 @@ version: 1
 tags:
   uuid:
     - e09d86c4-b907-4674-af4f-8aceeb2b7ef1
-# validations are tested before and after each step calls do. before any other event (like on-done).
-validation:
-  - if: >
-      time.now_ns()-(24*60*1000000000)>run["created_at"]
-    then:
-      # will save to the label that activated it.
-      set:
-        - key: result
-          value: '{"status":"failed"}'
-      set-run-status: done
 steps:
+  - name: "expiration" # you can setup a scheduler to call this step after a timeout.
+    description: expire the workflow
+    label: expiration
+    on:
+      pre-done:
+        rules:
+          - then:
+              set:
+                - key: result
+                  value: '{"status":"failed"}'
+              set-run-status: done
   - name: Starting
     description: >
       Execute: echo "hello world" > stepsman_hello.world

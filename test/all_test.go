@@ -19,6 +19,9 @@ package test
 import (
 	"errors"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
+	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/cmd"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/fortify500/stepsman/serve"
@@ -110,6 +113,7 @@ func TestRemotePostgreSQL(t *testing.T) {
 	}{
 		{"postgresql", "serve -V %s"},
 	}
+BreakOut:
 	for _, tc := range testCases {
 		command := fmt.Sprintf(tc.command, tc.databaseVendor)
 		cmd.ResetCommandParameters()
@@ -124,16 +128,101 @@ func TestRemotePostgreSQL(t *testing.T) {
 			wg.Done()
 		}()
 		time.Sleep(time.Duration(2) * time.Second)
-		dao.Parameters.DatabaseSSLMode = false
-		dao.Parameters.DatabasePort = 3333
-		dao.InitClient()
+		client.InitClient(false, "localhost", 3333)
+		createdRunId := ""
+		{
+			fileName := "examples/basic.yaml"
+			var template bl.Template
+			yamlDocument, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
+				break BreakOut
+			}
+			err = template.LoadFromBytes(true, yamlDocument)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
+				break BreakOut
+			}
+			{
+				breakOut := false
+				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
+					createdRunId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
+						Key:      "",
+						Template: template,
+					})
+					if err != nil {
+						t.Error(err)
+						breakOut = true
+					}
+				})
+				if breakOut {
+					break BreakOut
+				}
+			}
+		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListRuns"), func(t *testing.T) {
-			_, _, err := dao.RemoteListRuns(&dao.ListQuery{})
+			runs, _, err := client.RemoteListRuns(&api.ListQuery{
+				Filters: []api.Expression{{
+					AttributeName: "id",
+					Operator:      "=",
+					Value:         createdRunId,
+				}},
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			if len(runs) != 1 {
+				t.Error(fmt.Errorf("only one run should be returned, got: %d", len(runs)))
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
+			err := client.RemoteUpdateRun(&api.UpdateQuery{
+				Id:      createdRunId,
+				Changes: map[string]interface{}{"status": dao.RunDone.MustTranslateRunStatus()},
+			})
 			if err != nil {
 				t.Error(err)
 			}
 		})
-
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
+			runs, err := client.RemoteGetRuns(&api.GetQuery{
+				Ids:              []string{createdRunId},
+				ReturnAttributes: []string{"id", "status"},
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			if len(runs) != 1 {
+				t.Error(fmt.Errorf("only one run should be returned, got: %d", len(runs)))
+			}
+			if runs[0].Status != dao.RunDone {
+				t.Error(fmt.Errorf("status should be done, got: %s", runs[0].Status.MustTranslateRunStatus()))
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun idle"), func(t *testing.T) {
+			err := client.RemoteUpdateRun(&api.UpdateQuery{
+				Id:      createdRunId,
+				Changes: map[string]interface{}{"status": dao.RunIdle.MustTranslateRunStatus()},
+			})
+			if err != nil {
+				t.Error(err)
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
+			runs, err := client.RemoteGetRuns(&api.GetQuery{
+				Ids:              []string{createdRunId},
+				ReturnAttributes: []string{"id", "status"},
+			})
+			if err != nil {
+				t.Error(err)
+			}
+			if len(runs) != 1 {
+				t.Error(fmt.Errorf("only one run should be returned, got: %d", len(runs)))
+			}
+			if runs[0].Status != dao.RunIdle {
+				t.Error(fmt.Errorf("status should be idle, got: %s", runs[0].Status.MustTranslateRunStatus()))
+			}
+		})
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end")

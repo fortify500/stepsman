@@ -14,7 +14,14 @@
  * limitations under the License.
  */
 
-package dao
+package api
+
+const (
+	RPCListRuns  = "listRuns"
+	RPCGetRuns   = "getRuns"
+	RPCUpdateRun = "updateRun"
+	RPCCreateRun = "createRun"
+)
 
 type (
 	RunAPIRecord struct {
@@ -27,29 +34,26 @@ type (
 	}
 )
 
-const (
-	LIST_RUNS  = "listRuns"
-	GET_RUNS   = "getRuns"
-	UPDATE_RUN = "updateRun"
-)
+type RangeResult struct {
+	Range
+	Total int64 `json:"total,omitempty"`
+}
+
+type RangeQuery struct {
+	Range
+	ReturnTotal bool `json:"return-total"`
+}
+
+type Sort struct {
+	Fields []string // ordered left to right
+	Order  string   // Either asc/desc
+}
 
 type Range struct {
 	Start int64
 	End   int64
 }
 
-type RangeResult struct {
-	Range
-	Total int64 `json:"total,omitempty"`
-}
-type RangeQuery struct {
-	Range
-	ReturnTotal bool `json:"return-total"`
-}
-type Sort struct {
-	Fields []string // ordered left to right
-	Order  string   // Either asc/desc
-}
 type Expression struct {
 	AttributeName string `json:"attribute-name"`
 	Operator      string // =,>=,>,<=,<,starts-with,ends-with,contains
@@ -57,33 +61,33 @@ type Expression struct {
 }
 
 type ListQuery struct {
-	Range            RangeQuery
-	Sort             Sort
-	Filters          []Expression
-	ReturnAttributes []string `json:"return-attributes,omitempty"`
+	Range            RangeQuery   `json:"range,omitempty"`
+	Sort             Sort         `json:"sort,omitempty"`
+	Filters          []Expression `json:"filters,omitempty"`
+	ReturnAttributes []string     `json:"return-attributes,omitempty"`
 }
-
 type ListParams ListQuery
-
-type GetQuery struct {
-	Ids              []string `json:"ids,omitempty"`
-	ReturnAttributes []string `json:"return-attributes,omitempty"`
-}
-
-type GetParams GetQuery
-
-type GetRunsResult []RunAPIRecord
-
 type ListRunsResult struct {
 	Range RangeResult    `json:"range,omitempty"`
 	Data  []RunAPIRecord `json:"data,omitempty"`
 }
 
-type UpdateQuery struct {
-	Id      string `json:"id,omitempty"`
-	Changes map[string]interface{}
+type GetQuery struct {
+	Ids              []string `json:"ids,omitempty"`
+	ReturnAttributes []string `json:"return-attributes,omitempty"`
 }
+type GetRunsResult []RunAPIRecord
+type GetParams GetQuery
 
+type UpdateQuery struct {
+	Id      string                 `json:"id,omitempty"`
+	Changes map[string]interface{} `json:"changes,omitempty"`
+}
 type UpdateRunParams UpdateQuery
-
 type UpdateRunsResult struct{}
+
+type CreateRunsResult RunAPIRecord
+type CreateRunParams struct {
+	Key      string      `json:"key,omitempty"`
+	Template interface{} `json:"template,omitempty"`
+}

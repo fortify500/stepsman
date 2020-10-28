@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dao
+package client
 
 import (
 	"bytes"
@@ -70,15 +70,15 @@ func NewMarshaledJSONRPCRequest(id string, method string, params interface{}) ([
 
 var jsonRpcUrl string
 
-func InitClient() {
+func InitClient(ssl bool, host string, port int64) {
 	protocol := "http"
-	if Parameters.DatabaseSSLMode {
+	if ssl {
 		protocol += "s"
 	}
 	jsonRpcUrl = fmt.Sprintf("%s://%s:%d/v0/json-rpc",
 		protocol,
-		Parameters.DatabaseHost,
-		Parameters.DatabasePort)
+		host,
+		port)
 }
 
 //goland:noinspection GoUnhandledErrorResult

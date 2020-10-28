@@ -56,7 +56,7 @@ func do(doType DoType, doI interface{}, prevState *dao.StepState) (*dao.StepStat
 				if do.Options.Timeout > 0 {
 					timeout = time.Duration(do.Options.Timeout) * time.Second
 				}
-				var maxResponseHeaderBytes int64 = 1024 * 1024 * 10
+				var maxResponseHeaderBytes int64 = 256 * 1024
 				if do.Options.MaxResponseHeaderBytes > 0 {
 					maxResponseHeaderBytes = do.Options.MaxResponseHeaderBytes
 				}

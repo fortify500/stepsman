@@ -38,7 +38,7 @@ func (db *Sqlite3SqlxDB) SQL() *sqlx.DB {
 }
 func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE runs (
-                                     id TEXT PRIMARY KEY NOT NULL,
+                                     id varchar(128) PRIMARY KEY NOT NULL,
                                      key TEXT NOT NULL,
 	                                 template_title TEXT,
 	                                 template_version INTEGER NOT NULL,
@@ -54,9 +54,9 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 		return fmt.Errorf("failed to create index idx_runs_status: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE steps (
-                                     run_id TEXT NOT NULL,
+                                     run_id varchar(128) NOT NULL,
                                      "index" INTEGER NOT NULL,
-                                     uuid TEXT NOT NULL,
+                                     uuid varchar(128) NOT NULL,
 	                                 name TEXT,
 	                                 label TEXT NOT NULL,
 	                                 status INTEGER NOT NULL,

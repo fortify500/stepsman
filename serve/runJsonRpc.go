@@ -18,16 +18,23 @@ package serve
 
 import (
 	"context"
+	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
+	"github.com/mitchellh/mapstructure"
 	"github.com/osamingo/jsonrpc"
+	"strings"
 )
 
 type (
-	ListRunsHandler struct{}
+	ListRunsHandler  struct{}
+	GetRunsHandler   struct{}
+	CreateRunHandler struct{}
+	UpdateRunHandler struct{}
 )
 
 func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -39,13 +46,13 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p dao.ListParams
+	var p api.ListParams
 	if params != nil {
 		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 			return nil, errResult
 		}
 	}
-	query := dao.ListQuery(p)
+	query := api.ListQuery(p)
 	runs, runsRange, err := bl.ListRuns(&query)
 	if err != nil {
 		return nil, &jsonrpc.Error{
@@ -70,15 +77,11 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 			Message: err.Error(),
 		}
 	}
-	return dao.ListRunsResult{
+	return api.ListRunsResult{
 		Range: *runsRange,
 		Data:  runRpcRecords,
 	}, nil
 }
-
-type (
-	GetRunsHandler struct{}
-)
 
 func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	err := valve.Lever(c).Open()
@@ -89,7 +92,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p dao.GetParams
+	var p api.GetParams
 	if params != nil {
 		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 			return nil, errResult
@@ -99,7 +102,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 	if vetErr != nil {
 		return nil, vetErr
 	}
-	query := dao.GetQuery(p)
+	query := api.GetQuery(p)
 	runs, err := bl.GetRuns(&query)
 	if err != nil {
 		return nil, &jsonrpc.Error{
@@ -128,8 +131,8 @@ func VetIds(ids []string) *jsonrpc.Error {
 	}
 	return nil
 }
-func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) ([]dao.RunAPIRecord, error) {
-	var runRpcRecords []dao.RunAPIRecord
+func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) ([]api.RunAPIRecord, error) {
+	var runRpcRecords []api.RunAPIRecord
 	for _, runRecord := range runRecords {
 		var status string
 		var err error
@@ -139,7 +142,7 @@ func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) 
 				return nil, err
 			}
 		}
-		runRpcRecords = append(runRpcRecords, dao.RunAPIRecord{
+		runRpcRecords = append(runRpcRecords, api.RunAPIRecord{
 			Id:              runRecord.Id,
 			Key:             runRecord.Key,
 			TemplateVersion: runRecord.TemplateVersion,
@@ -151,10 +154,6 @@ func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) 
 	return runRpcRecords, nil
 }
 
-type (
-	UpdateRunHandler struct{}
-)
-
 func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	err := valve.Lever(c).Open()
 	if err != nil {
@@ -164,7 +163,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p dao.UpdateRunParams
+	var p api.UpdateRunParams
 	if params != nil {
 		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 			return nil, errResult
@@ -202,5 +201,76 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		}
 	}
 
-	return &dao.UpdateRunsResult{}, nil
+	return &api.UpdateRunsResult{}, nil
+}
+
+func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	err := valve.Lever(c).Open()
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	defer valve.Lever(c).Close()
+	var p api.CreateRunParams
+	if params != nil {
+		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+			return nil, errResult
+		}
+	}
+	key := p.Key
+	if p.Key == "" {
+		random, err := uuid.NewRandom()
+		if err != nil {
+			return nil, &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		key = random.String()
+	}
+	var md mapstructure.Metadata
+	var template bl.Template
+	decoder, err := mapstructure.NewDecoder(
+		&mapstructure.DecoderConfig{
+			Metadata: &md,
+			Result:   &template,
+		})
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	err = decoder.Decode(p.Template)
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInvalidParams,
+			Message: err.Error(),
+		}
+	}
+	if len(md.Unused) > 0 {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInvalidParams,
+			Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
+		}
+	}
+	run, err := template.CreateRun(key)
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	if p.Key == "" {
+		key = run.Key
+	} else {
+		key = ""
+	}
+	return &api.CreateRunsResult{
+		Id:     run.Id,
+		Status: run.Status.MustTranslateRunStatus(),
+		Key:    key,
+	}, nil
 }

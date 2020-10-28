@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/csv"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -46,7 +47,7 @@ func listRunsInternal(runId string) {
 	t.SetOutputMirror(os.Stdout)
 	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status"})
 	var runs []*dao.RunRecord
-	var runRange *dao.RangeResult
+	var runRange *api.RangeResult
 	if runId != "" {
 		run, err := getRun(runId)
 		if err != nil {
@@ -55,15 +56,15 @@ func listRunsInternal(runId string) {
 		}
 		runs = append(runs, run)
 	} else {
-		query := dao.ListQuery{
-			Range: dao.RangeQuery{
-				Range: dao.Range{
+		query := api.ListQuery{
+			Range: api.RangeQuery{
+				Range: api.Range{
 					Start: Parameters.RangeStart,
 					End:   Parameters.RangeEnd,
 				},
 				ReturnTotal: Parameters.RangeReturnTotal,
 			},
-			Sort: dao.Sort{
+			Sort: api.Sort{
 				Fields: Parameters.SortFields,
 				Order:  Parameters.SortOrder,
 			},
@@ -109,8 +110,8 @@ func listRunsInternal(runId string) {
 	t.Render()
 }
 
-func parseFilters() ([]dao.Expression, bool) {
-	expressions := make([]dao.Expression, len(Parameters.Filters))
+func parseFilters() ([]api.Expression, bool) {
+	expressions := make([]api.Expression, len(Parameters.Filters))
 	for i, filter := range Parameters.Filters {
 		name := ""
 		value := ""
@@ -175,7 +176,7 @@ func parseFilters() ([]dao.Expression, bool) {
 			}
 			return nil, true
 		}
-		expressions[i] = dao.Expression{
+		expressions[i] = api.Expression{
 			AttributeName: name,
 			Operator:      operator,
 			Value:         value,

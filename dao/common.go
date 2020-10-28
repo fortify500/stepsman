@@ -139,7 +139,6 @@ func InitDAO(daoParameters *ParametersType) error {
 		}
 	case "remote":
 		IsRemote = true
-		InitClient()
 	default:
 		return fmt.Errorf("database vendor: %s is not supported", daoParameters.DatabaseVendor)
 	}

@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
+	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -79,18 +81,6 @@ func (do StepDoREST) Describe() (string, error) {
 	return string(doStr), nil
 }
 
-func (s *Template) LoadFromFile(filename string) error {
-	yamlDocument, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-	err = s.LoadFromBytes(true, yamlDocument)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	var err error
 	if isYaml {
@@ -114,15 +104,32 @@ func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	return nil
 }
 
-func (s *Template) Start(key string, fileName string) (*dao.RunRecord, error) {
-	err := s.LoadFromFile(fileName)
+func (s *Template) Start(key string, fileName string) (string, error) {
+	yamlDocument, err := ioutil.ReadFile(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", fileName, err)
+		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
+	}
+	err = s.LoadFromBytes(true, yamlDocument)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
+	}
+	if dao.IsRemote {
+		runId, _, _, err := client.RemoteCreateRun(&api.CreateRunParams{
+			Key:      key,
+			Template: s,
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to create run remotely for file %s: %w", fileName, err)
+		}
+		return runId, err
+	} else {
+		runRow, err := s.CreateRun(key)
+		if err != nil {
+			return "", err
+		}
+		return runRow.Id, err
 	}
 
-	runRow, err := s.CreateRun(key)
-
-	return runRow, err
 }
 
 func (s *Step) AdjustUnmarshalStep() error {

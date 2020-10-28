@@ -44,7 +44,7 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		runRow, err := t.Start(Parameters.RunKey, Parameters.CreateFileName)
+		runId, err := t.Start(Parameters.RunKey, Parameters.CreateFileName)
 		if err != nil {
 			msg := "failed to create run"
 			Parameters.Err = &Error{
@@ -53,10 +53,10 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		msg := fmt.Sprintf("run created with id: %s", runRow.Id)
+		msg := fmt.Sprintf("run created with id: %s", runId)
 		fmt.Println(msg)
 		log.Info(msg)
-		Parameters.CurrentRunId = runRow.Id
+		Parameters.CurrentRunId = runId
 	},
 }
 

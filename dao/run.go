@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/yaml.v2"
 	"log"
@@ -79,7 +80,7 @@ func (r *RunRecord) PrettyYamlTemplate() (string, error) {
 	}
 	return string(prettyBytes), err
 }
-func ListRuns(query *ListQuery) ([]*RunRecord, *RangeResult, error) {
+func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
 	var err error
@@ -243,8 +244,8 @@ func ListRuns(query *ListQuery) ([]*RunRecord, *RangeResult, error) {
 		result = append(result, &run)
 	}
 	{
-		rangeResult := RangeResult{
-			Range: Range{
+		rangeResult := api.RangeResult{
+			Range: api.Range{
 				Start: 0,
 				End:   -1,
 			},
@@ -282,7 +283,7 @@ func buildReturnAttirbutesStrAndVet(attributes []string) (string, error) {
 	}
 	var sb strings.Builder
 	first := true
-	for str, _ := range set {
+	for str := range set {
 		if !first {
 			sb.WriteString(",")
 		} else {
@@ -302,7 +303,7 @@ func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
 }
 
 func GetRun(id string) (*RunRecord, error) {
-	runs, err := GetRunsTx(nil, &GetQuery{
+	runs, err := GetRunsTx(nil, &api.GetQuery{
 		Ids:              []string{id},
 		ReturnAttributes: nil,
 	})
@@ -313,7 +314,7 @@ func GetRun(id string) (*RunRecord, error) {
 }
 
 func GetRunTx(tx *sqlx.Tx, id string) (*RunRecord, error) {
-	runs, err := GetRunsTx(tx, &GetQuery{
+	runs, err := GetRunsTx(tx, &api.GetQuery{
 		Ids:              []string{id},
 		ReturnAttributes: nil,
 	})
@@ -323,7 +324,7 @@ func GetRunTx(tx *sqlx.Tx, id string) (*RunRecord, error) {
 	return runs[0], nil
 }
 
-func GetRunsTx(tx *sqlx.Tx, getQuery *GetQuery) ([]*RunRecord, error) {
+func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetQuery) ([]*RunRecord, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
 	var err error
