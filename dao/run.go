@@ -73,7 +73,7 @@ func (r *RunRecord) PrettyYamlTemplate() (string, error) {
 	}
 	return string(prettyBytes), err
 }
-func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
+func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
 	var err error
@@ -87,7 +87,7 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 	} else {
 		sqlQuery = "SELECT * FROM runs"
 		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-			attributesStr, err := buildRunsReturnAttirbutesStrAndVet(query.ReturnAttributes)
+			attributesStr, err := buildRunsReturnAttributesStrAndVet(query.ReturnAttributes)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -211,24 +211,16 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 		}
 	}
 	if query != nil && query.Range.ReturnTotal {
-		tx, err := DB.SQL().Beginx()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
-		}
 		err = tx.Get(&count, "select count(*) from ("+sqlNoRange+") C", params...)
 		if err != nil {
-			err = Rollback(tx, err)
 			return nil, nil, fmt.Errorf("failed to query count database run table: %w", err)
 		}
 		rows, err = tx.Queryx(sqlQuery, params...)
 		if err != nil {
-			err = Rollback(tx, err)
 			return nil, nil, fmt.Errorf("failed to query database run table: %w", err)
 		}
-
-		defer tx.Commit()
 	} else {
-		rows, err = DB.SQL().Queryx(sqlQuery, params...)
+		rows, err = tx.Queryx(sqlQuery, params...)
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
@@ -262,7 +254,7 @@ func ListRuns(query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
 	}
 }
 
-func buildRunsReturnAttirbutesStrAndVet(attributes []string) (string, error) {
+func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
 	if attributes == nil || len(attributes) == 0 {
 		return "*", nil
 	}
@@ -301,40 +293,17 @@ func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
 	return err
 }
 
-func GetRun(id string) (*RunRecord, error) {
-	runs, err := GetRunsTx(nil, &api.GetQuery{
-		Ids:              []string{id},
-		ReturnAttributes: nil,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return runs[0], nil
-}
-
-func GetRunTx(tx *sqlx.Tx, id string) (*RunRecord, error) {
-	runs, err := GetRunsTx(tx, &api.GetQuery{
-		Ids:              []string{id},
-		ReturnAttributes: nil,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return runs[0], nil
-}
-
-func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetQuery) ([]*RunRecord, error) {
+func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]*RunRecord, error) {
 	var result []*RunRecord
 	var rows *sqlx.Rows
 	var err error
-	attributesStr, err := buildRunsReturnAttirbutesStrAndVet(getQuery.ReturnAttributes)
+	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
+	if err != nil {
+		return nil, err
+	}
 	query := fmt.Sprintf("SELECT %s FROM runs where id IN %s", attributesStr, "('"+strings.Join(getQuery.Ids, "','")+"')")
 
-	if tx == nil {
-		rows, err = DB.SQL().Queryx(query)
-	} else {
-		rows, err = tx.Queryx(query)
-	}
+	rows, err = tx.Queryx(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
 	}

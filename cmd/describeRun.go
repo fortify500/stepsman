@@ -130,75 +130,79 @@ You can also describe a single step by adding --step <Index>.`,
 			if index > 0 && index != int64(i)+1 {
 				continue
 			}
-			status, err := stepRecord.Status.TranslateStepStatus()
+			t, err := RenderStep(stepRecord, &script)
 			if err != nil {
-				msg := "failed to describe steps"
-				Parameters.Err = &Error{
-					Technical: fmt.Errorf(msg+": %w", err),
-					Friendly:  msg,
-				}
 				return
 			}
-			checked := "[ ]"
-			heartBeat := "N/A"
-			switch stepRecord.Status {
-			case dao.StepDone:
-				checked = "True"
-			}
-			if stepRecord.Status == dao.StepInProgress {
-				heartBeat = fmt.Sprintf("%s", stepRecord.HeartBeat)
-			}
-			step := script.Steps[stepRecord.Index-1]
-			{
-				t := table.NewWriter()
-				//t.SetOutputMirror(os.Stdout)
-				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 120))
-				t.SetStyle(NoBordersStyle)
-				t.AppendRows([]table.Row{
-					//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
-					{"Index:", stepRecord.Index},
-					{"Name:", strings.TrimSpace(text.WrapText(stepRecord.Name, TableWrapLen))},
-					{"Label:", strings.TrimSpace(text.WrapText(stepRecord.Label, TableWrapLen))},
-					{"UUID:", stepRecord.UUID},
-					{"Status:", status},
-					{"Status UUID:", stepRecord.StatusUUID},
-					{"Heartbeat:", heartBeat},
-					{"Done:", checked},
-					{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
-				})
-				if step.Do != nil {
-					do, ok := step.Do.(bl.DO)
-					if ok {
-						describe, err := do.Describe()
-						if err != nil {
-							msg := "failed to describe step"
-							Parameters.Err = &Error{
-								Technical: fmt.Errorf(msg+": %w", err),
-								Friendly:  msg,
-							}
-							return
-						}
-						t.AppendRow(table.Row{"Do:", strings.TrimSpace(text.WrapText(describe, 120))})
-					}
-				}
-
-				yamlState, err := stepRecord.PrettyJSONState()
-				if err != nil {
-					msg := "failed to describe steps"
-					Parameters.Err = &Error{
-						Technical: fmt.Errorf(msg+": %w", err),
-						Friendly:  msg,
-					}
-					return
-				}
-				t.AppendRow(table.Row{"State:", strings.TrimSpace(text.WrapText(yamlState, 120))})
-				t.AppendRow(table.Row{"", ""})
-				mainT.AppendRow(table.Row{t.Render()})
-			}
+			mainT.AppendRow(table.Row{t.Render()})
 		}
 
 		mainT.Render()
 	},
+}
+
+func RenderStep(stepRecord *dao.StepRecord, script *bl.Template) (table.Writer, error) {
+	status, err := stepRecord.Status.TranslateStepStatus()
+	if err != nil {
+		msg := "failed to describe steps"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
+		return nil, err
+	}
+	checked := "[ ]"
+	heartBeat := "N/A"
+	switch stepRecord.Status {
+	case dao.StepDone:
+		checked = "True"
+	}
+	if stepRecord.Status == dao.StepInProgress {
+		heartBeat = fmt.Sprintf("%s", stepRecord.HeartBeat)
+	}
+	step := script.Steps[stepRecord.Index-1]
+	t := table.NewWriter()
+	t.SetStyle(NoBordersStyle)
+	t.AppendRows([]table.Row{
+		//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
+		{"Index:", stepRecord.Index},
+		{"Name:", strings.TrimSpace(text.WrapText(stepRecord.Name, TableWrapLen))},
+		{"Label:", strings.TrimSpace(text.WrapText(stepRecord.Label, TableWrapLen))},
+		{"UUID:", stepRecord.UUID},
+		{"Status:", status},
+		{"Status UUID:", stepRecord.StatusUUID},
+		{"Heartbeat:", heartBeat},
+		{"Done:", checked},
+		{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
+	})
+	if step.Do != nil {
+		do, ok := step.Do.(bl.DO)
+		if ok {
+			describe, err := do.Describe()
+			if err != nil {
+				msg := "failed to describe step"
+				Parameters.Err = &Error{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
+				return nil, err
+			}
+			t.AppendRow(table.Row{"Do:", strings.TrimSpace(text.WrapText(describe, 120))})
+		}
+	}
+
+	yamlState, err := stepRecord.PrettyJSONState()
+	if err != nil {
+		msg := "failed to describe steps"
+		Parameters.Err = &Error{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
+		return nil, err
+	}
+	t.AppendRow(table.Row{"State:", strings.TrimSpace(text.WrapText(yamlState, 120))})
+	t.AppendRow(table.Row{"", ""})
+	return t, nil
 }
 
 func init() {

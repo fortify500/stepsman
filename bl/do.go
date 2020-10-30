@@ -32,7 +32,7 @@ import (
 )
 
 //var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
-const DEFAULT_DO_REST_TIMEOUT = 60
+const DefaultDoRestTimeout = 60
 
 type StepStateRest struct {
 	Body        interface{} `json:"body,omitempty" mapstructure:"body" yaml:"body,omitempty"`
@@ -52,7 +52,7 @@ func do(doType DoType, doI interface{}, prevState *dao.StepState) (*dao.StepStat
 			do := doI.(StepDoREST)
 			var response *http.Response
 			{
-				var timeout = DEFAULT_DO_REST_TIMEOUT * time.Second
+				var timeout = DefaultDoRestTimeout * time.Second
 				if do.Options.Timeout > 0 {
 					timeout = time.Duration(do.Options.Timeout) * time.Second
 				}

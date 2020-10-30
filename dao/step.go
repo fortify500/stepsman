@@ -108,28 +108,20 @@ func (s *StepRecord) UpdateHeartBeat(uuid string) error {
 	return nil
 }
 
-func GetStep(runId string, index int64) (*StepRecord, error) {
-	return GetStepTx(nil, runId, index)
-}
-func GetStepByUUID(uuid4 string) (*StepRecord, error) {
-	return GetStepByUUIDTx(nil, uuid4)
-}
-func GetStepByUUIDTx(tx *sqlx.Tx, uuid4 string) (*StepRecord, error) {
-	var result *StepRecord
-
-	const query = "SELECT *,CURRENT_TIMESTAMP as now FROM steps where uuid=$1"
+func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]*StepRecord, error) {
+	var result []*StepRecord
 	var rows *sqlx.Rows
 	var err error
-	if tx == nil {
-		rows, err = DB.SQL().Queryx(query, uuid4)
-	} else {
-		rows, err = tx.Queryx(query, uuid4)
+	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
+	if err != nil {
+		return nil, err
 	}
+	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM steps where uuid IN %s", attributesStr, "('"+strings.Join(getQuery.UUIDs, "','")+"')")
 
+	rows, err = tx.Queryx(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database steps table - get: %w", err)
 	}
-
 	defer rows.Close()
 	for rows.Next() {
 		var step StepRecord
@@ -137,14 +129,9 @@ func GetStepByUUIDTx(tx *sqlx.Tx, uuid4 string) (*StepRecord, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse database steps row - get: %w", err)
 		}
-		err = adjustStepNow(step)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row: %w", err)
-		}
-		result = &step
-		break
+		result = append(result, &step)
 	}
-	if result == nil {
+	if result == nil || len(result) != len(getQuery.UUIDs) {
 		return nil, ErrRecordNotFound
 	}
 	return result, nil
@@ -156,12 +143,7 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*StepRecord, error) {
 	const query = "SELECT *,CURRENT_TIMESTAMP as now FROM steps where run_id=$1 and \"index\"=$2"
 	var rows *sqlx.Rows
 	var err error
-	if tx == nil {
-		rows, err = DB.SQL().Queryx(query, runId, index)
-	} else {
-		rows, err = tx.Queryx(query, runId, index)
-	}
-
+	rows, err = tx.Queryx(query, runId, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database steps table - get: %w", err)
 	}
@@ -186,24 +168,7 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*StepRecord, error) {
 	return result, nil
 }
 
-func ListSteps(query *api.ListQuery) ([]*StepRecord, *api.RangeResult, error) {
-	tx, err := DB.SQL().Beginx()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-	stepRecords, rangeResult, err := ListStepsTx(tx, query)
-	if err != nil {
-		err = Rollback(tx, err)
-		return nil, nil, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
-	}
-	return stepRecords, rangeResult, nil
-}
-
-func buildStepsReturnAttirbutesStrAndVet(attributes []string) (string, error) {
+func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 	if attributes == nil || len(attributes) == 0 {
 		return "*", nil
 	}
@@ -251,7 +216,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeRe
 	params := make([]interface{}, 0)
 	sqlQuery = "SELECT *,CURRENT_TIMESTAMP as now FROM steps"
 	if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-		attributesStr, err := buildStepsReturnAttirbutesStrAndVet(query.ReturnAttributes)
+		attributesStr, err := buildStepsReturnAttributesStrAndVet(query.ReturnAttributes)
 		if err != nil {
 			return nil, nil, err
 		}

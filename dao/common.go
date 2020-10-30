@@ -128,9 +128,9 @@ var Parameters ParametersType
 func InitDAO(daoParameters *ParametersType) error {
 	switch strings.TrimSpace(daoParameters.DatabaseVendor) {
 	case "postgresql":
-		sslmode := "disable"
+		sslMode := "disable"
 		if daoParameters.DatabaseSSLMode {
-			sslmode = "enable"
+			sslMode = "enable"
 		}
 
 		var connectionString string
@@ -145,7 +145,7 @@ func InitDAO(daoParameters *ParametersType) error {
 			daoParameters.DatabaseUserName,
 			daoParameters.DatabasePassword,
 			daoParameters.DatabaseName,
-			sslmode,
+			sslMode,
 			daoParameters.DatabaseSchema)
 		fallthrough
 	case "sqlite":

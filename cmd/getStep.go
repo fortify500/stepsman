@@ -13,59 +13,61 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package cmd
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
+	"os"
 )
 
-var updateRunCmd = &cobra.Command{
-	Use:   "run",
+var getStepCmd = &cobra.Command{
+	Use:   "step",
 	Args:  cobra.ExactArgs(1),
-	Short: "A brief description of your command",
-	Long: `Changes the status of a run.
-Use run <run id>.`,
+	Short: "step summary.",
+	Long:  `Get step summary.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		Parameters.CurrentCommand = CommandUpdateRun
-		runId, err := parseRunId(args[0])
+		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		status, err := dao.TranslateToRunStatus(Parameters.Status)
+		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+			UUIDs: []string{stepUUID},
+		})
+		if len(stepRecords) != 1 {
+			msg := fmt.Sprintf("failed to locate step uuid [%s]", stepUUID)
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
+		}
+		run, err := getRun(stepRecords[0].RunId)
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		run, err := getRun(runId)
+		script := bl.Template{}
+		err = script.LoadFromBytes(false, []byte(run.Template))
 		if err != nil {
-			Parameters.Err = err
-			return
-		}
-		err = bl.UpdateRunStatus(runId, status)
-		if err != nil {
-			msg := "failed to update run status"
+			msg := "failed to load template while getting a step"
 			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
 			return
 		}
-		Parameters.CurrentRunId = run.Id
+		t, err := RenderStep(stepRecords[0], &script)
+		if err != nil {
+			return
+		}
+		t.SetOutputMirror(os.Stdout)
+		t.Render()
 	},
 }
 
 func init() {
-	updateCmd.AddCommand(updateRunCmd)
-	initFlags := func() error {
-		updateRunCmd.ResetFlags()
-		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s, %s", dao.StepIdle.MustTranslateStepStatus(), dao.StepInProgress.MustTranslateStepStatus(), dao.StepFailed.MustTranslateStepStatus(), dao.StepDone.MustTranslateStepStatus()))
-		err := updateRunCmd.MarkFlagRequired("status")
-		return err
-	}
-	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
+	getCmd.AddCommand(getStepCmd)
 }

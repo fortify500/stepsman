@@ -23,6 +23,7 @@ const (
 	RPCCreateRun = "createRun"
 
 	RPCListSteps = "listSteps"
+	RPCGetSteps  = "getSteps"
 )
 
 type (
@@ -87,12 +88,12 @@ type ListRunsResult struct {
 	Data  []RunAPIRecord `json:"data,omitempty"`
 }
 
-type GetQuery struct {
+type GetRunsQuery struct {
 	Ids              []string `json:"ids,omitempty"`
 	ReturnAttributes []string `json:"return-attributes,omitempty"`
 }
 type GetRunsResult []RunAPIRecord
-type GetParams GetQuery
+type GetRunsParams GetRunsQuery
 
 type UpdateQuery struct {
 	Id      string                 `json:"id,omitempty"`
@@ -111,3 +112,10 @@ type ListStepsResult struct {
 	Range RangeResult     `json:"range,omitempty"`
 	Data  []StepAPIRecord `json:"data,omitempty"`
 }
+
+type GetStepsQuery struct {
+	UUIDs            []string `json:"uuids,omitempty"`
+	ReturnAttributes []string `json:"return-attributes,omitempty"`
+}
+type GetStepsResult []StepAPIRecord
+type GetStepsParams GetStepsQuery

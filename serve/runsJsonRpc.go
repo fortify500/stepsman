@@ -92,7 +92,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p api.GetParams
+	var p api.GetRunsParams
 	if params != nil {
 		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 			return nil, errResult
@@ -102,7 +102,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 	if vetErr != nil {
 		return nil, vetErr
 	}
-	query := api.GetQuery(p)
+	query := api.GetRunsQuery(p)
 	runs, err := bl.GetRuns(&query)
 	if err != nil {
 		return nil, &jsonrpc.Error{

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
@@ -36,11 +37,17 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		stepRecord, err := dao.GetStepByUUID(stepUUID)
-		if err != nil {
-			Parameters.Err = err
-			return
+		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+			UUIDs: []string{stepUUID},
+		})
+		if len(stepRecords) != 1 {
+			msg := fmt.Sprintf("failed to locate step uuid [%s]", stepUUID)
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 		}
+		stepRecord := stepRecords[0]
 		run, err := getRun(stepRecord.RunId)
 		if err != nil {
 			Parameters.Err = err

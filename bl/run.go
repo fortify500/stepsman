@@ -23,19 +23,37 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 func ListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
 		return client.RemoteListRuns(query)
 	} else {
-		return dao.ListRuns(query)
+		return listSteps(query)
 	}
+}
+
+func listSteps(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, error) {
+	tx, err := dao.DB.SQL().Beginx()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start a database transaction: %w", err)
+	}
+	runRecords, rangeResult, err := dao.ListRunsTx(tx, query)
+	if err != nil {
+		err = dao.Rollback(tx, err)
+		return nil, nil, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
+	}
+	return runRecords, rangeResult, nil
 }
 
 func GetRun(id string) (*dao.RunRecord, error) {
 	if dao.IsRemote {
-		runs, err := client.RemoteGetRuns(&api.GetQuery{
+		runs, err := client.RemoteGetRuns(&api.GetRunsQuery{
 			Ids:              []string{id},
 			ReturnAttributes: nil,
 		})
@@ -44,16 +62,33 @@ func GetRun(id string) (*dao.RunRecord, error) {
 		}
 		return runs[0], nil
 	} else {
-		return dao.GetRun(id)
+		return getRunById(id)
 	}
 }
 
-func GetRuns(query *api.GetQuery) ([]*dao.RunRecord, error) {
+func GetRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
 	if dao.IsRemote {
 		return client.RemoteGetRuns(query)
 	} else {
-		return dao.GetRunsTx(nil, query)
+		return getRuns(query)
 	}
+}
+
+func getRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
+	tx, err := dao.DB.SQL().Beginx()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
+	}
+	runRecords, err := dao.GetRunsTx(tx, query)
+	if err != nil {
+		err = dao.Rollback(tx, err)
+		return nil, fmt.Errorf("failed to get runs: %w", err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
+	}
+	return runRecords, nil
 }
 func UpdateRunStatus(runId string, newStatus dao.RunStatusType) error {
 	if dao.IsRemote {
@@ -69,7 +104,11 @@ func UpdateRunStatus(runId string, newStatus dao.RunStatusType) error {
 }
 func UpdateRunStatusLocal(runId string, newStatus dao.RunStatusType) error {
 	tx, err := dao.DB.SQL().Beginx()
-	runRecord, err := dao.GetRunTx(tx, runId)
+	if err != nil {
+		return fmt.Errorf("failed to start a database transaction: %w", err)
+	}
+
+	runRecord, err := GetRunByIdTx(tx, runId)
 	if err != nil {
 		err = dao.Rollback(tx, err)
 		return fmt.Errorf("failed to update database run status: %w", err)
@@ -161,4 +200,36 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
 	}
 	return &runRecord, nil
+}
+
+func getRunById(id string) (*dao.RunRecord, error) {
+	tx, err := dao.DB.SQL().Beginx()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
+	}
+
+	runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
+		Ids:              []string{id},
+		ReturnAttributes: nil,
+	})
+	if err != nil {
+		err = dao.Rollback(tx, err)
+		return nil, fmt.Errorf("failed to get run: %w", err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
+	}
+	return runs[0], nil
+}
+
+func GetRunByIdTx(tx *sqlx.Tx, id string) (*dao.RunRecord, error) {
+	runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
+		Ids:              []string{id},
+		ReturnAttributes: nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return runs[0], nil
 }

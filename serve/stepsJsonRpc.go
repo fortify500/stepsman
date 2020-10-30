@@ -102,3 +102,44 @@ func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		Data:  runRpcRecords,
 	}, nil
 }
+
+type (
+	GetStepsHandler struct{}
+)
+
+func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	err := valve.Lever(c).Open()
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	defer valve.Lever(c).Close()
+	var p api.GetStepsParams
+	if params != nil {
+		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+			return nil, errResult
+		}
+	}
+	vetErr := VetIds(p.UUIDs)
+	if vetErr != nil {
+		return nil, vetErr
+	}
+	query := api.GetStepsQuery(p)
+	steps, err := bl.GetSteps(&query)
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	stepRpcRecords, err := StepRecordToStepRPCRecord(steps, true)
+	if err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	return stepRpcRecords, nil
+}

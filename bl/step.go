@@ -30,11 +30,18 @@ import (
 
 const DefaultHeartBeatInterval = 10 * time.Second
 
+func GetSteps(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
+	if dao.IsRemote {
+		return client.RemoteGetSteps(query)
+	} else {
+		return getStepsByQuery(query)
+	}
+}
 func ListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
 		return client.RemoteListSteps(query)
 	}
-	return dao.ListSteps(query)
+	return listStepsByQuery(query)
 }
 
 func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, newState *dao.StepState, doFinish bool) (*dao.StepRecord, error) {
@@ -83,7 +90,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus da
 
 	if newStatus != dao.StepIdle {
 		var run *dao.RunRecord
-		run, err = dao.GetRunTx(tx, runId)
+		run, err = GetRunByIdTx(tx, runId)
 		if err != nil {
 			err = dao.Rollback(tx, err)
 			return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
@@ -169,4 +176,38 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 	}
 	stepRecord, err = s.UpdateStateAndStatus(stepRecord, newStepStatus, newState, true)
 	return err
+}
+
+func getStepsByQuery(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
+	tx, err := dao.DB.SQL().Beginx()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
+	}
+	stepRecords, err := dao.GetStepsTx(tx, query)
+	if err != nil {
+		err = dao.Rollback(tx, err)
+		return nil, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit get steps transaction: %w", err)
+	}
+	return stepRecords, nil
+}
+
+func listStepsByQuery(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
+	tx, err := dao.DB.SQL().Beginx()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start a database transaction: %w", err)
+	}
+	stepRecords, rangeResult, err := dao.ListStepsTx(tx, query)
+	if err != nil {
+		err = dao.Rollback(tx, err)
+		return nil, nil, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
+	}
+	return stepRecords, rangeResult, nil
 }

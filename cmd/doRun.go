@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
@@ -37,7 +38,7 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		index, err := parseIndex(Parameters.Step)
+		_, err = parseIndex(Parameters.Step)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -57,11 +58,40 @@ Use run <run id>.`,
 			}
 			return
 		}
-		stepRecord, err := dao.GetStep(args[0], index)
+		expressions := []api.Expression{{
+			AttributeName: dao.RunId,
+			Operator:      "=",
+			Value:         args[0],
+		}, {
+			AttributeName: dao.Index,
+			Operator:      "=",
+			Value:         Parameters.Step,
+		}}
+		stepRecords, _, err := bl.ListSteps(&api.ListQuery{
+			Sort: api.Sort{
+				Fields: []string{dao.Index},
+				Order:  "asc",
+			},
+			Filters:          expressions,
+			ReturnAttributes: nil,
+		})
 		if err != nil {
-			Parameters.Err = err
+			msg := "failed to perform do run"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
 			return
 		}
+		if len(stepRecords) != 1 {
+			msg := "failed to perform do run"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg + ": list steps query should have returned only 1 step record"),
+				Friendly:  msg,
+			}
+			return
+		}
+		stepRecord := stepRecords[0]
 		template := bl.Template{}
 		err = template.LoadFromBytes(false, []byte(run.Template))
 		if err != nil {
