@@ -35,20 +35,17 @@ func ListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, error) 
 }
 
 func listSteps(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, error) {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-	runRecords, rangeResult, err := dao.ListRunsTx(tx, query)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, nil, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
-	}
-	return runRecords, rangeResult, nil
+	var runRecords []*dao.RunRecord
+	var rangeResult *api.RangeResult
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+		var err error
+		runRecords, rangeResult, err = dao.ListRunsTx(tx, query)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return runRecords, rangeResult, tErr
 }
 
 func GetRun(id string) (*dao.RunRecord, error) {
@@ -75,20 +72,16 @@ func GetRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
 }
 
 func getRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-	runRecords, err := dao.GetRunsTx(tx, query)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to get runs: %w", err)
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
-	}
-	return runRecords, nil
+	var runRecords []*dao.RunRecord
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+		var err error
+		runRecords, err = dao.GetRunsTx(tx, query)
+		if err != nil {
+			return fmt.Errorf("failed to get runs: %w", err)
+		}
+		return nil
+	})
+	return runRecords, tErr
 }
 func UpdateRunStatus(runId string, newStatus dao.RunStatusType) error {
 	if dao.IsRemote {
@@ -103,108 +96,83 @@ func UpdateRunStatus(runId string, newStatus dao.RunStatusType) error {
 	}
 }
 func UpdateRunStatusLocal(runId string, newStatus dao.RunStatusType) error {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-
-	runRecord, err := GetRunByIdTx(tx, runId)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return fmt.Errorf("failed to update database run status: %w", err)
-	}
-	if newStatus == runRecord.Status {
-		return dao.Rollback(tx, err)
-	}
-	_, err = dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return fmt.Errorf("failed to update database run status: %w", err)
-	}
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit database transaction: %w", err)
-	}
-	return err
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+		var err error
+		runRecord, err := GetRunByIdTx(tx, runId)
+		if err != nil {
+			return fmt.Errorf("failed to update database run status: %w", err)
+		}
+		if newStatus == runRecord.Status {
+			return ErrStatusNotChanged
+		}
+		_, err = dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
+		if err != nil {
+			return fmt.Errorf("failed to update database run status: %w", err)
+		}
+		return nil
+	})
+	return tErr
 }
 
 func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 	title := s.Title
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create database transaction: %w", err)
-	}
-
-	uuid4, err := uuid.NewRandom()
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to generate uuid: %w", err)
-	}
-	jsonBytes, err := json.Marshal(s)
-	if err != nil {
-		return nil, err
-	}
-	runRecord := dao.RunRecord{
-		Id:              uuid4.String(),
-		Key:             key,
-		TemplateVersion: s.Version,
-		TemplateTitle:   title,
-		Status:          dao.RunIdle,
-		Template:        string(jsonBytes),
-	}
-
-	err = dao.CreateRunTx(tx, &runRecord)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to create runs row: %w", err)
-	}
-
-	for i, step := range s.Steps {
+	var runRecord *dao.RunRecord
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		uuid4, err := uuid.NewRandom()
 		if err != nil {
-			err = dao.Rollback(tx, err)
-			return nil, fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
+			return fmt.Errorf("failed to generate uuid: %w", err)
 		}
-		statusUuid4, err := uuid.NewRandom()
+		jsonBytes, err := json.Marshal(s)
 		if err != nil {
-			err = dao.Rollback(tx, err)
-			return nil, fmt.Errorf("failed to create runs row and generate status uuid4: %w", err)
+			return err
 		}
-		//	"run_id" UUid NOT NULL,
-		//	"index" Bigint NOT NULL,
-		//	"uuid" UUid NOT NULL,
-		//	"status" Bigint NOT NULL,
-		//	"heartbeat" TIMESTAMP NOT NULL,
-		//	"label" Text NOT NULL,
-		//	"name" Text,
-		//	"state" jsonb,
-		stepRecord := &dao.StepRecord{
-			RunId:      runRecord.Id,
-			Index:      int64(i) + 1,
-			UUID:       uuid4.String(),
-			Status:     dao.StepIdle,
-			StatusUUID: statusUuid4.String(),
-			Label:      step.Label,
-			Name:       step.Name,
-			State:      "{}",
+		runRecord = &dao.RunRecord{
+			Id:              uuid4.String(),
+			Key:             key,
+			TemplateVersion: s.Version,
+			TemplateTitle:   title,
+			Status:          dao.RunIdle,
+			Template:        string(jsonBytes),
 		}
-		_, err = dao.DB.CreateStepTx(tx, stepRecord)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return nil, fmt.Errorf("failed to insert database steps row: %w", err)
-		}
-	}
 
-	err = tx.Commit()
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
-	}
-	return &runRecord, nil
+		err = dao.CreateRunTx(tx, runRecord)
+		if err != nil {
+			return fmt.Errorf("failed to create runs row: %w", err)
+		}
+
+		for i, step := range s.Steps {
+			uuid4, err := uuid.NewRandom()
+			if err != nil {
+				return fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
+			}
+			statusUuid4, err := uuid.NewRandom()
+			if err != nil {
+				return fmt.Errorf("failed to create runs row and generate status uuid4: %w", err)
+			}
+
+			stepRecord := &dao.StepRecord{
+				RunId:      runRecord.Id,
+				Index:      int64(i) + 1,
+				UUID:       uuid4.String(),
+				Status:     dao.StepIdle,
+				StatusUUID: statusUuid4.String(),
+				Label:      step.Label,
+				Name:       step.Name,
+				State:      "{}",
+			}
+			_, err = dao.DB.CreateStepTx(tx, stepRecord)
+			if err != nil {
+				return fmt.Errorf("failed to insert database steps row: %w", err)
+			}
+		}
+		return nil
+	})
+	return runRecord, tErr
 }
 
 func getRunById(id string) (*dao.RunRecord, error) {
 	var result *dao.RunRecord
-	err := dao.Transactional(func(tx *sqlx.Tx) error {
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
 			Ids:              []string{id},
 			ReturnAttributes: nil,
@@ -215,26 +183,7 @@ func getRunById(id string) (*dao.RunRecord, error) {
 		result = runs[0]
 		return nil
 	})
-	return result, err
-
-	//tx, err := dao.DB.SQL().Beginx()
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	//}
-	//
-	//runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
-	//	Ids:              []string{id},
-	//	ReturnAttributes: nil,
-	//})
-	//if err != nil {
-	//	err = dao.Rollback(tx, err)
-	//	return nil, fmt.Errorf("failed to get run: %w", err)
-	//}
-	//err = tx.Commit()
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to commit database transaction: %w", err)
-	//}
-	//return runs[0], nil
+	return result, tErr
 }
 
 func GetRunByIdTx(tx *sqlx.Tx, id string) (*dao.RunRecord, error) {

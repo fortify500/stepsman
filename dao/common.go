@@ -105,14 +105,6 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 	return err
 }
 
-func Rollback(tx *sqlx.Tx, err error) error {
-	err2 := tx.Rollback()
-	if err2 != nil {
-		err = fmt.Errorf("failed to Rollback transaction: %s after %w", err2.Error(), err)
-	}
-	return err
-}
-
 var IsRemote = false
 
 type ParametersType struct {

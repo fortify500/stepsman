@@ -23,6 +23,7 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -45,78 +46,68 @@ func ListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error
 }
 
 func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, newState *dao.StepState, doFinish bool) (*dao.StepRecord, error) {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-	runId := prevStepRecord.RunId
-	stepRecord, err := dao.GetStepTx(tx, runId, prevStepRecord.Index)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
-	}
-
-	// if we are starting check if the stepRecord is already in-progress.
-	if !doFinish && stepRecord.Status == dao.StepInProgress {
-		delta := stepRecord.Now.(time.Time).Sub(stepRecord.HeartBeat.(time.Time))
-		if delta < 0 {
-			delta = delta * -1
-		}
-		heartBeatInterval := s.GetHeartBeatInterval()
-		if delta <= heartBeatInterval {
-			err = dao.Rollback(tx, fmt.Errorf("stepRecord is already in progress and has a heartbeat with an interval of %d: %w", heartBeatInterval, ErrStepAlreadyInProgress))
-			return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
-		}
-	}
-
-	// don't change done if the status did not change.
-	if newStatus == stepRecord.Status {
-		err = tx.Rollback()
-		return nil, ErrStatusNotChanged
-	}
-	if newState == nil {
-		_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus)
+	var stepRecord *dao.StepRecord
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+		var err error
+		runId := prevStepRecord.RunId
+		stepRecord, err = dao.GetStepTx(tx, runId, prevStepRecord.Index)
 		if err != nil {
-			err = dao.Rollback(tx, err)
-			return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
+			return fmt.Errorf("failed to update database stepRecord row: %w", err)
 		}
-	} else {
-		_, err = stepRecord.UpdateStateAndStatusAndHeartBeatTx(tx, newStatus, newState)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
-		}
-	}
 
-	if newStatus != dao.StepIdle {
-		var run *dao.RunRecord
-		run, err = GetRunByIdTx(tx, runId)
-		if err != nil {
-			err = dao.Rollback(tx, err)
-			return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
-		}
-		if run.Status == dao.RunIdle {
-			_, err = dao.UpdateRunStatusTx(tx, run.Id, dao.RunInProgress)
-			if err != nil {
-				err = dao.Rollback(tx, err)
-				return nil, fmt.Errorf("failed to update database run row: %w", err)
+		// if we are starting check if the stepRecord is already in-progress.
+		if !doFinish && stepRecord.Status == dao.StepInProgress {
+			delta := stepRecord.Now.(time.Time).Sub(stepRecord.HeartBeat.(time.Time))
+			if delta < 0 {
+				delta = delta * -1
 			}
-		} else if run.Status == dao.RunDone {
-			err = dao.Rollback(tx, ErrRunIsAlreadyDone)
-			return nil, fmt.Errorf("failed to update database stepRecord status: %w", err)
+			heartBeatInterval := s.GetHeartBeatInterval()
+			if delta <= heartBeatInterval {
+				err = fmt.Errorf("stepRecord is already in progress and has a heartbeat with an interval of %d: %w", heartBeatInterval, ErrStepAlreadyInProgress)
+				return fmt.Errorf("failed to update database stepRecord row: %w", err)
+			}
 		}
-	}
-	stepRecord, err = dao.GetStepTx(tx, runId, prevStepRecord.Index)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to update database stepRecord row: %w", err)
-	}
 
-	err = tx.Commit()
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
-	}
-	return stepRecord, nil
+		// don't change done if the status did not change.
+		if newStatus == stepRecord.Status {
+			return ErrStatusNotChanged
+		}
+		if newState == nil {
+			_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus)
+			if err != nil {
+				return fmt.Errorf("failed to update database stepRecord row: %w", err)
+			}
+		} else {
+			_, err = stepRecord.UpdateStateAndStatusAndHeartBeatTx(tx, newStatus, newState)
+			if err != nil {
+				return fmt.Errorf("failed to update database stepRecord row: %w", err)
+			}
+		}
+
+		if newStatus != dao.StepIdle {
+			var run *dao.RunRecord
+			run, err = GetRunByIdTx(tx, runId)
+			if err != nil {
+				return fmt.Errorf("failed to update database stepRecord row: %w", err)
+			}
+			if run.Status == dao.RunIdle {
+				_, err = dao.UpdateRunStatusTx(tx, run.Id, dao.RunInProgress)
+				if err != nil {
+					return fmt.Errorf("failed to update database run row: %w", err)
+				}
+			} else if run.Status == dao.RunDone {
+				err = ErrRunIsAlreadyDone
+				return fmt.Errorf("failed to update database stepRecord status: %w", err)
+			}
+		}
+		stepRecord, err = dao.GetStepTx(tx, runId, prevStepRecord.Index)
+		if err != nil {
+			return fmt.Errorf("failed to update database stepRecord row: %w", err)
+		}
+
+		return nil
+	})
+	return stepRecord, tErr
 }
 
 func (s *Step) GetHeartBeatInterval() time.Duration {
@@ -179,35 +170,28 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 }
 
 func getStepsByQuery(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-	stepRecords, err := dao.GetStepsTx(tx, query)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit get steps transaction: %w", err)
-	}
-	return stepRecords, nil
+	var stepRecords []*dao.StepRecord
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+		var err error
+		stepRecords, err = dao.GetStepsTx(tx, query)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return stepRecords, tErr
 }
 
 func listStepsByQuery(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-	stepRecords, rangeResult, err := dao.ListStepsTx(tx, query)
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, nil, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to commit list steps transaction: %w", err)
-	}
-	return stepRecords, rangeResult, nil
+	var stepRecords []*dao.StepRecord
+	var rangeResult *api.RangeResult
+	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+		var err error
+		stepRecords, rangeResult, err = dao.ListStepsTx(tx, query)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return stepRecords, rangeResult, tErr
 }
