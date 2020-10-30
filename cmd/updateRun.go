@@ -31,6 +31,7 @@ var updateRunCmd = &cobra.Command{
 Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandUpdateRun
+		defer recoverAndLog("failed to update run")
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = err

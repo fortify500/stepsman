@@ -66,41 +66,46 @@ func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p api.ListParams
-	if params != nil {
-		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
-			return nil, errResult
-		}
-	}
-	query := api.ListQuery(p)
-	steps, stepsRange, err := bl.ListSteps(&query)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
-		}
-	}
-	translateStatus := false
-	if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-		for _, attribute := range query.ReturnAttributes {
-			if attribute == dao.Status {
-				translateStatus = true
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.ListParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
 			}
 		}
-	} else {
-		translateStatus = true
-	}
-	runRpcRecords, err := StepRecordToStepRPCRecord(steps, translateStatus)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		query := api.ListQuery(p)
+		steps, stepsRange, err := bl.ListSteps(&query)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
 		}
-	}
-	return api.ListStepsResult{
-		Range: *stepsRange,
-		Data:  runRpcRecords,
-	}, nil
+		translateStatus := false
+		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
+			for _, attribute := range query.ReturnAttributes {
+				if attribute == dao.Status {
+					translateStatus = true
+				}
+			}
+		} else {
+			translateStatus = true
+		}
+		runRpcRecords, err := StepRecordToStepRPCRecord(steps, translateStatus)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		result = api.ListStepsResult{
+			Range: *stepsRange,
+			Data:  runRpcRecords,
+		}
+		return nil
+	})
+	return result, jsonRPCErr
 }
 
 type (
@@ -116,30 +121,35 @@ func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p api.GetStepsParams
-	if params != nil {
-		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
-			return nil, errResult
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.GetStepsParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
 		}
-	}
-	vetErr := VetIds(p.UUIDs)
-	if vetErr != nil {
-		return nil, vetErr
-	}
-	query := api.GetStepsQuery(p)
-	steps, err := bl.GetSteps(&query)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		vetErr := VetIds(p.UUIDs)
+		if vetErr != nil {
+			return vetErr
 		}
-	}
-	stepRpcRecords, err := StepRecordToStepRPCRecord(steps, true)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		query := api.GetStepsQuery(p)
+		steps, err := bl.GetSteps(&query)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
 		}
-	}
-	return stepRpcRecords, nil
+		result, err = StepRecordToStepRPCRecord(steps, true)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		return nil
+	})
+
+	return result, jsonRPCErr
 }

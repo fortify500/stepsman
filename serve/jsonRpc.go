@@ -19,10 +19,36 @@ package serve
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
+	"io"
+	"runtime/debug"
 )
+
+func recoverable(recoverableFunction func() *jsonrpc.Error) (err *jsonrpc.Error) {
+	defer func() {
+		if p := recover(); p != nil {
+			var msg string
+			if _, ok := p.(error); ok {
+				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to serve: %w", p))
+				msg = p.(error).Error()
+			} else {
+				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to serve: %v", p))
+				msg = fmt.Sprintf("%v", p)
+			}
+			err = &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: msg,
+			}
+		} else if err != nil {
+			defer log.Debug(fmt.Errorf("failed to serve: %w", err))
+		}
+	}()
+	err = recoverableFunction()
+	return err
+}
 
 func JSONRPCUnmarshal(params []byte, dst interface{}) *jsonrpc.Error {
 	if params == nil {
@@ -63,4 +89,10 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 		log.Fatal(err)
 	}
 	return mr
+}
+
+func InitLogrus(out io.Writer) {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetLevel(log.TraceLevel)
+	log.SetOutput(out)
 }

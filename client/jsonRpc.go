@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net"
@@ -116,4 +117,10 @@ func getJSONRPCError(jsonRpcError *JSONRPCError) error {
 		return fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRpcError.Code, jsonRpcError.Message)
 	}
 	return nil
+}
+
+func InitLogrus(out io.Writer) {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetLevel(log.TraceLevel)
+	log.SetOutput(out)
 }

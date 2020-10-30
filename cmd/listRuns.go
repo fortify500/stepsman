@@ -36,6 +36,7 @@ var listRunsCmd = &cobra.Command{
 	Long:  `A succinct list of runs and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListRuns
+		defer recoverAndLog("failed to list runs")
 		listRunsInternal("")
 	},
 }

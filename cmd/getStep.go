@@ -29,6 +29,7 @@ var getStepCmd = &cobra.Command{
 	Short: "step summary.",
 	Long:  `Get step summary.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		defer recoverAndLog("failed to get step")
 		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = err

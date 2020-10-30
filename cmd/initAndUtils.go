@@ -21,15 +21,19 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/fortify500/stepsman/serve"
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"os"
 	"path"
+	"runtime/debug"
 	"strconv"
 	"strings"
 )
@@ -133,6 +137,25 @@ func Execute() bool {
 	}
 	return false
 }
+func recoverAndLog(msg string) {
+	if p := recover(); p != nil {
+		var err error
+		var ok bool
+		if err, ok = p.(error); ok {
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg+": %w", err),
+				Friendly:  msg,
+			}
+		} else {
+			err = fmt.Errorf(msg+": %+v", p)
+			Parameters.Err = &Error{
+				Technical: err,
+				Friendly:  msg,
+			}
+		}
+		defer log.WithField("stack", string(debug.Stack())).Error(err)
+	}
+}
 
 func InitConfig() {
 	flag.Parse()
@@ -160,19 +183,18 @@ func InitConfig() {
 		MaxAge:     1, // days
 		Compress:   true,
 	}
-	log.SetFormatter(&log.JSONFormatter{})
-	// use this later on
-	log.SetOutput(LumberJack)
+	args := flag.Args()
+	if args != nil && len(args) > 0 && strings.EqualFold("serve", args[0]) {
+		InitLogrusALL(os.Stdout)
+	} else {
+		InitLogrusALL(LumberJack)
+	}
 
-	//mw := io.MultiWriter(os.Stdout, &lumberjack.Logger{
-	//	Filename:   path.Join(StoreDir, "stepsman.log"),
-	//	MaxSize:    10, // megabytes
-	//	MaxBackups: 2,
-	//	MaxAge:     1, // days
-	//	Compress:   true,
-	//})
-	//log.SetOutput(mw)
-	log.SetLevel(log.TraceLevel)
+	log.Info(fmt.Sprintf("stepsman starting [build commit id: %s]", dao.GitCommit))
+	bi, ok := debug.ReadBuildInfo()
+	if ok {
+		log.WithField("build-info", bi).Info()
+	}
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
@@ -307,4 +329,17 @@ var NoBordersStyle = table.Style{
 	HTML:    table.DefaultHTMLOptions,
 	Options: table.OptionsNoBordersAndSeparators,
 	Title:   table.TitleOptionsDefault,
+}
+
+func InitLogrusALL(out io.Writer) {
+	InitLogrus(out)
+	dao.InitLogrus(out)
+	serve.InitLogrus(out)
+	client.InitLogrus(out)
+	bl.InitLogrus(out)
+}
+func InitLogrus(out io.Writer) {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetLevel(log.TraceLevel)
+	log.SetOutput(out)
 }

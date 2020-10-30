@@ -31,6 +31,7 @@ var createRunCmd = &cobra.Command{
 	Short: "Create a run",
 	Long:  `Create a run. You must specify a file.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		defer recoverAndLog("failed to create run")
 		var t bl.Template
 		Parameters.CurrentCommand = CommandCreateRun
 		Parameters.CreateFileName = strings.TrimSpace(Parameters.CreateFileName)

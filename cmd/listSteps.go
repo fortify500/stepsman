@@ -36,6 +36,7 @@ var listStepsCmd = &cobra.Command{
 	Long:  `List the steps of a run and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListSteps
+		defer recoverAndLog("failed to list steps")
 		listStepsInternal()
 	},
 }

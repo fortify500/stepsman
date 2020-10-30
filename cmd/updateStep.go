@@ -32,6 +32,7 @@ var updateStepCmd = &cobra.Command{
 Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandUpdateStep
+		defer recoverAndLog("failed to update step")
 		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = err

@@ -203,24 +203,38 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 }
 
 func getRunById(id string) (*dao.RunRecord, error) {
-	tx, err := dao.DB.SQL().Beginx()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start a database transaction: %w", err)
-	}
-
-	runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
-		Ids:              []string{id},
-		ReturnAttributes: nil,
+	var result *dao.RunRecord
+	err := dao.Transactional(func(tx *sqlx.Tx) error {
+		runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
+			Ids:              []string{id},
+			ReturnAttributes: nil,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get run: %w", err)
+		}
+		result = runs[0]
+		return nil
 	})
-	if err != nil {
-		err = dao.Rollback(tx, err)
-		return nil, fmt.Errorf("failed to get run: %w", err)
-	}
-	err = tx.Commit()
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit database transaction: %w", err)
-	}
-	return runs[0], nil
+	return result, err
+
+	//tx, err := dao.DB.SQL().Beginx()
+	//if err != nil {
+	//	return nil, fmt.Errorf("failed to start a database transaction: %w", err)
+	//}
+	//
+	//runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
+	//	Ids:              []string{id},
+	//	ReturnAttributes: nil,
+	//})
+	//if err != nil {
+	//	err = dao.Rollback(tx, err)
+	//	return nil, fmt.Errorf("failed to get run: %w", err)
+	//}
+	//err = tx.Commit()
+	//if err != nil {
+	//	return nil, fmt.Errorf("failed to commit database transaction: %w", err)
+	//}
+	//return runs[0], nil
 }
 
 func GetRunByIdTx(tx *sqlx.Tx, id string) (*dao.RunRecord, error) {

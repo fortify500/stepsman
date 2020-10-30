@@ -19,8 +19,6 @@ package cmd
 import (
 	serveServe "github.com/fortify500/stepsman/serve"
 	"github.com/spf13/cobra"
-	"io"
-	"os"
 )
 
 var ServeCmd = &cobra.Command{
@@ -28,8 +26,8 @@ var ServeCmd = &cobra.Command{
 	Short: "serve will enter server mode and serve http requests",
 	Long:  `Use serve to remote control stepsman via http. You can query, monitor and do remotely.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		mw := io.MultiWriter(os.Stdout, LumberJack)
-		serveServe.Serve(Parameters.ServerPort, mw)
+		defer recoverAndLog("failed to serve")
+		serveServe.Serve(Parameters.ServerPort)
 	},
 }
 

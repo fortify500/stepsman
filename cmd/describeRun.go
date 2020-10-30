@@ -37,6 +37,7 @@ Use run <run id>.
 You can also describe a single step by adding --step <Index>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandDescribeRun
+		defer recoverAndLog("failed to describe run")
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = err

@@ -21,6 +21,8 @@ import (
 	"github.com/fortify500/stepsman/dao"
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/mattn/go-sqlite3"
+	log "github.com/sirupsen/logrus"
+	"io"
 )
 
 type Error struct {
@@ -66,4 +68,10 @@ func InitBL(daoParameters *dao.ParametersType) error {
 		client.InitClient(dao.Parameters.DatabaseSSLMode, dao.Parameters.DatabaseHost, dao.Parameters.DatabasePort)
 	}
 	return nil
+}
+
+func InitLogrus(out io.Writer) {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetLevel(log.TraceLevel)
+	log.SetOutput(out)
 }

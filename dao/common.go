@@ -20,9 +20,14 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 )
+
+var GitCommit string
 
 const (
 	Id              = "id"
@@ -161,4 +166,35 @@ func InitDAO(daoParameters *ParametersType) error {
 	}
 	Parameters = *daoParameters
 	return nil
+}
+
+func Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err error) {
+	var tx *sqlx.Tx
+	tx, err = DB.SQL().Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			err2 := tx.Rollback()
+			if err2 != nil {
+				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to rollback: %w", err2))
+			}
+			panic(p)
+		} else if err != nil {
+			err2 := tx.Rollback()
+			if err2 != nil {
+				defer log.WithField("stack", string(debug.Stack())).Trace(fmt.Errorf("failed to rollback: %w", err2))
+			}
+		} else {
+			err = tx.Commit()
+		}
+	}()
+	err = transactionalFunction(tx)
+	return err
+}
+func InitLogrus(out io.Writer) {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetLevel(log.TraceLevel)
+	log.SetOutput(out)
 }

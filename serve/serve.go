@@ -25,7 +25,6 @@ import (
 	"github.com/go-chi/valve"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -35,15 +34,13 @@ import (
 
 var InterruptServe chan os.Signal
 
-func Serve(port int64, logWriter io.Writer) {
-
+func Serve(port int64) {
 	shutdownValve := valve.New()
 	baseCtx := shutdownValve.Context()
 	newLog := logrus.New()
 	newLog.SetFormatter(&logrus.JSONFormatter{})
 	newLog.SetLevel(logrus.TraceLevel)
-	newLog.SetOutput(logWriter)
-	logrus.SetOutput(logWriter)
+	newLog.SetOutput(os.Stdout)
 	r := chi.NewRouter()
 	r.Use(middleware.AllowContentType("application/json"))
 	r.Use(middleware.RequestID)

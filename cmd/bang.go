@@ -27,6 +27,7 @@ var bangCmd = &cobra.Command{
 	Short: "! will execute a shell command from the prompt command.",
 	Long:  `! will execute a shell command from the prompt command and will not be logged.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		defer recoverAndLog("failed to execute !")
 		var err error
 		var newArgs []string
 		Parameters.CurrentCommand = CommandBang

@@ -46,41 +46,46 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p api.ListParams
-	if params != nil {
-		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
-			return nil, errResult
-		}
-	}
-	query := api.ListQuery(p)
-	runs, runsRange, err := bl.ListRuns(&query)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
-		}
-	}
-	translateStatus := false
-	if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-		for _, attribute := range query.ReturnAttributes {
-			if attribute == "status" {
-				translateStatus = true
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.ListParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
 			}
 		}
-	} else {
-		translateStatus = true
-	}
-	runRpcRecords, err := RunRecordToRunRPCRecord(runs, translateStatus)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		query := api.ListQuery(p)
+		runs, runsRange, err := bl.ListRuns(&query)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
 		}
-	}
-	return api.ListRunsResult{
-		Range: *runsRange,
-		Data:  runRpcRecords,
-	}, nil
+		translateStatus := false
+		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
+			for _, attribute := range query.ReturnAttributes {
+				if attribute == "status" {
+					translateStatus = true
+				}
+			}
+		} else {
+			translateStatus = true
+		}
+		runRpcRecords, err := RunRecordToRunRPCRecord(runs, translateStatus)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		result = api.ListRunsResult{
+			Range: *runsRange,
+			Data:  runRpcRecords,
+		}
+		return nil
+	})
+	return result, jsonRPCErr
 }
 
 func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -92,32 +97,37 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p api.GetRunsParams
-	if params != nil {
-		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
-			return nil, errResult
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.GetRunsParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
 		}
-	}
-	vetErr := VetIds(p.Ids)
-	if vetErr != nil {
-		return nil, vetErr
-	}
-	query := api.GetRunsQuery(p)
-	runs, err := bl.GetRuns(&query)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		vetErr := VetIds(p.Ids)
+		if vetErr != nil {
+			return vetErr
 		}
-	}
-	runRpcRecords, err := RunRecordToRunRPCRecord(runs, true)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		query := api.GetRunsQuery(p)
+		runs, err := bl.GetRuns(&query)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
 		}
-	}
-	return runRpcRecords, nil
+		runRpcRecords, err := RunRecordToRunRPCRecord(runs, true)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		result = runRpcRecords
+		return nil
+	})
+	return result, jsonRPCErr
 }
 
 func VetIds(ids []string) *jsonrpc.Error {
@@ -163,45 +173,50 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		}
 	}
 	defer valve.Lever(c).Close()
-	var p api.UpdateRunParams
-	if params != nil {
-		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
-			return nil, errResult
-		}
-	}
-	vetErr := VetIds([]string{p.Id})
-	if vetErr != nil {
-		return nil, vetErr
-	}
-	if len(p.Changes) > 0 {
-		if len(p.Changes) != 1 {
-			return nil, jsonrpc.ErrInvalidParams()
-		}
-		val, ok := p.Changes["status"]
-		if !ok {
-			return nil, jsonrpc.ErrInvalidParams()
-		}
-		statusStr, ok := val.(string)
-		if !ok {
-			return nil, jsonrpc.ErrInvalidParams()
-		}
-		newStatus, err := dao.TranslateToRunStatus(statusStr)
-		if err != nil {
-			return nil, &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInvalidParams,
-				Message: err.Error(),
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.UpdateRunParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
 			}
 		}
-		err = bl.UpdateRunStatus(p.Id, newStatus)
-		if err != nil {
-			return nil, &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
+		vetErr := VetIds([]string{p.Id})
+		if vetErr != nil {
+			return vetErr
+		}
+		if len(p.Changes) > 0 {
+			if len(p.Changes) != 1 {
+				return jsonrpc.ErrInvalidParams()
+			}
+			val, ok := p.Changes["status"]
+			if !ok {
+				return jsonrpc.ErrInvalidParams()
+			}
+			statusStr, ok := val.(string)
+			if !ok {
+				return jsonrpc.ErrInvalidParams()
+			}
+			newStatus, err := dao.TranslateToRunStatus(statusStr)
+			if err != nil {
+				return &jsonrpc.Error{
+					Code:    jsonrpc.ErrorCodeInvalidParams,
+					Message: err.Error(),
+				}
+			}
+			err = bl.UpdateRunStatus(p.Id, newStatus)
+			if err != nil {
+				return &jsonrpc.Error{
+					Code:    jsonrpc.ErrorCodeInternal,
+					Message: err.Error(),
+				}
 			}
 		}
-	}
 
-	return &api.UpdateRunsResult{}, nil
+		result = &api.UpdateRunsResult{}
+		return nil
+	})
+	return result, jsonRPCErr
 }
 
 func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -214,63 +229,68 @@ func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 	}
 	defer valve.Lever(c).Close()
 	var p api.CreateRunParams
-	if params != nil {
-		if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
-			return nil, errResult
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
 		}
-	}
-	key := p.Key
-	if p.Key == "" {
-		random, err := uuid.NewRandom()
+		key := p.Key
+		if p.Key == "" {
+			random, err := uuid.NewRandom()
+			if err != nil {
+				return &jsonrpc.Error{
+					Code:    jsonrpc.ErrorCodeInternal,
+					Message: err.Error(),
+				}
+			}
+			key = random.String()
+		}
+		var md mapstructure.Metadata
+		var template bl.Template
+		decoder, err := mapstructure.NewDecoder(
+			&mapstructure.DecoderConfig{
+				Metadata: &md,
+				Result:   &template,
+			})
 		if err != nil {
-			return nil, &jsonrpc.Error{
+			return &jsonrpc.Error{
 				Code:    jsonrpc.ErrorCodeInternal,
 				Message: err.Error(),
 			}
 		}
-		key = random.String()
-	}
-	var md mapstructure.Metadata
-	var template bl.Template
-	decoder, err := mapstructure.NewDecoder(
-		&mapstructure.DecoderConfig{
-			Metadata: &md,
-			Result:   &template,
-		})
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		err = decoder.Decode(p.Template)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInvalidParams,
+				Message: err.Error(),
+			}
 		}
-	}
-	err = decoder.Decode(p.Template)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInvalidParams,
-			Message: err.Error(),
+		if len(md.Unused) > 0 {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInvalidParams,
+				Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
+			}
 		}
-	}
-	if len(md.Unused) > 0 {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInvalidParams,
-			Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
+		run, err := template.CreateRun(key)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
 		}
-	}
-	run, err := template.CreateRun(key)
-	if err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
+		if p.Key == "" {
+			key = run.Key
+		} else {
+			key = ""
 		}
-	}
-	if p.Key == "" {
-		key = run.Key
-	} else {
-		key = ""
-	}
-	return &api.CreateRunsResult{
-		Id:     run.Id,
-		Status: run.Status.MustTranslateRunStatus(),
-		Key:    key,
-	}, nil
+		result = &api.CreateRunsResult{
+			Id:     run.Id,
+			Status: run.Status.MustTranslateRunStatus(),
+			Key:    key,
+		}
+		return nil
+	})
+	return result, jsonRPCErr
 }

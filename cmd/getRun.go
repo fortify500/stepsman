@@ -26,6 +26,7 @@ var getRunCmd = &cobra.Command{
 	Short: "Run summary.",
 	Long:  `Get run summary.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		defer recoverAndLog("failed to get runs")
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = err
