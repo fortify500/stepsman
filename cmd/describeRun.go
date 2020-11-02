@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
+	"time"
 )
 
 var describeRunCmd = &cobra.Command{
@@ -99,16 +100,7 @@ You can also describe a single step by adding --step <Index>.`,
 			mainT.AppendRow(table.Row{"Description"})
 
 			{
-				var runStatus string
-				runStatus, err = run.Status.TranslateRunStatus()
-				if err != nil {
-					msg := "failed to describe steps"
-					Parameters.Err = &Error{
-						Technical: fmt.Errorf(msg+": %w", err),
-						Friendly:  msg,
-					}
-					return
-				}
+				runStatus := run.Status.TranslateRunStatus()
 				t := table.NewWriter()
 				//t.SetOutputMirror(os.Stdout)
 				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 120))
@@ -151,15 +143,7 @@ You can also describe a single step by adding --step <Index>.`,
 }
 
 func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, error) {
-	status, err := stepRecord.Status.TranslateStepStatus()
-	if err != nil {
-		msg := "failed to describe steps"
-		Parameters.Err = &Error{
-			Technical: fmt.Errorf(msg+": %w", err),
-			Friendly:  msg,
-		}
-		return nil, err
-	}
+	status := stepRecord.Status.TranslateStepStatus()
 	checked := "[ ]"
 	heartBeat := "N/A"
 	switch stepRecord.Status {
@@ -167,7 +151,7 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		checked = "True"
 	}
 	if stepRecord.Status == api.StepInProgress {
-		heartBeat = fmt.Sprintf("%s", stepRecord.Heartbeat)
+		heartBeat = fmt.Sprintf("%s", time.Time(stepRecord.Heartbeat).Format(time.RFC3339))
 	}
 	step := script.Steps[stepRecord.Index-1]
 	t := table.NewWriter()
@@ -185,6 +169,7 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
 	})
 	if step.Do != nil {
+		var err error
 		do, ok := step.Do.(bl.DO)
 		if ok {
 			var describe string
@@ -201,15 +186,7 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		}
 	}
 
-	yamlState, err := stepRecord.PrettyJSONState()
-	if err != nil {
-		msg := "failed to describe steps"
-		Parameters.Err = &Error{
-			Technical: fmt.Errorf(msg+": %w", err),
-			Friendly:  msg,
-		}
-		return nil, err
-	}
+	yamlState := stepRecord.PrettyJSONState()
 	t.AppendRow(table.Row{"State:", strings.TrimSpace(text.WrapText(yamlState, 120))})
 	t.AppendRow(table.Row{"", ""})
 	return t, nil

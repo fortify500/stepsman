@@ -88,7 +88,7 @@ func UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
 		return client.RemoteUpdateRun(&api.UpdateQuery{
 			Id: runId,
 			Changes: map[string]interface{}{
-				"status": newStatus.MustTranslateRunStatus(),
+				"status": newStatus.TranslateRunStatus(),
 			},
 		})
 	} else {

@@ -91,17 +91,7 @@ func listRunsInternal(runId string) {
 		return
 	}
 	for _, run := range runs {
-		var status string
-		status, err = run.Status.TranslateRunStatus()
-		if err != nil {
-			msg := "failed to listRuns runs"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
-			return
-		}
-
+		status := run.Status.TranslateRunStatus()
 		t.AppendRows([]table.Row{
 			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 120)), status},
 		})

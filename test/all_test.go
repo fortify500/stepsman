@@ -198,7 +198,7 @@ BreakOut:
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
 			err := client.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
-				Changes: map[string]interface{}{"status": api.RunDone.MustTranslateRunStatus()},
+				Changes: map[string]interface{}{"status": api.RunDone.TranslateRunStatus()},
 			})
 			if err != nil {
 				t.Error(err)
@@ -219,14 +219,14 @@ BreakOut:
 				return
 			}
 			if runs[0].Status != api.RunDone {
-				t.Error(fmt.Errorf("status should be done, got: %s", runs[0].Status.MustTranslateRunStatus()))
+				t.Error(fmt.Errorf("status should be done, got: %s", runs[0].Status.TranslateRunStatus()))
 				return
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun idle"), func(t *testing.T) {
 			err := client.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
-				Changes: map[string]interface{}{"status": api.RunIdle.MustTranslateRunStatus()},
+				Changes: map[string]interface{}{"status": api.RunIdle.TranslateRunStatus()},
 			})
 			if err != nil {
 				t.Error(err)
@@ -247,7 +247,7 @@ BreakOut:
 				return
 			}
 			if runs[0].Status != api.RunIdle {
-				t.Error(fmt.Errorf("status should be idle, got: %s", runs[0].Status.MustTranslateRunStatus()))
+				t.Error(fmt.Errorf("status should be idle, got: %s", runs[0].Status.TranslateRunStatus()))
 				return
 			}
 		})

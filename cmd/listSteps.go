@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
+	"time"
 )
 
 var listStepsCmd = &cobra.Command{
@@ -127,16 +128,7 @@ func listStepsInternal() {
 		return
 	}
 	for _, step := range steps {
-		var status string
-		status, err = step.Status.TranslateStepStatus()
-		if err != nil {
-			msg := "failed to list steps"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
-			return
-		}
+		status := step.Status.TranslateStepStatus()
 		checked := "[ ]"
 		heartBeat := ""
 		switch step.Status {
@@ -144,7 +136,7 @@ func listStepsInternal() {
 			checked = "[V]"
 		}
 		if step.Status == api.StepInProgress {
-			heartBeat = fmt.Sprintf("%s", step.Heartbeat)
+			heartBeat = fmt.Sprintf("%s", time.Time(step.Heartbeat).Format(time.RFC3339))
 		}
 		t.AppendRows([]table.Row{
 			{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusUUID, heartBeat},

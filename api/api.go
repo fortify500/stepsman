@@ -36,30 +36,7 @@ const (
 	RPCGetSteps  = "getSteps"
 )
 
-//
-//type (
-//	RunAPIRecord struct {
-//		Id              string `json:"id,omitempty"`
-//		Key             string `json:"key,omitempty"`
-//		TemplateVersion int64  `json:"template-version,omitempty"`
-//		TemplateTitle   string `json:"template-title,omitempty"`
-//		Status          string `json:"status,omitempty"`
-//		Template        string `json:"template,omitempty"`
-//	}
-//
-//	StepAPIRecord struct {
-//		RunId      string `json:"run-id,omitempty"`
-//		Index      int64  `json:"index,omitempty"`
-//		Label      string
-//		UUID       string
-//		Name       string
-//		Status     string `json:"status,omitempty"`
-//		StatusUUID string `json:"status-uuid,omitempty"`
-//		HeartBeat  string `json:"heartbeat,omitempty"`
-//		Now        string
-//		State      string
-//	}
-//)
+const CurrentTimeStamp = "2006-01-02 15:04:05"
 
 type RangeResult struct {
 	Range
@@ -132,19 +109,19 @@ type GetStepsResult []StepRecord
 type GetStepsParams GetStepsQuery
 
 type RunRecord struct {
-	Id              string
-	Key             string
-	TemplateVersion int64  `db:"template_version" json:"template-version"`
-	TemplateTitle   string `db:"template_title" json:"template-title"`
-	Status          RunStatusType
-	Template        string
+	Id              string        `json:"id,omitempty"`
+	Key             string        `json:"key,omitempty"`
+	TemplateVersion int64         `db:"template_version" json:"template-version,omitempty"`
+	TemplateTitle   string        `db:"template_title" json:"template-title,omitempty"`
+	Status          RunStatusType `json:"status,omitempty"`
+	Template        string        `json:"template,omitempty"`
 }
 
 type RunStatusType int64
 
 func (r RunStatusType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
-	buffer.WriteString(r.MustTranslateRunStatus())
+	buffer.WriteString(r.TranslateRunStatus())
 	buffer.WriteString(`"`)
 	return buffer.Bytes(), nil
 }
@@ -167,52 +144,45 @@ const (
 	RunDone       RunStatusType = 15
 )
 
-func (r *RunRecord) PrettyJSONTemplate() (string, error) {
+func (r *RunRecord) PrettyJSONTemplate() string {
 	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
 	decoder.DisallowUnknownFields()
 	var tmp interface{}
 	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-func (r *RunRecord) PrettyYamlTemplate() (string, error) {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := yaml.Marshal(&tmp)
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-func (r RunStatusType) TranslateRunStatus() (string, error) {
-	switch r {
-	case RunIdle:
-		return "Stopped", nil
-	case RunInProgress:
-		return "In Progress", nil
-	case RunDone:
-		return "Done", nil
-	default:
-		return "", fmt.Errorf("failed to translate run status: %d", r)
-	}
-}
-func (r RunStatusType) MustTranslateRunStatus() string {
-	status, err := r.TranslateRunStatus()
 	if err != nil {
 		panic(err)
 	}
-	return status
+	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return string(prettyBytes)
+}
+func (r *RunRecord) PrettyYamlTemplate() string {
+	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
+	decoder.DisallowUnknownFields()
+	var tmp interface{}
+	err := decoder.Decode(&tmp)
+	if err != nil {
+		panic(err)
+	}
+	prettyBytes, err := yaml.Marshal(&tmp)
+	if err != nil {
+		panic(err)
+	}
+	return string(prettyBytes)
+}
+func (r RunStatusType) TranslateRunStatus() string {
+	switch r {
+	case RunIdle:
+		return "Stopped"
+	case RunInProgress:
+		return "In Progress"
+	case RunDone:
+		return "Done"
+	default:
+		panic(fmt.Errorf("failed to translate run status: %d", r))
+	}
 }
 
 func TranslateToRunStatus(status string) (RunStatusType, error) {
@@ -232,7 +202,7 @@ type StepStatusType int64
 
 func (s StepStatusType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
-	buffer.WriteString(s.MustTranslateStepStatus())
+	buffer.WriteString(s.TranslateStepStatus())
 	buffer.WriteString(`"`)
 	return buffer.Bytes(), nil
 }
@@ -267,9 +237,7 @@ func (a *AnyTime) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-const CurrentTimeStamp = "2006-01-02 15:04:05"
-
-func (e *AnyTime) Scan(src interface{}) error {
+func (a *AnyTime) Scan(src interface{}) error {
 	var err error
 	var result time.Time
 	switch v := src.(type) {
@@ -284,7 +252,7 @@ func (e *AnyTime) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	}
-	*e = AnyTime(result)
+	*a = AnyTime(result)
 	return nil
 }
 
@@ -297,66 +265,59 @@ const (
 
 type AnyTime time.Time
 type StepRecord struct {
-	RunId      string `db:"run_id" json:"run-id"`
-	Index      int64  `db:"index"`
-	Label      string
-	UUID       string
-	Name       string
-	Status     StepStatusType
-	StatusUUID string `db:"status_uuid" json:"status-uuid"`
-	Now        AnyTime
-	Heartbeat  AnyTime `json:"heartbeat"`
-	State      string
+	RunId      string         `db:"run_id" json:"run-id,omitempty"`
+	Index      int64          `db:"index" json:"index,omitempty"`
+	Label      string         `json:"label,omitempty"`
+	UUID       string         `json:"uuid,omitempty"`
+	Name       string         `json:"name,omitempty"`
+	Status     StepStatusType `json:"status,omitempty"`
+	StatusUUID string         `db:"status_uuid" json:"status-uuid,omitempty"`
+	Now        AnyTime        `json:"now,omitempty"`
+	Heartbeat  AnyTime        `json:"heartbeat,omitempty"`
+	State      string         `json:"state,omitempty"`
 }
 
-func (s *StepRecord) PrettyJSONState() (string, error) {
+func (s *StepRecord) PrettyJSONState() string {
 	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
 	decoder.DisallowUnknownFields()
 	var tmp interface{}
 	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-func (s *StepRecord) PrettyYamlState() (string, error) {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := yaml.Marshal(&tmp)
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-
-func (s StepStatusType) MustTranslateStepStatus() string {
-	stepStatus, err := s.TranslateStepStatus()
 	if err != nil {
 		panic(err)
 	}
-	return stepStatus
+	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return string(prettyBytes)
 }
-func (s StepStatusType) TranslateStepStatus() (string, error) {
+func (s *StepRecord) PrettyYamlState() string {
+	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
+	decoder.DisallowUnknownFields()
+	var tmp interface{}
+	err := decoder.Decode(&tmp)
+	if err != nil {
+		panic(err)
+	}
+	prettyBytes, err := yaml.Marshal(&tmp)
+	if err != nil {
+		panic(err)
+	}
+	return string(prettyBytes)
+}
+
+func (s StepStatusType) TranslateStepStatus() string {
 	switch s {
 	case StepIdle:
-		return "Idle", nil
+		return "Idle"
 	case StepInProgress:
-		return "In Progress", nil
+		return "In Progress"
 	case StepFailed:
-		return "Failed", nil
+		return "Failed"
 	case StepDone:
-		return "Done", nil
+		return "Done"
 	default:
-		return "Error", fmt.Errorf("failed to translate step status: %d", s)
+		panic(fmt.Errorf("failed to translate step status: %d", s))
 	}
 }
 func TranslateToStepStatus(status string) (StepStatusType, error) {
