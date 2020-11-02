@@ -49,7 +49,7 @@ const (
 	CommandBang
 	CommandCreateRun
 	CommandDescribeRun
-	CommandDoRun
+	CommandDoStep
 	CommandListSteps
 	CommandListRuns
 	CommandGetRun

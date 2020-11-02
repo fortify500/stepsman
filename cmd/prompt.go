@@ -107,7 +107,7 @@ func Executor(s string, wasEnter bool) {
 			RootCmd.SetArgs(describeCurrentStep)
 			Execute()
 		}
-	case CommandDoRun:
+	case CommandDoStep:
 		if !wasError {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeCurrentStep, " ")))
 			RootCmd.SetArgs(describeCurrentStep)
@@ -118,7 +118,7 @@ func Executor(s string, wasEnter bool) {
 				RootCmd.SetArgs(getRunRunId)
 				Execute()
 			} else {
-				nextInitialInput = s
+				nextInitialInput = ""
 			}
 		} else {
 			if runStatus == api.RunDone {
