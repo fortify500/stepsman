@@ -57,11 +57,18 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, err
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get steps transcational: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM steps where uuid IN %s", attributesStr, "('"+strings.Join(getQuery.UUIDs, "','")+"')")
+	queryStr := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM steps where uuid IN (?)", attributesStr)
 
-	rows, err = tx.Queryx(query)
+	var query string
+	var args []interface{}
+	query, args, err = sqlx.In(queryStr, getQuery.UUIDs)
+	if err != nil {
+		panic(err)
+	}
+	query = tx.Rebind(query)
+	rows, err = tx.Queryx(query, args...)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
 	}
