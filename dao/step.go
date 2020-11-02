@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
@@ -64,14 +63,14 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, err
 
 	rows, err = tx.Queryx(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query database steps table - get: %w", err)
+		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row - get: %w", err)
+			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
 		}
 		result = append(result, step)
 	}
@@ -89,7 +88,7 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*api.StepRecord, error) 
 	var err error
 	rows, err = tx.Queryx(query, runId, index)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query database steps table - get: %w", err)
+		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
 	}
 
 	defer rows.Close()
@@ -97,7 +96,7 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*api.StepRecord, error) 
 		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row - get: %w", err)
+			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
 		}
 		result = &step
 		break
@@ -286,24 +285,25 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 	if query != nil && query.Range.ReturnTotal {
 		err = tx.Get(&count, "select count(*) from ("+sqlNoRange+") C", params...)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query count database steps table: %w", err)
+			panic(fmt.Errorf("failed to query count database steps table: %w", err))
 		}
 		rows, err = tx.Queryx(sqlQuery, params...)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query database steps table: %w", err)
+			panic(fmt.Errorf("failed to query database steps table: %w", err))
 		}
 	} else {
 		rows, err = tx.Queryx(sqlQuery, params...)
+		if err != nil {
+			panic(fmt.Errorf("failed to query database steps table: %w", err))
+		}
 	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query database steps table: %w", err)
-	}
+
 	defer rows.Close()
 	for rows.Next() {
 		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse database steps row: %w", err)
+			panic(fmt.Errorf("failed to parse database steps row: %w", err))
 		}
 		result = append(result, step)
 	}
@@ -327,24 +327,28 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 	}
 }
 
-func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType) (sql.Result, error) {
+func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType) {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate uuid: %w", err)
+		panic(fmt.Errorf("failed to generate uuid: %w", err))
 	}
 	s.StatusUUID = uuid4.String()
-	return tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP where run_id=$2 and \"index\"=$3", newStatus, s.RunId, s.Index)
+	if _, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP where run_id=$2 and \"index\"=$3", newStatus, s.RunId, s.Index); err != nil {
+		panic(err)
+	}
 }
 
-func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType, newState *StepState) (sql.Result, error) {
+func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType, newState *StepState) {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate uuid: %w", err)
+		panic(fmt.Errorf("failed to generate uuid: %w", err))
 	}
 	newStateStr, err := json.Marshal(newState)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	s.StatusUUID = uuid4.String()
-	return tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP where run_id=$3 and \"index\"=$4", newStatus, newStateStr, s.RunId, s.Index)
+	if _, err = tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP where run_id=$3 and \"index\"=$4", newStatus, newStateStr, s.RunId, s.Index); err != nil {
+		panic(err)
+	}
 }

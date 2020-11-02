@@ -73,15 +73,9 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 			return ErrStatusNotChanged
 		}
 		if newState == nil {
-			_, err = dao.UpdateStatusAndHeartBeatTx(tx, stepRecord, newStatus)
-			if err != nil {
-				return fmt.Errorf("failed to update database stepRecord row: %w", err)
-			}
+			dao.UpdateStatusAndHeartBeatTx(tx, stepRecord, newStatus)
 		} else {
-			_, err = dao.UpdateStateAndStatusAndHeartBeatTx(tx, stepRecord, newStatus, newState)
-			if err != nil {
-				return fmt.Errorf("failed to update database stepRecord row: %w", err)
-			}
+			dao.UpdateStateAndStatusAndHeartBeatTx(tx, stepRecord, newStatus, newState)
 		}
 
 		if newStatus != api.StepIdle {
