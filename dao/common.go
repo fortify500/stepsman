@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
@@ -53,7 +52,7 @@ var DB DBI
 type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation(tx *sqlx.Tx) error
-	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) (sql.Result, error)
+	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
 }
 
@@ -88,16 +87,16 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 			DB = (*Sqlite3SqlxDB)(dbOpen)
 			_, err = DB.SQL().Exec("PRAGMA journal_mode = WAL")
 			if err != nil {
-				return fmt.Errorf("failed to set journal mode: %w", err)
+				panic(fmt.Errorf("failed to set journal mode: %w", err))
 			}
 			_, err = DB.SQL().Exec("PRAGMA synchronous = NORMAL")
 			if err != nil {
-				return fmt.Errorf("failed to set synchronous mode: %w", err)
+				panic(fmt.Errorf("failed to set synchronous mode: %w", err))
 			}
 		case "pgx":
 			DB = (*PostgreSQLSqlxDB)(dbOpen)
 		default:
-			return fmt.Errorf("unsupported internal database driver name: %s", internalDriverName)
+			panic(fmt.Errorf("unsupported internal database driver name: %s", internalDriverName))
 		}
 		err = DB.SQL().Ping()
 		if err != nil {

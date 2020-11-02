@@ -105,10 +105,7 @@ func UpdateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
 		if newStatus == runRecord.Status {
 			return ErrStatusNotChanged
 		}
-		_, err = dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
-		if err != nil {
-			return fmt.Errorf("failed to update database run status: %w", err)
-		}
+		dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
 		return nil
 	})
 	return tErr
@@ -139,10 +136,7 @@ func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
 				Template:        string(jsonBytes),
 			}
 		}
-		err = dao.CreateRunTx(tx, runRecord)
-		if err != nil {
-			return fmt.Errorf("failed to create runs row: %w", err)
-		}
+		dao.CreateRunTx(tx, runRecord)
 
 		for i, step := range s.Steps {
 			var uuid4 uuid.UUID
@@ -166,10 +160,7 @@ func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
 				Name:       step.Name,
 				State:      "{}",
 			}
-			_, err = dao.DB.CreateStepTx(tx, stepRecord)
-			if err != nil {
-				return fmt.Errorf("failed to insert database steps row: %w", err)
-			}
+			dao.DB.CreateStepTx(tx, stepRecord)
 		}
 		return nil
 	})

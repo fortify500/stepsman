@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
@@ -73,6 +72,8 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 
-func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) (sql.Result, error) {
-	return tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),:state)", stepRecord)
+func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
+	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),:state)", stepRecord); err != nil {
+		panic(err)
+	}
 }

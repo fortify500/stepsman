@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
@@ -79,7 +78,9 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	}
 	return nil
 }
-func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) (sql.Result, error) {
+func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
 	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,0,:state)"
-	return tx.NamedExec(query, stepRecord)
+	if _, err := tx.NamedExec(query, stepRecord); err != nil {
+		panic(err)
+	}
 }

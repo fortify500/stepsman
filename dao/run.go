@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
@@ -165,24 +164,25 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 	if query != nil && query.Range.ReturnTotal {
 		err = tx.Get(&count, "select count(*) from ("+sqlNoRange+") C", params...)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query count database run table: %w", err)
+			panic(fmt.Errorf("failed to query count database run table: %w", err))
 		}
 		rows, err = tx.Queryx(sqlQuery, params...)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query database run table: %w", err)
+			panic(fmt.Errorf("failed to query database run table: %w", err))
 		}
 	} else {
 		rows, err = tx.Queryx(sqlQuery, params...)
+		if err != nil {
+			panic(fmt.Errorf("failed to query database runs table: %w", err))
+		}
 	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query database runs table: %w", err)
-	}
+
 	defer rows.Close()
 	for rows.Next() {
 		var run api.RunRecord
 		err = rows.StructScan(&run)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse database runs row: %w", err)
+			panic(fmt.Errorf("failed to parse database runs row: %w", err))
 		}
 		result = append(result, run)
 	}
@@ -240,9 +240,10 @@ func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
 	return sb.String(), nil
 }
 
-func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
-	_, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template) values(:id,:key,:template_version,:template_title,:status,:template)", runRecord)
-	return err
+func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) {
+	if _, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template) values(:id,:key,:template_version,:template_title,:status,:template)", runRecord); err != nil {
+		panic(err)
+	}
 }
 
 func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {
@@ -257,14 +258,14 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 
 	rows, err = tx.Queryx(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query database runs table - get: %w", err)
+		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var run api.RunRecord
 		err = rows.StructScan(&run)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse database runs row - get: %w", err)
+			panic(fmt.Errorf("failed to parse database runs row - get: %w", err))
 		}
 		result = append(result, run)
 	}
@@ -274,6 +275,8 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 	return result, nil
 }
 
-func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType) (sql.Result, error) {
-	return tx.Exec("update runs set status=$1 where id=$2", newStatus, id)
+func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType) {
+	if _, err := tx.Exec("update runs set status=$1 where id=$2", newStatus, id); err != nil {
+		panic(err)
+	}
 }

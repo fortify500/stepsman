@@ -91,10 +91,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
 			if run.Status == api.RunIdle {
-				_, err = dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
-				if err != nil {
-					return fmt.Errorf("failed to update database run row: %w", err)
-				}
+				dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
 			} else if run.Status == api.RunDone {
 				err = ErrRunIsAlreadyDone
 				return fmt.Errorf("failed to update database stepRecord status: %w", err)

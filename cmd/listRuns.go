@@ -51,6 +51,11 @@ func listRunsInternal(runId string) {
 	var runRange *api.RangeResult
 	if runId != "" {
 		var run *api.RunRecord
+		runId, err = parseRunId(runId)
+		if err != nil {
+			Parameters.Err = err
+			return
+		}
 		run, err = getRun(runId)
 		if err != nil {
 			Parameters.Err = err
