@@ -74,7 +74,8 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 		return fmt.Errorf("unsupported database vendor name: %s", databaseVendor)
 	}
 	{
-		dbOpen, err := sqlx.Open(internalDriverName, dataSourceName)
+		var dbOpen *sqlx.DB
+		dbOpen, err = sqlx.Open(internalDriverName, dataSourceName)
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
@@ -84,7 +85,7 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 		switch internalDriverName {
 		case "sqlite3":
 			DB = (*Sqlite3SqlxDB)(dbOpen)
-			_, err := DB.SQL().Exec("PRAGMA journal_mode = WAL")
+			_, err = DB.SQL().Exec("PRAGMA journal_mode = WAL")
 			if err != nil {
 				return fmt.Errorf("failed to set journal mode: %w", err)
 			}
@@ -122,6 +123,7 @@ type ParametersType struct {
 
 var Parameters ParametersType
 
+//goland:noinspection SpellCheckingInspection
 func InitDAO(daoParameters *ParametersType) error {
 	switch strings.TrimSpace(daoParameters.DatabaseVendor) {
 	case "postgresql":

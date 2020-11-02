@@ -41,28 +41,28 @@ type StepStateRest struct {
 
 var emptyMap = make(map[string]string)
 
-func do(doType DoType, doI interface{}, prevState *dao.StepState) (*dao.StepState, error) {
+func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.StepState, error) {
 	var newState dao.StepState
 	newState = *prevState
 	newState.Error = ""
 	newState.Result = emptyMap
-	if doI != nil {
+	if doInterface != nil {
 		switch doType {
 		case DoTypeREST:
-			do := doI.(StepDoREST)
+			doRest := doInterface.(StepDoREST)
 			var response *http.Response
 			{
 				var timeout = DefaultDoRestTimeout * time.Second
-				if do.Options.Timeout > 0 {
-					timeout = time.Duration(do.Options.Timeout) * time.Second
+				if doRest.Options.Timeout > 0 {
+					timeout = time.Duration(doRest.Options.Timeout) * time.Second
 				}
 				var maxResponseHeaderBytes int64 = 256 * 1024
-				if do.Options.MaxResponseHeaderBytes > 0 {
-					maxResponseHeaderBytes = do.Options.MaxResponseHeaderBytes
+				if doRest.Options.MaxResponseHeaderBytes > 0 {
+					maxResponseHeaderBytes = doRest.Options.MaxResponseHeaderBytes
 				}
 				var body io.ReadCloser = nil
-				if len(do.Options.Body) > 0 {
-					body = ioutil.NopCloser(strings.NewReader(do.Options.Body))
+				if len(doRest.Options.Body) > 0 {
+					body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
 				}
 				var netTransport = &http.Transport{
 					DialContext: (&net.Dialer{
@@ -78,12 +78,12 @@ func do(doType DoType, doI interface{}, prevState *dao.StepState) (*dao.StepStat
 				}
 				ctx, cancel := context.WithTimeout(context.Background(), timeout)
 				defer cancel()
-				request, err := http.NewRequestWithContext(ctx, do.Options.Method, do.Options.Url, body)
+				request, err := http.NewRequestWithContext(ctx, doRest.Options.Method, doRest.Options.Url, body)
 				if err != nil {
 					newState.Error = err.Error()
 					return &newState, err
 				}
-				for k, v := range do.Options.Headers {
+				for k, v := range doRest.Options.Headers {
 					request.Header[k] = v
 				}
 				response, err = netClient.Do(request)

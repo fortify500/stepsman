@@ -41,11 +41,11 @@ var bangCmd = &cobra.Command{
 		}
 		newArgs = append(newArgs, "-c")
 		newArgs = append(newArgs, args...)
-		bangCmd := exec.Command("/bin/sh", newArgs...)
-		bangCmd.Stdin = os.Stdin
-		bangCmd.Stdout = os.Stdout
-		bangCmd.Stderr = os.Stderr
-		err = bangCmd.Run()
+		bangC := exec.Command("/bin/sh", newArgs...)
+		bangC.Stdin = os.Stdin
+		bangC.Stdout = os.Stdout
+		bangC.Stderr = os.Stderr
+		err = bangC.Run()
 		if err != nil {
 			msg := "failed to execute \"!\""
 			Parameters.Err = &Error{

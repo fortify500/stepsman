@@ -90,7 +90,8 @@ BreakOut:
 				if tc.parseRunId {
 					var re = regexp.MustCompile(`.*:\s(.*-.*-.*-.*-.*).*`)
 					for _, match := range re.FindStringSubmatch(string(out)) {
-						parse, err := uuid.Parse(match)
+						var parse uuid.UUID
+						parse, err = uuid.Parse(match)
 						if err != nil {
 							continue
 						}
@@ -101,7 +102,8 @@ BreakOut:
 				if tc.parseStepId {
 					var re = regexp.MustCompile(`\b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b`)
 					for _, match := range re.FindStringSubmatch(string(out)) {
-						parse, err := uuid.Parse(match)
+						var parse uuid.UUID
+						parse, err = uuid.Parse(match)
 						if err != nil {
 							continue
 						}

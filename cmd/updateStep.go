@@ -66,7 +66,8 @@ Use run <run id>.`,
 		}
 		step := template.Steps[stepRecord.Index-1]
 		if Parameters.Status != "" {
-			status, err := dao.TranslateToStepStatus(Parameters.Status)
+			var status dao.StepStatusType
+			status, err = dao.TranslateToStepStatus(Parameters.Status)
 			if err != nil {
 				Parameters.Err = err
 				return

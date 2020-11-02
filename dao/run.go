@@ -87,7 +87,8 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*RunRecord, *api.RangeResu
 	} else {
 		sqlQuery = "SELECT * FROM runs"
 		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-			attributesStr, err := buildRunsReturnAttributesStrAndVet(query.ReturnAttributes)
+			var attributesStr string
+			attributesStr, err = buildRunsReturnAttributesStrAndVet(query.ReturnAttributes)
 			if err != nil {
 				return nil, nil, err
 			}

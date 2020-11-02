@@ -95,7 +95,8 @@ func (s *StepRecord) UpdateHeartBeat(uuid string) error {
 	}
 	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where run_id=$1 and \"index\"=$2 and status_uuid=$3", s.RunId, s.Index, s.StatusUUID)
 	if err == nil {
-		affected, err := res.RowsAffected()
+		var affected int64
+		affected, err = res.RowsAffected()
 		if err == nil {
 			if affected < 1 {
 				err = fmt.Errorf("no rows where affecting, suggesting status_uuid has changed (but possibly the record have been deleted)")
@@ -216,7 +217,8 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeRe
 	params := make([]interface{}, 0)
 	sqlQuery = "SELECT *,CURRENT_TIMESTAMP as now FROM steps"
 	if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-		attributesStr, err := buildStepsReturnAttributesStrAndVet(query.ReturnAttributes)
+		var attributesStr string
+		attributesStr, err = buildStepsReturnAttributesStrAndVet(query.ReturnAttributes)
 		if err != nil {
 			return nil, nil, err
 		}

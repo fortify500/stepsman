@@ -45,7 +45,7 @@ func RemoteListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, e
 		var jsonRPCResult ListRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&jsonRPCResult); err != nil {
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
 			return err
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
@@ -55,8 +55,9 @@ func RemoteListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, e
 		if jsonRPCResult.Result.Data != nil &&
 			jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
 			jsonRPCResult.Result.Range.Start > 0 {
+			var status dao.RunStatusType
 			for _, record := range jsonRPCResult.Result.Data {
-				status, err := dao.TranslateToRunStatus(record.Status)
+				status, err = dao.TranslateToRunStatus(record.Status)
 				if err != nil {
 					return err
 				}
@@ -93,7 +94,7 @@ func RemoteGetRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
 		var jsonRPCResult GetRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&jsonRPCResult); err != nil {
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
 			return err
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
@@ -101,8 +102,9 @@ func RemoteGetRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
 			return err
 		}
 		if jsonRPCResult.Result != nil {
+			var status dao.RunStatusType
 			for _, record := range jsonRPCResult.Result {
-				status, err := dao.TranslateToRunStatus(record.Status)
+				status, err = dao.TranslateToRunStatus(record.Status)
 				if err != nil {
 					return err
 				}
@@ -137,7 +139,7 @@ func RemoteUpdateRun(query *api.UpdateQuery) error {
 		var jsonRPCResult UpdateRunResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&jsonRPCResult); err != nil {
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
 			return err
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
@@ -167,7 +169,7 @@ func RemoteCreateRun(params *api.CreateRunParams) (string, string, dao.RunStatus
 		var jsonRPCResult CreateRunResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&jsonRPCResult); err != nil {
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
 			return err
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)

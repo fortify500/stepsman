@@ -99,7 +99,8 @@ You can also describe a single step by adding --step <Index>.`,
 			mainT.AppendRow(table.Row{"Description"})
 
 			{
-				runStatus, err := run.Status.TranslateRunStatus()
+				var runStatus string
+				runStatus, err = run.Status.TranslateRunStatus()
 				if err != nil {
 					msg := "failed to describe steps"
 					Parameters.Err = &Error{
@@ -127,12 +128,19 @@ You can also describe a single step by adding --step <Index>.`,
 			mainT.AppendRow(table.Row{"Step"})
 		}
 
+		var t table.Writer
 		for i, stepRecord := range stepRecords {
 			if index > 0 && index != int64(i)+1 {
 				continue
 			}
-			t, err := RenderStep(stepRecord, &script)
+			t, err = RenderStep(stepRecord, &script)
+
 			if err != nil {
+				msg := "failed to describe steps"
+				Parameters.Err = &Error{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
 				return
 			}
 			mainT.AppendRow(table.Row{t.Render()})
@@ -179,7 +187,8 @@ func RenderStep(stepRecord *dao.StepRecord, script *bl.Template) (table.Writer, 
 	if step.Do != nil {
 		do, ok := step.Do.(bl.DO)
 		if ok {
-			describe, err := do.Describe()
+			var describe string
+			describe, err = do.Describe()
 			if err != nil {
 				msg := "failed to describe step"
 				Parameters.Err = &Error{

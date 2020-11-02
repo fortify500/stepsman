@@ -118,34 +118,40 @@ func (s *Template) CreateRun(key string) (*dao.RunRecord, error) {
 	title := s.Title
 	var runRecord *dao.RunRecord
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
-		uuid4, err := uuid.NewRandom()
-		if err != nil {
-			return fmt.Errorf("failed to generate uuid: %w", err)
+		var err error
+		{
+			var uuid4 uuid.UUID
+			uuid4, err = uuid.NewRandom()
+			if err != nil {
+				return fmt.Errorf("failed to generate uuid: %w", err)
+			}
+			var jsonBytes []byte
+			jsonBytes, err = json.Marshal(s)
+			if err != nil {
+				return err
+			}
+			runRecord = &dao.RunRecord{
+				Id:              uuid4.String(),
+				Key:             key,
+				TemplateVersion: s.Version,
+				TemplateTitle:   title,
+				Status:          dao.RunIdle,
+				Template:        string(jsonBytes),
+			}
 		}
-		jsonBytes, err := json.Marshal(s)
-		if err != nil {
-			return err
-		}
-		runRecord = &dao.RunRecord{
-			Id:              uuid4.String(),
-			Key:             key,
-			TemplateVersion: s.Version,
-			TemplateTitle:   title,
-			Status:          dao.RunIdle,
-			Template:        string(jsonBytes),
-		}
-
 		err = dao.CreateRunTx(tx, runRecord)
 		if err != nil {
 			return fmt.Errorf("failed to create runs row: %w", err)
 		}
 
 		for i, step := range s.Steps {
-			uuid4, err := uuid.NewRandom()
+			var uuid4 uuid.UUID
+			var statusUuid4 uuid.UUID
+			uuid4, err = uuid.NewRandom()
 			if err != nil {
 				return fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
 			}
-			statusUuid4, err := uuid.NewRandom()
+			statusUuid4, err = uuid.NewRandom()
 			if err != nil {
 				return fmt.Errorf("failed to create runs row and generate status uuid4: %w", err)
 			}

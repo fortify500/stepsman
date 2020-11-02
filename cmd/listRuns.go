@@ -50,7 +50,8 @@ func listRunsInternal(runId string) {
 	var runs []*dao.RunRecord
 	var runRange *api.RangeResult
 	if runId != "" {
-		run, err := getRun(runId)
+		var run *dao.RunRecord
+		run, err = getRun(runId)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -90,7 +91,8 @@ func listRunsInternal(runId string) {
 		return
 	}
 	for _, run := range runs {
-		status, err := run.Status.TranslateRunStatus()
+		var status string
+		status, err = run.Status.TranslateRunStatus()
 		if err != nil {
 			msg := "failed to listRuns runs"
 			Parameters.Err = &Error{

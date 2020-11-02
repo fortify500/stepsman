@@ -38,8 +38,7 @@ type (
 )
 
 func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	err := valve.Lever(c).Open()
-	if err != nil {
+	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
@@ -89,8 +88,7 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 }
 
 func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	err := valve.Lever(c).Open()
-	if err != nil {
+	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
@@ -165,8 +163,7 @@ func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) 
 }
 
 func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	err := valve.Lever(c).Open()
-	if err != nil {
+	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
@@ -220,8 +217,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 }
 
 func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	err := valve.Lever(c).Open()
-	if err != nil {
+	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),

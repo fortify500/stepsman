@@ -58,8 +58,7 @@ func StepRecordToStepRPCRecord(stepsRecords []*dao.StepRecord, translateStatus b
 	return stepRpcRecords, nil
 }
 func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	err := valve.Lever(c).Open()
-	if err != nil {
+	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),
@@ -113,8 +112,7 @@ type (
 )
 
 func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	err := valve.Lever(c).Open()
-	if err != nil {
+	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCodeInternal,
 			Message: err.Error(),

@@ -114,7 +114,8 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
 	}
 	if dao.IsRemote {
-		runId, _, _, err := client.RemoteCreateRun(&api.CreateRunParams{
+		var runId string
+		runId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
 			Key:      key,
 			Template: s,
 		})
@@ -123,7 +124,8 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 		}
 		return runId, err
 	} else {
-		runRow, err := s.CreateRun(key)
+		var runRow *dao.RunRecord
+		runRow, err = s.CreateRun(key)
 		if err != nil {
 			return "", err
 		}
@@ -171,12 +173,12 @@ func (s *Step) AdjustUnmarshalStep() error {
 
 		switch doType {
 		case DoTypeREST:
-			do := StepDoREST{}
+			doRest := StepDoREST{}
 			var md mapstructure.Metadata
 			decoder, err := mapstructure.NewDecoder(
 				&mapstructure.DecoderConfig{
 					Metadata: &md,
-					Result:   &do,
+					Result:   &doRest,
 				})
 			if err != nil {
 				return err
@@ -188,8 +190,8 @@ func (s *Step) AdjustUnmarshalStep() error {
 			if len(md.Unused) > 0 {
 				return fmt.Errorf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
 			}
-			s.stepDo = do.StepDo
-			s.Do = do
+			s.stepDo = doRest.StepDo
+			s.Do = doRest
 		default:
 			return fmt.Errorf("unsupported do type: %s", doType)
 		}

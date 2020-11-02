@@ -46,7 +46,7 @@ func RemoteListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult,
 		var jsonRPCResult ListStepsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&jsonRPCResult); err != nil {
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
 			return err
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
@@ -120,7 +120,7 @@ func RemoteGetSteps(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
 		var jsonRPCResult GetStepsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&jsonRPCResult); err != nil {
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
 			return err
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
