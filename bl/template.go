@@ -58,7 +58,7 @@ type StepDo struct {
 }
 
 type DO interface {
-	Describe() (string, error)
+	Describe() string
 }
 type StepDoREST struct {
 	StepDo  `yaml:",inline" mapstructure:",squash"`
@@ -73,12 +73,12 @@ type StepDoRESTOptions struct {
 	Body                   string
 }
 
-func (do StepDoREST) Describe() (string, error) {
+func (do StepDoREST) Describe() string {
 	doStr, err := yaml.Marshal(do)
 	if err != nil {
-		return "", err
+		panic(err)
 	}
-	return string(doStr), nil
+	return string(doStr)
 }
 
 func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
@@ -93,12 +93,12 @@ func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 		err = decoder.Decode(s)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load from bytes: %w", err)
 	}
 	for i := range s.Steps {
 		err = (&s.Steps[i]).AdjustUnmarshalStep()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to load from bytes: %w", err)
 		}
 	}
 	return nil
@@ -127,7 +127,7 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 		var runRow *api.RunRecord
 		runRow, err = s.CreateRun(key)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to start: %w", err)
 		}
 		return runRow.Id, err
 	}
@@ -138,7 +138,7 @@ func (s *Step) AdjustUnmarshalStep() error {
 	if s.Label == "" {
 		random, err := uuid.NewRandom()
 		if err != nil {
-			return err
+			panic(err)
 		}
 		s.Label = random.String()
 	}
@@ -181,11 +181,11 @@ func (s *Step) AdjustUnmarshalStep() error {
 					Result:   &doRest,
 				})
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to adjust step do rest: %w", err)
 			}
 			err = decoder.Decode(s.Do)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to adjust step do rest: %w", err)
 			}
 			if len(md.Unused) > 0 {
 				return fmt.Errorf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))

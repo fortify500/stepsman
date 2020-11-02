@@ -59,14 +59,18 @@ type JSONRPCRequest struct {
 	ID      string      `json:"id,omitempty"`
 }
 
-func NewMarshaledJSONRPCRequest(id string, method string, params interface{}) ([]byte, error) {
+func NewMarshaledJSONRPCRequest(id string, method string, params interface{}) []byte {
 	request := JSONRPCRequest{
 		Version: "2.0",
 		Method:  method,
 		Params:  params,
 		ID:      id,
 	}
-	return json.Marshal(request)
+	marshal, err := json.Marshal(request)
+	if err != nil {
+		panic(err)
+	}
+	return marshal
 }
 
 var jsonRpcUrl string
@@ -86,12 +90,12 @@ func InitClient(ssl bool, host string, port int64) {
 func remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCloser) error) error {
 	newRequest, err := http.NewRequest("POST", jsonRpcUrl, bytes.NewBuffer(request))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to form rest request: %w", err)
 	}
 	newRequest.Header.Set("Content-type", "application/json")
 	response, err := Client.Do(newRequest)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to reach remote server: %w", err)
 	}
 	defer response.Body.Close()
 	defer io.Copy(ioutil.Discard, response.Body)

@@ -110,7 +110,7 @@ func (s *Step) GetHeartBeatInterval() time.Duration {
 func (s *Step) StartDo(stepRecord *api.StepRecord) error {
 	stepRecord, err := s.UpdateStateAndStatus(stepRecord, api.StepInProgress, nil, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to start do: %w", err)
 	}
 	heartbeatInterval := s.GetHeartBeatInterval() / 2
 	if heartbeatInterval < DefaultHeartBeatInterval {
@@ -166,7 +166,7 @@ func getStepsByQuery(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 		var err error
 		stepRecords, err = dao.GetStepsTx(tx, query)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get steps by query: %w", err)
 		}
 		return nil
 	})
@@ -180,7 +180,7 @@ func listStepsByQuery(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult,
 		var err error
 		stepRecords, rangeResult, err = dao.ListStepsTx(tx, query)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to list steps by query: %w", err)
 		}
 		return nil
 	})

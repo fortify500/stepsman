@@ -65,7 +65,7 @@ func PersistentPreRunE() error {
 			DatabaseSchema:      Parameters.DatabaseSchema,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to run pre run initializations: %w", err)
 		}
 	}
 	return nil

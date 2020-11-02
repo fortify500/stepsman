@@ -35,7 +35,7 @@ Use run <run id>.`,
 		defer recoverAndLog("failed to update step")
 		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
 			return
 		}
 		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
@@ -51,7 +51,7 @@ Use run <run id>.`,
 		stepRecord := stepRecords[0]
 		run, err := getRun(stepRecord.RunId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
 			return
 		}
 		template := bl.Template{}

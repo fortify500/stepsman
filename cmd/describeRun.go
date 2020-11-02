@@ -46,7 +46,7 @@ You can also describe a single step by adding --step <Index>.`,
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to describe run: %w", err)
 			return
 		}
 		Parameters.CurrentRunId = run.Id
@@ -57,7 +57,7 @@ You can also describe a single step by adding --step <Index>.`,
 		}}
 		index, err := parseIndex(Parameters.Step)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to describe run: %w", err)
 			return
 		}
 		if index > 0 {
@@ -169,19 +169,10 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
 	})
 	if step.Do != nil {
-		var err error
 		do, ok := step.Do.(bl.DO)
 		if ok {
 			var describe string
-			describe, err = do.Describe()
-			if err != nil {
-				msg := "failed to describe step"
-				Parameters.Err = &Error{
-					Technical: fmt.Errorf(msg+": %w", err),
-					Friendly:  msg,
-				}
-				return nil, err
-			}
+			describe = do.Describe()
 			t.AppendRow(table.Row{"Do:", strings.TrimSpace(text.WrapText(describe, 120))})
 		}
 	}

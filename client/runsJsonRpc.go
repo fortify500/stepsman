@@ -18,6 +18,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"io"
 )
@@ -35,12 +36,9 @@ func RemoteListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, er
 	if query != nil {
 		params = api.ListParams(*query)
 	}
-	request, err := NewMarshaledJSONRPCRequest("1", api.RPCListRuns, &params)
-	if err != nil {
-		return nil, nil, err
-	}
+	request := NewMarshaledJSONRPCRequest("1", api.RPCListRuns, &params)
 	var rangeResult *api.RangeResult
-	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
+	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult ListRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -49,7 +47,7 @@ func RemoteListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, er
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remote list runs: %w", err)
 		}
 		if jsonRPCResult.Result.Data != nil &&
 			jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
@@ -72,11 +70,8 @@ type GetRunsResponse struct {
 
 func RemoteGetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	var result []api.RunRecord
-	request, err := NewMarshaledJSONRPCRequest("1", api.RPCGetRuns, query)
-	if err != nil {
-		return nil, err
-	}
-	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCGetRuns, query)
+	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult GetRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -85,7 +80,7 @@ func RemoteGetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remote get runs: %w", err)
 		}
 		if jsonRPCResult.Result != nil {
 			result = jsonRPCResult.Result
@@ -103,11 +98,8 @@ type UpdateRunResponse struct {
 }
 
 func RemoteUpdateRun(query *api.UpdateQuery) error {
-	request, err := NewMarshaledJSONRPCRequest("1", api.RPCUpdateRun, query)
-	if err != nil {
-		return err
-	}
-	return remoteJRPCCall(request, func(body *io.ReadCloser) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateRun, query)
+	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult UpdateRunResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -116,7 +108,7 @@ func RemoteUpdateRun(query *api.UpdateQuery) error {
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remote update run: %w", err)
 		}
 		return nil
 	})
@@ -133,11 +125,8 @@ func RemoteCreateRun(params *api.CreateRunParams) (string, string, api.RunStatus
 	var runId string
 	key := params.Key
 	var status api.RunStatusType
-	request, err := NewMarshaledJSONRPCRequest("1", api.RPCCreateRun, params)
-	if err != nil {
-		return "", "", api.RunIdle, err
-	}
-	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCCreateRun, params)
+	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult CreateRunResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -146,7 +135,7 @@ func RemoteCreateRun(params *api.CreateRunParams) (string, string, api.RunStatus
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remote create run:%w", err)
 		}
 		status = jsonRPCResult.Result.Status
 		runId = jsonRPCResult.Result.Id

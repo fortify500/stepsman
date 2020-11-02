@@ -53,12 +53,12 @@ func listRunsInternal(runId string) {
 		var run *api.RunRecord
 		runId, err = parseRunId(runId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to list runs: %w", err)
 			return
 		}
 		run, err = getRun(runId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to list runs: %w", err)
 			return
 		}
 		runs = append(runs, *run)

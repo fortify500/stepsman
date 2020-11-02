@@ -27,10 +27,10 @@ var getRunCmd = &cobra.Command{
 	Short: "Run summary.",
 	Long:  `Get run summary.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		defer recoverAndLog("failed to get runs")
+		defer recoverAndLog("failed to get run")
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to get run: %w", err)
 			return
 		}
 		Parameters.CurrentCommand = CommandGetRun
@@ -49,7 +49,7 @@ var getRunCmd = &cobra.Command{
 			var run *api.RunRecord
 			run, err = getRun(runId)
 			if err != nil {
-				Parameters.Err = err
+				Parameters.Err = fmt.Errorf("failed to get run: %w", err)
 				return
 			}
 			switch Parameters.OnlyTemplateType {

@@ -252,7 +252,7 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
 	query := fmt.Sprintf("SELECT %s FROM runs where id IN %s", attributesStr, "('"+strings.Join(getQuery.Ids, "','")+"')")
 

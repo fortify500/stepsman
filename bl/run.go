@@ -41,7 +41,7 @@ func listRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
 		var err error
 		runRecords, rangeResult, err = dao.ListRunsTx(tx, query)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to list runs: %w", err)
 		}
 		return nil
 	})
@@ -55,7 +55,7 @@ func GetRun(id string) (*api.RunRecord, error) {
 			ReturnAttributes: nil,
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get run: %w", err)
 		}
 		return &runs[0], nil
 	} else {
@@ -120,12 +120,12 @@ func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
 			var uuid4 uuid.UUID
 			uuid4, err = uuid.NewRandom()
 			if err != nil {
-				return fmt.Errorf("failed to generate uuid: %w", err)
+				panic(fmt.Errorf("failed to generate uuid: %w", err))
 			}
 			var jsonBytes []byte
 			jsonBytes, err = json.Marshal(s)
 			if err != nil {
-				return err
+				panic(err)
 			}
 			runRecord = &api.RunRecord{
 				Id:              uuid4.String(),
@@ -143,11 +143,11 @@ func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
 			var statusUuid4 uuid.UUID
 			uuid4, err = uuid.NewRandom()
 			if err != nil {
-				return fmt.Errorf("failed to create runs row and generate uuid4: %w", err)
+				panic(fmt.Errorf("failed to create runs row and generate uuid4: %w", err))
 			}
 			statusUuid4, err = uuid.NewRandom()
 			if err != nil {
-				return fmt.Errorf("failed to create runs row and generate status uuid4: %w", err)
+				panic(fmt.Errorf("failed to create runs row and generate status uuid4: %w", err))
 			}
 
 			stepRecord := &api.StepRecord{

@@ -34,17 +34,17 @@ Use run <run id>.`,
 		defer recoverAndLog("failed to update run")
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
 			return
 		}
 		status, err := api.TranslateToRunStatus(Parameters.Status)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
 			return
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
 			return
 		}
 		err = bl.UpdateRunStatus(runId, status)

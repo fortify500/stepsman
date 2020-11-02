@@ -50,12 +50,12 @@ func listStepsInternal() {
 	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "Heartbeat"})
 	runId, err := parseRunId(Parameters.Run)
 	if err != nil {
-		Parameters.Err = err
+		Parameters.Err = fmt.Errorf("failed to list steps: %w", err)
 		return
 	}
 	run, err := getRun(runId)
 	if err != nil {
-		Parameters.Err = err
+		Parameters.Err = fmt.Errorf("failed to list steps: %w", err)
 		return
 	}
 	Parameters.CurrentRunId = run.Id

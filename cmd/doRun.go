@@ -36,17 +36,17 @@ Use run <run id>.`,
 		defer recoverAndLog("failed to do run")
 		runId, err := parseRunId(args[0])
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to do run: %w", err)
 			return
 		}
 		_, err = parseIndex(Parameters.Step)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to do run: %w", err)
 			return
 		}
 		run, err := getRun(runId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to do run: %w", err)
 			return
 		}
 		Parameters.CurrentRunId = run.Id

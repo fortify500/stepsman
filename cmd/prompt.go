@@ -169,8 +169,7 @@ func ResetCommandParameters() {
 	for _, flagsReInit := range Parameters.FlagsReInit {
 		err := flagsReInit()
 		if err != nil {
-			fmt.Println(fmt.Sprintf("internal server error: %s", err))
-			log.Fatal(err)
+			panic(err)
 		}
 	}
 }

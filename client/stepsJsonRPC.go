@@ -18,6 +18,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"io"
 )
@@ -35,12 +36,9 @@ func RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, 
 	if query != nil {
 		params = api.ListParams(*query)
 	}
-	request, err := NewMarshaledJSONRPCRequest("1", api.RPCListSteps, &params)
-	if err != nil {
-		return nil, nil, err
-	}
+	request := NewMarshaledJSONRPCRequest("1", api.RPCListSteps, &params)
 	var rangeResult *api.RangeResult
-	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
+	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult ListStepsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -49,7 +47,7 @@ func RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, 
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remote list steps: %w", err)
 		}
 		if jsonRPCResult.Result.Data != nil &&
 			jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
@@ -63,40 +61,6 @@ func RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, 
 	return result, rangeResult, err
 }
 
-//func appendStepToResult(record api.StepAPIRecord, result *[]*api.StepRecord) error {
-//	status, err := api.TranslateToStepStatus(record.Status)
-//	if err != nil {
-//		return err
-//	}
-//	var now time.Time
-//	var heartbeat time.Time
-//	if record.Now != "" {
-//		now, err = time.Parse(time.RFC3339, record.Now)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	if record.HeartBeat != "" {
-//		heartbeat, err = time.Parse(time.RFC3339, record.HeartBeat)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	*result = append(*result, &api.StepRecord{
-//		RunId:      record.RunId,
-//		Index:      record.Index,
-//		Label:      record.Label,
-//		UUID:       record.UUID,
-//		Name:       record.Name,
-//		Status:     status,
-//		StatusUUID: record.StatusUUID,
-//		Now:        now,
-//		Heartbeat:  heartbeat,
-//		State:      record.State,
-//	})
-//	return nil
-//}
-
 type GetStepsResponse struct {
 	Version string             `json:"jsonrpc"`
 	Result  api.GetStepsResult `json:"result,omitempty"`
@@ -106,11 +70,8 @@ type GetStepsResponse struct {
 
 func RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	var result []api.StepRecord
-	request, err := NewMarshaledJSONRPCRequest("1", api.RPCGetSteps, query)
-	if err != nil {
-		return nil, err
-	}
-	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCGetSteps, query)
+	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult GetStepsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -119,7 +80,7 @@ func RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remote get steps: %w", err)
 		}
 		if jsonRPCResult.Result != nil {
 			result = jsonRPCResult.Result

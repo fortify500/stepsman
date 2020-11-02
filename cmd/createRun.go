@@ -67,7 +67,7 @@ func init() {
 		createRunCmd.ResetFlags()
 		random, err := uuid.NewRandom()
 		if err != nil {
-			return err
+			panic(err)
 		}
 		createRunCmd.Flags().StringVarP(&Parameters.RunKey, "key", "k", random.String(), "Run unique key. If omitted a random uuid will be used")
 		createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "Template file (yaml) to create run")

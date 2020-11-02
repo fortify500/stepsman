@@ -57,7 +57,7 @@ func MigrateDB(autoMigrate bool) error {
 			case 0:
 				err = dao.DB.Migrate0(tx)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to migrate db: %w", err)
 				}
 				_, err = dao.UpdateMigration(tx, version+1)
 				if err != nil {

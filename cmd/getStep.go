@@ -32,7 +32,7 @@ var getStepCmd = &cobra.Command{
 		defer recoverAndLog("failed to get step")
 		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
 			return
 		}
 		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
@@ -47,7 +47,7 @@ var getStepCmd = &cobra.Command{
 		}
 		run, err := getRun(stepRecords[0].RunId)
 		if err != nil {
-			Parameters.Err = err
+			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
 			return
 		}
 		script := bl.Template{}
@@ -62,6 +62,7 @@ var getStepCmd = &cobra.Command{
 		}
 		t, err := RenderStep(&stepRecords[0], &script)
 		if err != nil {
+			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
 			return
 		}
 		t.SetOutputMirror(os.Stdout)
