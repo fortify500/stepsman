@@ -20,43 +20,41 @@ import (
 	"context"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	"github.com/intel-go/fastjson"
 	"github.com/osamingo/jsonrpc"
-	"time"
 )
 
 type (
 	ListStepsHandler struct{}
 )
 
-func StepRecordToStepRPCRecord(stepsRecords []*dao.StepRecord, translateStatus bool) ([]api.StepAPIRecord, error) {
-	var stepRpcRecords []api.StepAPIRecord
-	for _, stepRecord := range stepsRecords {
-		var status string
-		var err error
-		if translateStatus {
-			status, err = stepRecord.Status.TranslateStepStatus()
-			if err != nil {
-				return nil, err
-			}
-		}
-		stepRpcRecords = append(stepRpcRecords, api.StepAPIRecord{
-			RunId:      stepRecord.RunId,
-			Index:      stepRecord.Index,
-			Label:      stepRecord.Label,
-			UUID:       stepRecord.UUID,
-			Name:       stepRecord.Name,
-			Status:     status,
-			StatusUUID: stepRecord.StatusUUID,
-			HeartBeat:  stepRecord.HeartBeat.(time.Time).Format(time.RFC3339),
-			Now:        stepRecord.Now.(time.Time).Format(time.RFC3339),
-			State:      stepRecord.State,
-		})
-	}
-	return stepRpcRecords, nil
-}
+//func StepRecordToStepRPCRecord(stepsRecords []*dao.StepRecord, translateStatus bool) ([]api.StepAPIRecord, error) {
+//	var stepRpcRecords []api.StepAPIRecord
+//	for _, stepRecord := range stepsRecords {
+//		var status string
+//		var err error
+//		if translateStatus {
+//			status, err = stepRecord.Status.TranslateStepStatus()
+//			if err != nil {
+//				return nil, err
+//			}
+//		}
+//		stepRpcRecords = append(stepRpcRecords, api.StepAPIRecord{
+//			RunId:      stepRecord.RunId,
+//			Index:      stepRecord.Index,
+//			Label:      stepRecord.Label,
+//			UUID:       stepRecord.UUID,
+//			Name:       stepRecord.Name,
+//			Status:     status,
+//			StatusUUID: stepRecord.StatusUUID,
+//			Heartbeat:  stepRecord.Heartbeat.(time.Time).Format(time.RFC3339),
+//			Now:        stepRecord.Now.(time.Time).Format(time.RFC3339),
+//			State:      stepRecord.State,
+//		})
+//	}
+//	return stepRpcRecords, nil
+//}
 func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
@@ -81,26 +79,10 @@ func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 				Message: err.Error(),
 			}
 		}
-		translateStatus := false
-		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-			for _, attribute := range query.ReturnAttributes {
-				if attribute == dao.Status {
-					translateStatus = true
-				}
-			}
-		} else {
-			translateStatus = true
-		}
-		runRpcRecords, err := StepRecordToStepRPCRecord(steps, translateStatus)
-		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
-		}
+
 		result = api.ListStepsResult{
 			Range: *stepsRange,
-			Data:  runRpcRecords,
+			Data:  steps,
 		}
 		return nil
 	})
@@ -139,13 +121,7 @@ func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 				Message: err.Error(),
 			}
 		}
-		result, err = StepRecordToStepRPCRecord(steps, true)
-		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
-		}
+		result = steps
 		return nil
 	})
 

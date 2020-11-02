@@ -19,6 +19,7 @@ package dao
 import (
 	"database/sql"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -52,7 +53,7 @@ var DB DBI
 type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation(tx *sqlx.Tx) error
-	CreateStepTx(tx *sqlx.Tx, stepRecord *StepRecord) (sql.Result, error)
+	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) (sql.Result, error)
 	Migrate0(tx *sqlx.Tx) error
 }
 

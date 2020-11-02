@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
@@ -90,7 +91,7 @@ type AllParameters struct {
 	CurrentCommand   CommandType
 	CurrentStepIndex string
 	CurrentRunId     string
-	CurrentRun       *dao.RunRecord
+	CurrentRun       *api.RunRecord
 	FlagsReInit      []func() error
 	Err              error
 }
@@ -247,7 +248,7 @@ func InitConfig() {
 	}
 }
 
-func getRun(id string) (*dao.RunRecord, error) {
+func getRun(id string) (*api.RunRecord, error) {
 	run, err := bl.GetRun(id)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %s", id)
@@ -333,6 +334,7 @@ var NoBordersStyle = table.Style{
 
 func InitLogrusALL(out io.Writer) {
 	InitLogrus(out)
+	api.InitLogrus(out)
 	dao.InitLogrus(out)
 	serve.InitLogrus(out)
 	client.InitLogrus(out)

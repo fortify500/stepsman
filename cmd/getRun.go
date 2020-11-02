@@ -17,7 +17,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/fortify500/stepsman/dao"
+	"github.com/fortify500/stepsman/api"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +46,7 @@ var getRunCmd = &cobra.Command{
 				}
 				return
 			}
-			var run *dao.RunRecord
+			var run *api.RunRecord
 			run, err = getRun(runId)
 			if err != nil {
 				Parameters.Err = err

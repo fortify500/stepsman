@@ -66,13 +66,13 @@ Use run <run id>.`,
 		}
 		step := template.Steps[stepRecord.Index-1]
 		if Parameters.Status != "" {
-			var status dao.StepStatusType
-			status, err = dao.TranslateToStepStatus(Parameters.Status)
+			var status api.StepStatusType
+			status, err = api.TranslateToStepStatus(Parameters.Status)
 			if err != nil {
 				Parameters.Err = err
 				return
 			}
-			_, err = step.UpdateStateAndStatus(stepRecord, status, nil, false)
+			_, err = step.UpdateStateAndStatus(&stepRecord, status, nil, false)
 			if err != nil {
 				msg := "failed to update step status"
 				Parameters.Err = &Error{
@@ -83,7 +83,7 @@ Use run <run id>.`,
 			}
 		}
 		if Parameters.StatusUUID != "" {
-			err = stepRecord.UpdateHeartBeat(Parameters.StatusUUID)
+			err = dao.UpdateHeartBeat(&stepRecord, Parameters.StatusUUID)
 			if err != nil {
 				msg := "failed to update heartbeat"
 				Parameters.Err = &Error{
@@ -101,7 +101,7 @@ func init() {
 	updateCmd.AddCommand(updateStepCmd)
 	initFlags := func() error {
 		updateStepCmd.ResetFlags()
-		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s", dao.StepIdle.MustTranslateStepStatus(), dao.StepInProgress.MustTranslateStepStatus(), dao.StepFailed.MustTranslateStepStatus(), dao.StepDone.MustTranslateStepStatus()))
+		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s", api.StepIdle.MustTranslateStepStatus(), api.StepInProgress.MustTranslateStepStatus(), api.StepFailed.MustTranslateStepStatus(), api.StepDone.MustTranslateStepStatus()))
 		updateStepCmd.Flags().StringVarP(&Parameters.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
 		return nil
 	}

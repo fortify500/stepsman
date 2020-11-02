@@ -124,7 +124,7 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 		}
 		return runId, err
 	} else {
-		var runRow *dao.RunRecord
+		var runRow *api.RunRecord
 		runRow, err = s.CreateRun(key)
 		if err != nil {
 			return "", err

@@ -46,7 +46,7 @@ func listStepsInternal() {
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "HeartBeat"})
+	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "Heartbeat"})
 	runId, err := parseRunId(Parameters.Run)
 	if err != nil {
 		Parameters.Err = err
@@ -140,11 +140,11 @@ func listStepsInternal() {
 		checked := "[ ]"
 		heartBeat := ""
 		switch step.Status {
-		case dao.StepDone:
+		case api.StepDone:
 			checked = "[V]"
 		}
-		if step.Status == dao.StepInProgress {
-			heartBeat = fmt.Sprintf("%s", step.HeartBeat)
+		if step.Status == api.StepInProgress {
+			heartBeat = fmt.Sprintf("%s", step.Heartbeat)
 		}
 		t.AppendRows([]table.Row{
 			{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusUUID, heartBeat},

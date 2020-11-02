@@ -31,22 +31,22 @@ import (
 
 const DefaultHeartBeatInterval = 10 * time.Second
 
-func GetSteps(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
+func GetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	if dao.IsRemote {
 		return client.RemoteGetSteps(query)
 	} else {
 		return getStepsByQuery(query)
 	}
 }
-func ListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
+func ListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
 		return client.RemoteListSteps(query)
 	}
 	return listStepsByQuery(query)
 }
 
-func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus dao.StepStatusType, newState *dao.StepState, doFinish bool) (*dao.StepRecord, error) {
-	var stepRecord *dao.StepRecord
+func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool) (*api.StepRecord, error) {
+	var stepRecord *api.StepRecord
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		runId := prevStepRecord.RunId
@@ -56,8 +56,8 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus da
 		}
 
 		// if we are starting check if the stepRecord is already in-progress.
-		if !doFinish && stepRecord.Status == dao.StepInProgress {
-			delta := stepRecord.Now.(time.Time).Sub(stepRecord.HeartBeat.(time.Time))
+		if !doFinish && stepRecord.Status == api.StepInProgress {
+			delta := time.Time(stepRecord.Now).Sub(time.Time(stepRecord.Heartbeat))
 			if delta < 0 {
 				delta = delta * -1
 			}
@@ -73,29 +73,29 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *dao.StepRecord, newStatus da
 			return ErrStatusNotChanged
 		}
 		if newState == nil {
-			_, err = stepRecord.UpdateStatusAndHeartBeatTx(tx, newStatus)
+			_, err = dao.UpdateStatusAndHeartBeatTx(tx, stepRecord, newStatus)
 			if err != nil {
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
 		} else {
-			_, err = stepRecord.UpdateStateAndStatusAndHeartBeatTx(tx, newStatus, newState)
+			_, err = dao.UpdateStateAndStatusAndHeartBeatTx(tx, stepRecord, newStatus, newState)
 			if err != nil {
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
 		}
 
-		if newStatus != dao.StepIdle {
-			var run *dao.RunRecord
+		if newStatus != api.StepIdle {
+			var run *api.RunRecord
 			run, err = GetRunByIdTx(tx, runId)
 			if err != nil {
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
-			if run.Status == dao.RunIdle {
-				_, err = dao.UpdateRunStatusTx(tx, run.Id, dao.RunInProgress)
+			if run.Status == api.RunIdle {
+				_, err = dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
 				if err != nil {
 					return fmt.Errorf("failed to update database run row: %w", err)
 				}
-			} else if run.Status == dao.RunDone {
+			} else if run.Status == api.RunDone {
 				err = ErrRunIsAlreadyDone
 				return fmt.Errorf("failed to update database stepRecord status: %w", err)
 			}
@@ -116,8 +116,8 @@ func (s *Step) GetHeartBeatInterval() time.Duration {
 	}
 	return DefaultHeartBeatInterval
 }
-func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
-	stepRecord, err := s.UpdateStateAndStatus(stepRecord, dao.StepInProgress, nil, false)
+func (s *Step) StartDo(stepRecord *api.StepRecord) error {
+	stepRecord, err := s.UpdateStateAndStatus(stepRecord, api.StepInProgress, nil, false)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 			case <-heartBeatDone2:
 				break OUT
 			case <-time.After(heartbeatInterval):
-				errBeat := stepRecord.UpdateHeartBeat(stepRecord.StatusUUID)
+				errBeat := dao.UpdateHeartBeat(stepRecord, stepRecord.StatusUUID)
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
 				}
@@ -159,18 +159,18 @@ func (s *Step) StartDo(stepRecord *dao.StepRecord) error {
 	}
 	close(heartBeatDone2)
 	wg.Wait()
-	var newStepStatus dao.StepStatusType
+	var newStepStatus api.StepStatusType
 	if err != nil || doErr != nil {
-		newStepStatus = dao.StepFailed
+		newStepStatus = api.StepFailed
 	} else {
-		newStepStatus = dao.StepDone
+		newStepStatus = api.StepDone
 	}
 	stepRecord, err = s.UpdateStateAndStatus(stepRecord, newStepStatus, newState, true)
 	return err
 }
 
-func getStepsByQuery(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
-	var stepRecords []*dao.StepRecord
+func getStepsByQuery(query *api.GetStepsQuery) ([]api.StepRecord, error) {
+	var stepRecords []api.StepRecord
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		stepRecords, err = dao.GetStepsTx(tx, query)
@@ -182,8 +182,8 @@ func getStepsByQuery(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
 	return stepRecords, tErr
 }
 
-func listStepsByQuery(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
-	var stepRecords []*dao.StepRecord
+func listStepsByQuery(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
+	var stepRecords []api.StepRecord
 	var rangeResult *api.RangeResult
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error

@@ -198,7 +198,7 @@ BreakOut:
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
 			err := client.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
-				Changes: map[string]interface{}{"status": dao.RunDone.MustTranslateRunStatus()},
+				Changes: map[string]interface{}{"status": api.RunDone.MustTranslateRunStatus()},
 			})
 			if err != nil {
 				t.Error(err)
@@ -218,7 +218,7 @@ BreakOut:
 				t.Error(fmt.Errorf("only one run should be returned, got: %d", len(runs)))
 				return
 			}
-			if runs[0].Status != dao.RunDone {
+			if runs[0].Status != api.RunDone {
 				t.Error(fmt.Errorf("status should be done, got: %s", runs[0].Status.MustTranslateRunStatus()))
 				return
 			}
@@ -226,7 +226,7 @@ BreakOut:
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun idle"), func(t *testing.T) {
 			err := client.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
-				Changes: map[string]interface{}{"status": dao.RunIdle.MustTranslateRunStatus()},
+				Changes: map[string]interface{}{"status": api.RunIdle.MustTranslateRunStatus()},
 			})
 			if err != nil {
 				t.Error(err)
@@ -246,7 +246,7 @@ BreakOut:
 				t.Error(fmt.Errorf("only one run should be returned, got: %d", len(runs)))
 				return
 			}
-			if runs[0].Status != dao.RunIdle {
+			if runs[0].Status != api.RunIdle {
 				t.Error(fmt.Errorf("status should be idle, got: %s", runs[0].Status.MustTranslateRunStatus()))
 				return
 			}

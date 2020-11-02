@@ -19,8 +19,8 @@ package cmd
 import (
 	"fmt"
 	"github.com/c-bata/go-prompt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/gobs/args"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -88,7 +88,7 @@ func Executor(s string, wasEnter bool) {
 	if Parameters.CurrentRunId != "" {
 		describeCurrentStep = []string{"describe", "run", currentRunIdStr, "--step", currentStepIndexStr}
 	}
-	runStatus := dao.RunInProgress
+	runStatus := api.RunInProgress
 	if Parameters.CurrentRun != nil {
 		runStatus = Parameters.CurrentRun.Status
 	}
@@ -112,7 +112,7 @@ func Executor(s string, wasEnter bool) {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeCurrentStep, " ")))
 			RootCmd.SetArgs(describeCurrentStep)
 			Execute()
-			if runStatus == dao.RunDone {
+			if runStatus == api.RunDone {
 				ResetCommandParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 				RootCmd.SetArgs(getRunRunId)
@@ -121,7 +121,7 @@ func Executor(s string, wasEnter bool) {
 				nextInitialInput = s
 			}
 		} else {
-			if runStatus == dao.RunDone {
+			if runStatus == api.RunDone {
 				nextInitialInput = strings.Join(getRunRunId, " ")
 			} else {
 				nextInitialInput = strings.Join(describeCurrentStep, " ")
@@ -132,7 +132,7 @@ func Executor(s string, wasEnter bool) {
 			fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(describeCurrentStep, " ")))
 			RootCmd.SetArgs(describeCurrentStep)
 			Execute()
-			if runStatus == dao.RunDone {
+			if runStatus == api.RunDone {
 				ResetCommandParameters()
 				fmt.Println(fmt.Sprintf("%s%s", prefix, strings.Join(getRunRunId, " ")))
 				RootCmd.SetArgs(getRunRunId)
@@ -141,7 +141,7 @@ func Executor(s string, wasEnter bool) {
 				nextInitialInput = s
 			}
 		} else {
-			if runStatus == dao.RunDone {
+			if runStatus == api.RunDone {
 				nextInitialInput = strings.Join(getRunRunId, " ")
 			} else {
 				nextInitialInput = strings.Join(describeCurrentStep, " ")

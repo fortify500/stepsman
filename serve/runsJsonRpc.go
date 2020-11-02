@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
@@ -61,26 +60,9 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 				Message: err.Error(),
 			}
 		}
-		translateStatus := false
-		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
-			for _, attribute := range query.ReturnAttributes {
-				if attribute == "status" {
-					translateStatus = true
-				}
-			}
-		} else {
-			translateStatus = true
-		}
-		runRpcRecords, err := RunRecordToRunRPCRecord(runs, translateStatus)
-		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
-		}
 		result = api.ListRunsResult{
 			Range: *runsRange,
-			Data:  runRpcRecords,
+			Data:  runs,
 		}
 		return nil
 	})
@@ -115,14 +97,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 				Message: err.Error(),
 			}
 		}
-		runRpcRecords, err := RunRecordToRunRPCRecord(runs, true)
-		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
-		}
-		result = runRpcRecords
+		result = runs
 		return nil
 	})
 	return result, jsonRPCErr
@@ -138,28 +113,6 @@ func VetIds(ids []string) *jsonrpc.Error {
 		}
 	}
 	return nil
-}
-func RunRecordToRunRPCRecord(runRecords []*dao.RunRecord, translateStatus bool) ([]api.RunAPIRecord, error) {
-	var runRpcRecords []api.RunAPIRecord
-	for _, runRecord := range runRecords {
-		var status string
-		var err error
-		if translateStatus {
-			status, err = runRecord.Status.TranslateRunStatus()
-			if err != nil {
-				return nil, err
-			}
-		}
-		runRpcRecords = append(runRpcRecords, api.RunAPIRecord{
-			Id:              runRecord.Id,
-			Key:             runRecord.Key,
-			TemplateVersion: runRecord.TemplateVersion,
-			TemplateTitle:   runRecord.TemplateTitle,
-			Status:          status,
-			Template:        runRecord.Template,
-		})
-	}
-	return runRpcRecords, nil
 }
 
 func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -194,7 +147,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 			if !ok {
 				return jsonrpc.ErrInvalidParams()
 			}
-			newStatus, err := dao.TranslateToRunStatus(statusStr)
+			newStatus, err := api.TranslateToRunStatus(statusStr)
 			if err != nil {
 				return &jsonrpc.Error{
 					Code:    jsonrpc.ErrorCodeInvalidParams,
@@ -283,7 +236,7 @@ func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		}
 		result = &api.CreateRunsResult{
 			Id:     run.Id,
-			Status: run.Status.MustTranslateRunStatus(),
+			Status: run.Status,
 			Key:    key,
 		}
 		return nil

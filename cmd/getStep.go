@@ -60,7 +60,7 @@ var getStepCmd = &cobra.Command{
 			}
 			return
 		}
-		t, err := RenderStep(stepRecords[0], &script)
+		t, err := RenderStep(&stepRecords[0], &script)
 		if err != nil {
 			return
 		}

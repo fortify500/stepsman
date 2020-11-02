@@ -47,16 +47,16 @@ func listRunsInternal(runId string) {
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
 	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status"})
-	var runs []*dao.RunRecord
+	var runs []api.RunRecord
 	var runRange *api.RangeResult
 	if runId != "" {
-		var run *dao.RunRecord
+		var run *api.RunRecord
 		run, err = getRun(runId)
 		if err != nil {
 			Parameters.Err = err
 			return
 		}
-		runs = append(runs, run)
+		runs = append(runs, *run)
 	} else {
 		query := api.ListQuery{
 			Range: api.RangeQuery{

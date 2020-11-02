@@ -17,28 +17,13 @@
 package dao
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"strings"
-	"time"
-)
-
-const CurrentTimeStamp = "2006-01-02 15:04:05"
-
-type StepStatusType int64
-
-const (
-	StepIdle       StepStatusType = 0
-	StepInProgress StepStatusType = 2
-	StepFailed     StepStatusType = 4
-	StepDone       StepStatusType = 5
 )
 
 type StepState struct {
@@ -47,49 +32,7 @@ type StepState struct {
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
 
-type StepRecord struct {
-	RunId      string `db:"run_id"`
-	Index      int64  `db:"index"`
-	Label      string
-	UUID       string
-	Name       string
-	Status     StepStatusType
-	StatusUUID string `db:"status_uuid"`
-	Now        interface{}
-	HeartBeat  interface{}
-	State      string
-}
-
-func (s *StepRecord) PrettyJSONState() (string, error) {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-func (s *StepRecord) PrettyYamlState() (string, error) {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := yaml.Marshal(&tmp)
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-
-func (s *StepRecord) UpdateHeartBeat(uuid string) error {
+func UpdateHeartBeat(s *api.StepRecord, uuid string) error {
 	if s.StatusUUID != uuid {
 		return fmt.Errorf("cannot update heartbeat for a different status_uuid in order to prevent a race condition")
 	}
@@ -109,8 +52,8 @@ func (s *StepRecord) UpdateHeartBeat(uuid string) error {
 	return nil
 }
 
-func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]*StepRecord, error) {
-	var result []*StepRecord
+func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, error) {
+	var result []api.StepRecord
 	var rows *sqlx.Rows
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
@@ -125,12 +68,12 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]*StepRecord, error)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var step StepRecord
+		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse database steps row - get: %w", err)
 		}
-		result = append(result, &step)
+		result = append(result, step)
 	}
 	if result == nil || len(result) != len(getQuery.UUIDs) {
 		return nil, ErrRecordNotFound
@@ -138,8 +81,8 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]*StepRecord, error)
 	return result, nil
 }
 
-func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*StepRecord, error) {
-	var result *StepRecord
+func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*api.StepRecord, error) {
+	var result *api.StepRecord
 
 	const query = "SELECT *,CURRENT_TIMESTAMP as now FROM steps where run_id=$1 and \"index\"=$2"
 	var rows *sqlx.Rows
@@ -151,14 +94,10 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*StepRecord, error) {
 
 	defer rows.Close()
 	for rows.Next() {
-		var step StepRecord
+		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse database steps row - get: %w", err)
-		}
-		err = adjustStepNow(step)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse database steps row: %w", err)
 		}
 		result = &step
 		break
@@ -207,8 +146,8 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 	return sb.String(), nil
 }
 
-func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeResult, error) {
-	var result []*StepRecord
+func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
+	var result []api.StepRecord
 	var rows *sqlx.Rows
 	var err error
 	var count int64 = -1
@@ -361,16 +300,12 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeRe
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var step StepRecord
+		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse database steps row: %w", err)
 		}
-		err = adjustStepNow(step)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse database steps row: %w", err)
-		}
-		result = append(result, &step)
+		result = append(result, step)
 	}
 	{
 		rangeResult := api.RangeResult{
@@ -392,21 +327,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*StepRecord, *api.RangeRe
 	}
 }
 
-func adjustStepNow(step StepRecord) error {
-	var err error
-	switch v := step.Now.(type) {
-	case time.Time:
-	case string:
-		step.Now, err = time.Parse(CurrentTimeStamp, v)
-	case []byte:
-		step.Now, err = time.Parse(CurrentTimeStamp, string(step.Now.([]byte)))
-	default:
-		err = fmt.Errorf("invalid type for current_timestamp")
-	}
-	return err
-}
-
-func (s *StepRecord) UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatusType) (sql.Result, error) {
+func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType) (sql.Result, error) {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate uuid: %w", err)
@@ -415,7 +336,7 @@ func (s *StepRecord) UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatu
 	return tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP where run_id=$2 and \"index\"=$3", newStatus, s.RunId, s.Index)
 }
 
-func (s *StepRecord) UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus StepStatusType, newState *StepState) (sql.Result, error) {
+func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType, newState *StepState) (sql.Result, error) {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate uuid: %w", err)
@@ -426,40 +347,4 @@ func (s *StepRecord) UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, newStatus S
 	}
 	s.StatusUUID = uuid4.String()
 	return tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP where run_id=$3 and \"index\"=$4", newStatus, newStateStr, s.RunId, s.Index)
-}
-
-func (s StepStatusType) MustTranslateStepStatus() string {
-	stepStatus, err := s.TranslateStepStatus()
-	if err != nil {
-		logrus.Panic(err)
-	}
-	return stepStatus
-}
-func (s StepStatusType) TranslateStepStatus() (string, error) {
-	switch s {
-	case StepIdle:
-		return "Idle", nil
-	case StepInProgress:
-		return "In Progress", nil
-	case StepFailed:
-		return "Failed", nil
-	case StepDone:
-		return "Done", nil
-	default:
-		return "Error", fmt.Errorf("failed to translate step status: %d", s)
-	}
-}
-func TranslateToStepStatus(status string) (StepStatusType, error) {
-	switch status {
-	case "Idle":
-		return StepIdle, nil
-	case "In Progress":
-		return StepInProgress, nil
-	case "Failed":
-		return StepFailed, nil
-	case "Done":
-		return StepDone, nil
-	default:
-		return StepIdle, fmt.Errorf("failed to translate statys to step status")
-	}
 }

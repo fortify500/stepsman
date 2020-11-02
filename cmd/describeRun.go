@@ -133,7 +133,7 @@ You can also describe a single step by adding --step <Index>.`,
 			if index > 0 && index != int64(i)+1 {
 				continue
 			}
-			t, err = RenderStep(stepRecord, &script)
+			t, err = RenderStep(&stepRecord, &script)
 
 			if err != nil {
 				msg := "failed to describe steps"
@@ -150,7 +150,7 @@ You can also describe a single step by adding --step <Index>.`,
 	},
 }
 
-func RenderStep(stepRecord *dao.StepRecord, script *bl.Template) (table.Writer, error) {
+func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, error) {
 	status, err := stepRecord.Status.TranslateStepStatus()
 	if err != nil {
 		msg := "failed to describe steps"
@@ -163,11 +163,11 @@ func RenderStep(stepRecord *dao.StepRecord, script *bl.Template) (table.Writer, 
 	checked := "[ ]"
 	heartBeat := "N/A"
 	switch stepRecord.Status {
-	case dao.StepDone:
+	case api.StepDone:
 		checked = "True"
 	}
-	if stepRecord.Status == dao.StepInProgress {
-		heartBeat = fmt.Sprintf("%s", stepRecord.HeartBeat)
+	if stepRecord.Status == api.StepInProgress {
+		heartBeat = fmt.Sprintf("%s", stepRecord.Heartbeat)
 	}
 	step := script.Steps[stepRecord.Index-1]
 	t := table.NewWriter()

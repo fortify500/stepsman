@@ -19,9 +19,7 @@ package client
 import (
 	"encoding/json"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/dao"
 	"io"
-	"time"
 )
 
 type ListStepsResponse struct {
@@ -31,8 +29,8 @@ type ListStepsResponse struct {
 	ID      string              `json:"id,omitempty"`
 }
 
-func RemoteListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult, error) {
-	result := make([]*dao.StepRecord, 0)
+func RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
+	var result []api.StepRecord
 	params := api.ListParams{}
 	if query != nil {
 		params = api.ListParams(*query)
@@ -56,52 +54,48 @@ func RemoteListSteps(query *api.ListQuery) ([]*dao.StepRecord, *api.RangeResult,
 		if jsonRPCResult.Result.Data != nil &&
 			jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
 			jsonRPCResult.Result.Range.Start > 0 {
-			for _, record := range jsonRPCResult.Result.Data {
-				err = appendStepToResult(record, &result)
-				if err != nil {
-					return err
-				}
-			}
+			result = jsonRPCResult.Result.Data
+			rangeResult = &jsonRPCResult.Result.Range
 		}
-		rangeResult = &jsonRPCResult.Result.Range
+
 		return err
 	})
 	return result, rangeResult, err
 }
 
-func appendStepToResult(record api.StepAPIRecord, result *[]*dao.StepRecord) error {
-	status, err := dao.TranslateToStepStatus(record.Status)
-	if err != nil {
-		return err
-	}
-	var now time.Time
-	var heartbeat time.Time
-	if record.Now != "" {
-		now, err = time.Parse(time.RFC3339, record.Now)
-		if err != nil {
-			return err
-		}
-	}
-	if record.HeartBeat != "" {
-		heartbeat, err = time.Parse(time.RFC3339, record.HeartBeat)
-		if err != nil {
-			return err
-		}
-	}
-	*result = append(*result, &dao.StepRecord{
-		RunId:      record.RunId,
-		Index:      record.Index,
-		Label:      record.Label,
-		UUID:       record.UUID,
-		Name:       record.Name,
-		Status:     status,
-		StatusUUID: record.StatusUUID,
-		Now:        now,
-		HeartBeat:  heartbeat,
-		State:      record.State,
-	})
-	return nil
-}
+//func appendStepToResult(record api.StepAPIRecord, result *[]*api.StepRecord) error {
+//	status, err := api.TranslateToStepStatus(record.Status)
+//	if err != nil {
+//		return err
+//	}
+//	var now time.Time
+//	var heartbeat time.Time
+//	if record.Now != "" {
+//		now, err = time.Parse(time.RFC3339, record.Now)
+//		if err != nil {
+//			return err
+//		}
+//	}
+//	if record.HeartBeat != "" {
+//		heartbeat, err = time.Parse(time.RFC3339, record.HeartBeat)
+//		if err != nil {
+//			return err
+//		}
+//	}
+//	*result = append(*result, &api.StepRecord{
+//		RunId:      record.RunId,
+//		Index:      record.Index,
+//		Label:      record.Label,
+//		UUID:       record.UUID,
+//		Name:       record.Name,
+//		Status:     status,
+//		StatusUUID: record.StatusUUID,
+//		Now:        now,
+//		Heartbeat:  heartbeat,
+//		State:      record.State,
+//	})
+//	return nil
+//}
 
 type GetStepsResponse struct {
 	Version string             `json:"jsonrpc"`
@@ -110,8 +104,8 @@ type GetStepsResponse struct {
 	ID      string             `json:"id,omitempty"`
 }
 
-func RemoteGetSteps(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
-	result := make([]*dao.StepRecord, 0)
+func RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
+	var result []api.StepRecord
 	request, err := NewMarshaledJSONRPCRequest("1", api.RPCGetSteps, query)
 	if err != nil {
 		return nil, err
@@ -128,12 +122,7 @@ func RemoteGetSteps(query *api.GetStepsQuery) ([]*dao.StepRecord, error) {
 			return err
 		}
 		if jsonRPCResult.Result != nil {
-			for _, record := range jsonRPCResult.Result {
-				err = appendStepToResult(record, &result)
-				if err != nil {
-					return err
-				}
-			}
+			result = jsonRPCResult.Result
 		}
 		return err
 	})

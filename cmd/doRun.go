@@ -51,7 +51,7 @@ Use run <run id>.`,
 		}
 		Parameters.CurrentRunId = run.Id
 		Parameters.CurrentRun = run
-		if run.Status == dao.RunDone {
+		if run.Status == api.RunDone {
 			msg := "run is already done"
 			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg),
@@ -104,7 +104,7 @@ Use run <run id>.`,
 			return
 		}
 		step := template.Steps[stepRecord.Index-1]
-		err = step.StartDo(stepRecord)
+		err = step.StartDo(&stepRecord)
 		if err != nil {
 			msg := "failed to start do"
 			Parameters.Err = &Error{

@@ -18,8 +18,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +37,7 @@ Use run <run id>.`,
 			Parameters.Err = err
 			return
 		}
-		status, err := dao.TranslateToRunStatus(Parameters.Status)
+		status, err := api.TranslateToRunStatus(Parameters.Status)
 		if err != nil {
 			Parameters.Err = err
 			return
@@ -64,7 +64,7 @@ func init() {
 	updateCmd.AddCommand(updateRunCmd)
 	initFlags := func() error {
 		updateRunCmd.ResetFlags()
-		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s, %s", dao.StepIdle.MustTranslateStepStatus(), dao.StepInProgress.MustTranslateStepStatus(), dao.StepFailed.MustTranslateStepStatus(), dao.StepDone.MustTranslateStepStatus()))
+		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s, %s", api.StepIdle.MustTranslateStepStatus(), api.StepInProgress.MustTranslateStepStatus(), api.StepFailed.MustTranslateStepStatus(), api.StepDone.MustTranslateStepStatus()))
 		err := updateRunCmd.MarkFlagRequired("status")
 		return err
 	}

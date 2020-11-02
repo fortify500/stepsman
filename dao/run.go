@@ -17,64 +17,15 @@
 package dao
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
-	"gopkg.in/yaml.v2"
-	"log"
 	"strings"
 )
 
-type RunStatusType int64
-
-const (
-	RunIdle       RunStatusType = 10
-	RunInProgress RunStatusType = 12
-	RunDone       RunStatusType = 15
-)
-
-type RunRecord struct {
-	Id              string
-	Key             string
-	TemplateVersion int64  `db:"template_version"`
-	TemplateTitle   string `db:"template_title"`
-	Status          RunStatusType
-	Template        string
-}
-
-func (r *RunRecord) PrettyJSONTemplate() (string, error) {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-func (r *RunRecord) PrettyYamlTemplate() (string, error) {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(r.Template)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		return "", err
-	}
-	prettyBytes, err := yaml.Marshal(&tmp)
-	if err != nil {
-		return "", err
-	}
-	return string(prettyBytes), err
-}
-func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*RunRecord, *api.RangeResult, error) {
-	var result []*RunRecord
+func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
+	var result []api.RunRecord
 	var rows *sqlx.Rows
 	var err error
 	var count int64 = -1
@@ -228,12 +179,12 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]*RunRecord, *api.RangeResu
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var run RunRecord
+		var run api.RunRecord
 		err = rows.StructScan(&run)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse database runs row: %w", err)
 		}
-		result = append(result, &run)
+		result = append(result, run)
 	}
 	{
 		rangeResult := api.RangeResult{
@@ -294,8 +245,8 @@ func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) error {
 	return err
 }
 
-func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]*RunRecord, error) {
-	var result []*RunRecord
+func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {
+	var result []api.RunRecord
 	var rows *sqlx.Rows
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
@@ -310,12 +261,12 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]*RunRecord, error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var run RunRecord
+		var run api.RunRecord
 		err = rows.StructScan(&run)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse database runs row - get: %w", err)
 		}
-		result = append(result, &run)
+		result = append(result, run)
 	}
 	if result == nil || len(result) != len(getQuery.Ids) {
 		return nil, ErrRecordNotFound
@@ -323,38 +274,6 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]*RunRecord, error) {
 	return result, nil
 }
 
-func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus RunStatusType) (sql.Result, error) {
+func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType) (sql.Result, error) {
 	return tx.Exec("update runs set status=$1 where id=$2", newStatus, id)
-}
-
-func TranslateToRunStatus(status string) (RunStatusType, error) {
-	switch status {
-	case "Stopped":
-		return RunIdle, nil
-	case "In Progress":
-		return RunInProgress, nil
-	case "Done":
-		return RunDone, nil
-	default:
-		return RunIdle, fmt.Errorf("failed to translate run status: %s", status)
-	}
-}
-func (s RunStatusType) TranslateRunStatus() (string, error) {
-	switch s {
-	case RunIdle:
-		return "Stopped", nil
-	case RunInProgress:
-		return "In Progress", nil
-	case RunDone:
-		return "Done", nil
-	default:
-		return "", fmt.Errorf("failed to translate run status: %d", s)
-	}
-}
-func (s RunStatusType) MustTranslateRunStatus() string {
-	status, err := s.TranslateRunStatus()
-	if err != nil {
-		log.Panic(err)
-	}
-	return status
 }

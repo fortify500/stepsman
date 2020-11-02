@@ -19,7 +19,6 @@ package client
 import (
 	"encoding/json"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/dao"
 	"io"
 )
 
@@ -30,8 +29,8 @@ type ListRunsResponse struct {
 	ID      string             `json:"id,omitempty"`
 }
 
-func RemoteListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, error) {
-	result := make([]*dao.RunRecord, 0)
+func RemoteListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
+	var result []api.RunRecord
 	params := api.ListParams{}
 	if query != nil {
 		params = api.ListParams(*query)
@@ -55,23 +54,10 @@ func RemoteListRuns(query *api.ListQuery) ([]*dao.RunRecord, *api.RangeResult, e
 		if jsonRPCResult.Result.Data != nil &&
 			jsonRPCResult.Result.Range.End >= jsonRPCResult.Result.Range.Start &&
 			jsonRPCResult.Result.Range.Start > 0 {
-			var status dao.RunStatusType
-			for _, record := range jsonRPCResult.Result.Data {
-				status, err = dao.TranslateToRunStatus(record.Status)
-				if err != nil {
-					return err
-				}
-				result = append(result, &dao.RunRecord{
-					Id:              record.Id,
-					Key:             record.Key,
-					TemplateVersion: record.TemplateVersion,
-					TemplateTitle:   record.TemplateTitle,
-					Status:          status,
-					Template:        record.Template,
-				})
-			}
+			rangeResult = &jsonRPCResult.Result.Range
+			result = jsonRPCResult.Result.Data
 		}
-		rangeResult = &jsonRPCResult.Result.Range
+
 		return err
 	})
 	return result, rangeResult, err
@@ -84,8 +70,8 @@ type GetRunsResponse struct {
 	ID      string            `json:"id,omitempty"`
 }
 
-func RemoteGetRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
-	result := make([]*dao.RunRecord, 0)
+func RemoteGetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
+	var result []api.RunRecord
 	request, err := NewMarshaledJSONRPCRequest("1", api.RPCGetRuns, query)
 	if err != nil {
 		return nil, err
@@ -102,21 +88,7 @@ func RemoteGetRuns(query *api.GetRunsQuery) ([]*dao.RunRecord, error) {
 			return err
 		}
 		if jsonRPCResult.Result != nil {
-			var status dao.RunStatusType
-			for _, record := range jsonRPCResult.Result {
-				status, err = dao.TranslateToRunStatus(record.Status)
-				if err != nil {
-					return err
-				}
-				result = append(result, &dao.RunRecord{
-					Id:              record.Id,
-					Key:             record.Key,
-					TemplateVersion: record.TemplateVersion,
-					TemplateTitle:   record.TemplateTitle,
-					Status:          status,
-					Template:        record.Template,
-				})
-			}
+			result = jsonRPCResult.Result
 		}
 		return err
 	})
@@ -157,13 +129,13 @@ type CreateRunResponse struct {
 	ID      string               `json:"id,omitempty"`
 }
 
-func RemoteCreateRun(params *api.CreateRunParams) (string, string, dao.RunStatusType, error) {
+func RemoteCreateRun(params *api.CreateRunParams) (string, string, api.RunStatusType, error) {
 	var runId string
 	key := params.Key
-	var status dao.RunStatusType
+	var status api.RunStatusType
 	request, err := NewMarshaledJSONRPCRequest("1", api.RPCCreateRun, params)
 	if err != nil {
-		return "", "", dao.RunIdle, err
+		return "", "", api.RunIdle, err
 	}
 	err = remoteJRPCCall(request, func(body *io.ReadCloser) error {
 		var jsonRPCResult CreateRunResponse
@@ -176,18 +148,13 @@ func RemoteCreateRun(params *api.CreateRunParams) (string, string, dao.RunStatus
 		if err != nil {
 			return err
 		}
-		status, err = dao.TranslateToRunStatus(jsonRPCResult.Result.Status)
-		if err != nil {
-			return err
-		}
+		status = jsonRPCResult.Result.Status
 		runId = jsonRPCResult.Result.Id
-		if jsonRPCResult.Result.Key != "" {
-			key = jsonRPCResult.Result.Key
-		}
+		key = jsonRPCResult.Result.Key
 		return nil
 	})
 	if err != nil {
-		return "", "", dao.RunIdle, err
+		return "", "", api.RunIdle, err
 	}
 	return runId, key, status, nil
 }
