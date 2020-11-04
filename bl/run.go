@@ -103,7 +103,7 @@ func UpdateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
 			return fmt.Errorf("failed to update database run status: %w", err)
 		}
 		if newStatus == runRecord.Status {
-			return ErrStatusNotChanged
+			return api.NewError(api.ErrStatusNotChanged, "update run status have not changed")
 		}
 		dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
 		return nil

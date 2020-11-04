@@ -52,10 +52,7 @@ func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		query := api.ListQuery(p)
 		steps, stepsRange, err := bl.ListSteps(&query)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 
 		result = api.ListStepsResult{
@@ -83,17 +80,13 @@ func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 				return errResult
 			}
 		}
-		vetErr := dao.VetIds(p.UUIDs)
-		if vetErr != nil {
-			return vetErr
+		if err := dao.VetIds(p.UUIDs); err != nil {
+			return resolveError(err)
 		}
 		query := api.GetStepsQuery(p)
 		steps, err := bl.GetSteps(&query)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 		result = steps
 		return nil
@@ -121,10 +114,7 @@ func (h UpdateStepHandler) ServeJSONRPC(c context.Context, params *fastjson.RawM
 		query := api.UpdateQuery(p)
 		err := bl.UpdateStep(&query)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 		result = &api.UpdateStepResult{}
 		return nil
@@ -148,16 +138,12 @@ func (h DoStepHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessa
 				return errResult
 			}
 		}
-		vetErr := dao.VetIds([]string{p.UUID})
-		if vetErr != nil {
-			return vetErr
+		if err := dao.VetIds([]string{p.UUID}); err != nil {
+			return resolveError(err)
 		}
 		err := bl.DoStep(p.UUID)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 		result = &api.DoStepResult{}
 		return nil

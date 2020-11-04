@@ -60,14 +60,14 @@ func updateStep(query *api.UpdateQuery) error {
 	}
 	if len(query.Changes) > 0 {
 		if len(query.Changes) > 2 {
-			return fmt.Errorf("more than 2 change types. currently only 2 change type are supported: status or heartbeat")
+			return api.NewError(api.ErrInvalidParams, "more than 2 change types. currently only 2 change type are supported: status or heartbeat")
 		}
 		val, ok := query.Changes["status"]
 		if ok {
 			var statusStr string
 			statusStr, ok = val.(string)
 			if !ok {
-				return fmt.Errorf("status must be of string type")
+				return api.NewError(api.ErrInvalidParams, "status must be of string type")
 			}
 			newStatus, err := api.TranslateToStepStatus(statusStr)
 			if err != nil {
@@ -81,7 +81,7 @@ func updateStep(query *api.UpdateQuery) error {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
 			if len(stepRecords) != 1 {
-				return fmt.Errorf("failed to locate step record for uuid [%s]", query.Id)
+				return api.NewError(api.ErrRecordNotFound, "failed to locate step record for uuid [%s]", query.Id)
 			}
 
 			stepRecord := stepRecords[0]
@@ -103,12 +103,12 @@ func updateStep(query *api.UpdateQuery) error {
 		} else {
 			val, ok = query.Changes["heartbeat"]
 			if !ok {
-				return fmt.Errorf("unsupported update fields provided")
+				return api.NewError(api.ErrInvalidParams, "unsupported update fields provided")
 			}
 			var statusUUIDStr string
 			statusUUIDStr, ok = val.(string)
 			if !ok {
-				return fmt.Errorf("status must be of string type")
+				return api.NewError(api.ErrInvalidParams, "status uuid must be of string type")
 			}
 			err := dao.UpdateHeartBeat(query.Id, statusUUIDStr)
 			if err != nil {
@@ -127,7 +127,6 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 		if err != nil {
 			return fmt.Errorf("failed to update database stepRecord row: %w", err)
 		}
-
 		// if we are starting check if the stepRecord is already in-progress.
 		if !doFinish && stepRecord.Status == api.StepInProgress {
 			delta := time.Time(stepRecord.Now).Sub(time.Time(stepRecord.Heartbeat))
@@ -136,14 +135,17 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 			}
 			heartBeatInterval := s.GetHeartBeatInterval()
 			if delta <= heartBeatInterval {
-				err = fmt.Errorf("stepRecord is already in progress and has a heartbeat with an interval of %d: %w", heartBeatInterval, ErrStepAlreadyInProgress)
-				return fmt.Errorf("failed to update database stepRecord row: %w", err)
+				return api.NewError(api.ErrStepAlreadyInProgress, "failed to update database stepRecord row, stepRecord is already in progress and has a heartbeat with an interval of %d", heartBeatInterval)
+			}
+		} else if stepRecord.Status == api.StepInProgress {
+			if stepRecord.StatusUUID != prevStepRecord.StatusUUID {
+				return api.NewError(api.ErrRecordNotAffected, "while updating step status, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", prevStepRecord.UUID, prevStepRecord.StatusUUID)
 			}
 		}
 
 		// don't change done if the status did not change.
 		if newStatus == stepRecord.Status {
-			return ErrStatusNotChanged
+			return api.NewError(api.ErrStatusNotChanged, "step status have not changed")
 		}
 		//remote state if we are back to idle.
 		if newStatus == api.StepIdle {
@@ -166,8 +168,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 			if run.Status == api.RunIdle {
 				dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
 			} else if run.Status == api.RunDone {
-				err = ErrRunIsAlreadyDone
-				return fmt.Errorf("failed to update database stepRecord status: %w", err)
+				return api.NewError(api.ErrRunIsAlreadyDone, "failed to update database stepRecord status, run is already done and no change is possible")
 			}
 		}
 		stepRecord, err = dao.GetStepTx(tx, runId, prevStepRecord.Index)
@@ -196,6 +197,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
 		heartbeatInterval = DefaultHeartBeatInterval
 	}
 	var wg sync.WaitGroup
+	var errBeat error
 	heartBeatDone1 := make(chan int)
 	heartBeatDone2 := make(chan int)
 	heartbeat := func() {
@@ -207,9 +209,10 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
 			case <-heartBeatDone2:
 				break OUT
 			case <-time.After(heartbeatInterval):
-				errBeat := dao.UpdateHeartBeat(updatedStepRecord.UUID, updatedStepRecord.StatusUUID)
+				errBeat = dao.UpdateHeartBeat(updatedStepRecord.UUID, updatedStepRecord.StatusUUID)
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
+					break OUT
 				}
 			}
 		}
@@ -222,15 +225,18 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
 	decoder.DisallowUnknownFields()
 	var prevState dao.StepState
 	err = decoder.Decode(&prevState)
+	if err != nil {
+		panic(err)
+	}
 	var newState *dao.StepState
 	var doErr error
-	if err == nil {
+	if errBeat == nil {
 		newState, doErr = do(s.doType, s.Do, &prevState)
 	}
 	close(heartBeatDone2)
 	wg.Wait()
 	var newStepStatus api.StepStatusType
-	if err != nil || doErr != nil {
+	if doErr != nil || errBeat != nil {
 		newStepStatus = api.StepFailed
 	} else {
 		newStepStatus = api.StepDone
@@ -255,7 +261,7 @@ func doStep(uuid string) error {
 		return fmt.Errorf("failed to do step: %w", err)
 	}
 	if len(stepRecords) != 1 {
-		return fmt.Errorf("failed to locate step uuid [%s]", uuid)
+		return api.NewError(api.ErrRecordNotFound, "failed to locate step uuid [%s]", uuid)
 	}
 	stepRecord := stepRecords[0]
 	run, err := GetRun(stepRecord.RunId)
@@ -263,8 +269,7 @@ func doStep(uuid string) error {
 		return fmt.Errorf("failed to do step: %w", err)
 	}
 	if run.Status == api.RunDone {
-		//TODO: return a predefined error here
-		return fmt.Errorf("failed to do step, run is already done")
+		return api.NewError(api.ErrRunIsAlreadyDone, "failed to do step, run is already done and no change is possible")
 	}
 
 	template := Template{}

@@ -38,12 +38,9 @@ func UpdateHeartBeat(stepUUID string, statusUUID string) error {
 		affected, err = res.RowsAffected()
 		if err == nil {
 			if affected < 1 {
-				err = fmt.Errorf("no rows where affecting, suggesting status_uuid has changed (but possibly the record have been deleted)")
+				return api.NewError(api.ErrRecordNotAffected, "while updating step heartbeat, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", stepUUID, statusUUID)
 			}
 		}
-	}
-	if err != nil {
-		return fmt.Errorf("failed to update database step heartbeat: %w", err)
 	}
 	return nil
 }
@@ -52,7 +49,7 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, err
 	var result []api.StepRecord
 	var rows *sqlx.Rows
 	var err error
-	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
+	attributesStr, err := buildStepsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get steps transcational: %w", err)
 	}
@@ -79,7 +76,7 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, err
 		result = append(result, step)
 	}
 	if result == nil || len(result) != len(getQuery.UUIDs) {
-		return nil, ErrRecordNotFound
+		return nil, api.NewError(api.ErrRecordNotFound, "failed to get steps records, at least one record is missing")
 	}
 	return result, nil
 }
@@ -106,7 +103,7 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*api.StepRecord, error) 
 		break
 	}
 	if result == nil {
-		return nil, ErrRecordNotFound
+		return nil, api.NewError(api.ErrRecordNotFound, "failed to get step record, no record found")
 	}
 	return result, nil
 }
@@ -129,7 +126,7 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		case State:
 		case Now:
 		default:
-			return "", fmt.Errorf("invalid attribute name in return-attributes: %s", attribute)
+			return "", api.NewError(api.ErrInvalidParams, "invalid attribute name in return-attributes: %s", attribute)
 		}
 		set[attribute] = true
 	}
@@ -183,7 +180,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 			case Label:
 			case Name:
 			default:
-				return nil, nil, fmt.Errorf("invalid attribute name in filter: %s", expression.AttributeName)
+				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in filter: %s", expression.AttributeName)
 			}
 			queryExpression = fmt.Sprintf("\"%s\"", attributeName)
 			switch expression.Operator {
@@ -197,7 +194,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				switch expression.AttributeName {
 				case Index:
 				default:
-					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
 				queryExpression += expression.Operator
 				queryExpression += fmt.Sprintf("$%d", +i+1)
@@ -211,7 +208,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				case Label:
 				case Name:
 				default:
-					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
 				queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
 			case "endsWith":
@@ -219,7 +216,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				case Label:
 				case Name:
 				default:
-					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
 				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
 			case "contains":
@@ -227,11 +224,11 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				case Label:
 				case Name:
 				default:
-					return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
 				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i+1)
 			default:
-				return nil, nil, fmt.Errorf("invalud operator in filter: %s", expression.Operator)
+				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid operator in filter: %s", expression.Operator)
 			}
 			params = append(params, expression.Value)
 			if filterQuery != "" {
@@ -260,7 +257,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				case Label:
 				case Name:
 				default:
-					return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in sort fields: %s", field)
 				}
 				if sort != orderBy {
 					sort += ","
@@ -271,7 +268,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 			case "desc":
 			case "asc":
 			default:
-				return nil, nil, fmt.Errorf("invalid sort order: %s", query.Sort.Order)
+				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid sort order: %s", query.Sort.Order)
 			}
 			sqlQuery += sort + " " + query.Sort.Order
 		} else {

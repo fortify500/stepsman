@@ -93,7 +93,7 @@ func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 		err = decoder.Decode(s)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to load from bytes: %w", err)
+		return api.NewWrapError(api.ErrInvalidParams, err, "failed to load from bytes: %w", err)
 	}
 	for i := range s.Steps {
 		err = (&s.Steps[i]).AdjustUnmarshalStep()
@@ -153,7 +153,7 @@ func (s *Step) AdjustUnmarshalStep() error {
 			switch doMap["type"].(type) {
 			case string:
 			default:
-				return fmt.Errorf("failed to adjust step do options, invalid do type - type value")
+				return api.NewError(api.ErrInvalidParams, "failed to adjust step do options, invalid do type - type value")
 			}
 			doType = DoType(doMap["type"].(string))
 		case map[string]interface{}:
@@ -161,14 +161,14 @@ func (s *Step) AdjustUnmarshalStep() error {
 			switch doMap["type"].(type) {
 			case string:
 			default:
-				return fmt.Errorf("failed to adjust step do options, invalid do type - string type value")
+				return api.NewError(api.ErrInvalidParams, "failed to adjust step do options, invalid do type - string type value")
 			}
 			doType = DoType(doMap["type"].(string))
 		case map[string]string:
 			doMap := s.Do.(map[string]string)
 			doType = DoType(doMap["type"])
 		default:
-			return fmt.Errorf("failed to adjust step do options, invalid do type")
+			return api.NewError(api.ErrInvalidParams, "failed to adjust step do options, invalid do type")
 		}
 
 		switch doType {
@@ -181,19 +181,19 @@ func (s *Step) AdjustUnmarshalStep() error {
 					Result:   &doRest,
 				})
 			if err != nil {
-				return fmt.Errorf("failed to adjust step do rest: %w", err)
+				return api.NewWrapError(api.ErrInvalidParams, err, "failed to adjust step do rest: %w", err)
 			}
 			err = decoder.Decode(s.Do)
 			if err != nil {
-				return fmt.Errorf("failed to adjust step do rest: %w", err)
+				return api.NewWrapError(api.ErrInvalidParams, err, "failed to adjust step do rest: %w", err)
 			}
 			if len(md.Unused) > 0 {
-				return fmt.Errorf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
+				return api.NewError(api.ErrInvalidParams, "unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
 			}
 			s.stepDo = doRest.StepDo
 			s.Do = doRest
 		default:
-			return fmt.Errorf("unsupported do type: %s", doType)
+			return api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 		}
 		s.doType = doType
 	}

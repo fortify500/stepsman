@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io"
+	"runtime/debug"
 	"time"
 )
 
@@ -204,7 +206,7 @@ func TranslateToRunStatus(status string) (RunStatusType, error) {
 	case "Done":
 		return RunDone, nil
 	default:
-		return RunIdle, fmt.Errorf("failed to translate run status: %s", status)
+		return RunIdle, NewError(ErrInvalidParams, "failed to translate run status: %s", status)
 	}
 }
 
@@ -342,11 +344,80 @@ func TranslateToStepStatus(status string) (StepStatusType, error) {
 	case "Done":
 		return StepDone, nil
 	default:
-		return StepIdle, fmt.Errorf("failed to translate statys to step status")
+		return StepIdle, NewError(ErrInvalidParams, "failed to translate to step status: %s", status)
 	}
 }
 func InitLogrus(out io.Writer) {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.TraceLevel)
 	log.SetOutput(out)
+}
+
+type ErrorCode struct {
+	Code    int
+	Message string
+}
+
+var ErrStatusNotChanged = &ErrorCode{
+	Code:    1000,
+	Message: "status did not change",
+}
+var ErrInvalidParams = &ErrorCode{
+	Code:    int(jsonrpc.ErrInvalidParams().Code),
+	Message: jsonrpc.ErrInvalidParams().Message,
+}
+var ErrRecordNotFound = &ErrorCode{
+	Code:    1001,
+	Message: "failed to locate record",
+}
+var ErrRecordNotAffected = &ErrorCode{
+	Code:    1002,
+	Message: "failed to affect record",
+}
+var ErrExternal = &ErrorCode{
+	Code:    1003,
+	Message: "failed to interact with an external resource",
+}
+var ErrStepAlreadyInProgress = &ErrorCode{
+	Code:    1004,
+	Message: "step is already in progress",
+}
+var ErrRunIsAlreadyDone = &ErrorCode{
+	Code:    1005,
+	Message: "run is already done, no change is possible",
+}
+
+type Error struct {
+	msg   string
+	stack []byte //only available if debug is enabled.
+	code  *ErrorCode
+	err   error
+}
+
+func NewError(code *ErrorCode, msg string, args ...interface{}) *Error {
+	return NewWrapError(code, nil, msg, args...)
+}
+func NewWrapError(code *ErrorCode, wrapErr error, msg string, args ...interface{}) *Error {
+	newErr := &Error{
+		msg:  fmt.Errorf(msg, args...).Error(),
+		code: code,
+		err:  wrapErr,
+	}
+	if log.IsLevelEnabled(log.DebugLevel) {
+		newErr.stack = debug.Stack()
+	}
+	return newErr
+}
+
+func (e *Error) Error() string {
+	return e.msg
+}
+func (e *Error) Stack() []byte {
+	return e.stack
+}
+func (e *Error) Code() *ErrorCode {
+	return e.code
+}
+func (e *Error) Unwrap() error {
+	return e.err
 }

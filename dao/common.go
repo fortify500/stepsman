@@ -21,7 +21,6 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
@@ -168,7 +167,7 @@ func Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err error) {
 	var tx *sqlx.Tx
 	tx, err = DB.SQL().Beginx()
 	if err != nil {
-		return err
+		panic(err)
 	}
 	defer func() {
 		if p := recover(); p != nil {
@@ -180,10 +179,13 @@ func Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err error) {
 		} else if err != nil {
 			err2 := tx.Rollback()
 			if err2 != nil {
-				defer log.WithField("stack", string(debug.Stack())).Trace(fmt.Errorf("failed to rollback: %w", err2))
+				panic(err2)
 			}
 		} else {
-			err = tx.Commit()
+			err2 := tx.Commit()
+			if err2 != nil {
+				panic(err2)
+			}
 		}
 	}()
 	err = transactionalFunction(tx)
@@ -195,12 +197,12 @@ func InitLogrus(out io.Writer) {
 	log.SetOutput(out)
 }
 
-func VetIds(ids []string) *jsonrpc.Error {
+func VetIds(ids []string) error {
 	if ids != nil {
 		for _, id := range ids {
 			_, err := uuid.Parse(id)
 			if err != nil {
-				return jsonrpc.ErrInvalidParams()
+				return api.NewError(api.ErrInvalidParams, "failed to parse UUID: %s", id)
 			}
 		}
 	}

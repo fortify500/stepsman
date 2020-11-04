@@ -40,7 +40,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 			var attributesStr string
 			attributesStr, err = buildRunsReturnAttributesStrAndVet(query.ReturnAttributes)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("failed to list runs: %w", err)
 			}
 			sqlQuery = fmt.Sprintf("SELECT %s FROM runs", attributesStr)
 		}
@@ -59,7 +59,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 					attributeName = "template_title"
 				case Status:
 				default:
-					return nil, nil, fmt.Errorf("invalid attribute name in filter: %s", expression.AttributeName)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in filter: %s", expression.AttributeName)
 				}
 				queryExpression = fmt.Sprintf("\"%s\"", attributeName)
 				switch expression.Operator {
@@ -73,7 +73,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 					switch expression.AttributeName {
 					case TemplateVersion:
 					default:
-						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += expression.Operator
 					queryExpression += fmt.Sprintf("$%d", +i+1)
@@ -87,7 +87,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 					case Key:
 					case TemplateTitle:
 					default:
-						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
 				case "endsWith":
@@ -95,7 +95,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 					case Key:
 					case TemplateTitle:
 					default:
-						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
 				case "contains":
@@ -103,11 +103,11 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 					case Key:
 					case TemplateTitle:
 					default:
-						return nil, nil, fmt.Errorf("invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
 					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i+1)
 				default:
-					return nil, nil, fmt.Errorf("invalud operator in filter: %s", expression.Operator)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid operator in filter: %s", expression.Operator)
 				}
 				params = append(params, expression.Value)
 				if filterQuery != "" {
@@ -134,7 +134,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 						fieldDB = "template_title"
 					case Status:
 					default:
-						return nil, nil, fmt.Errorf("invalid attribute name in sort fields: %s", field)
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in sort fields: %s", field)
 					}
 					if sort != orderBy {
 						sort += ","
@@ -145,7 +145,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 				case "desc":
 				case "asc":
 				default:
-					return nil, nil, fmt.Errorf("invalid sort order: %s", query.Sort.Order)
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid sort order: %s", query.Sort.Order)
 				}
 				sqlQuery += sort + " " + query.Sort.Order
 			} else {
@@ -220,7 +220,7 @@ func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		case Status:
 		case Template:
 		default:
-			return "", fmt.Errorf("invalid attribute name in return-attributes: %s", attribute)
+			return "", api.NewError(api.ErrInvalidParams, "invalid attribute name in return-attributes: %s", attribute)
 		}
 		set[attribute] = true
 	}
@@ -234,7 +234,7 @@ func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		}
 		_, err := sb.WriteString(str)
 		if err != nil {
-			return "", fmt.Errorf("failed to concatenate return-attribtues")
+			panic(fmt.Errorf("failed to concatenate return-attribtues"))
 		}
 	}
 	return sb.String(), nil
@@ -276,7 +276,7 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 		result = append(result, run)
 	}
 	if result == nil || len(result) != len(getQuery.Ids) {
-		return nil, ErrRecordNotFound
+		return nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
 	}
 	return result, nil
 }

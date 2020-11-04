@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -84,7 +85,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				request, err := http.NewRequestWithContext(ctx, doRest.Options.Method, doRest.Options.Url, body)
 				if err != nil {
 					newState.Error = err.Error()
-					return &newState, err
+					return &newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
 				}
 				for k, v := range doRest.Options.Headers {
 					request.Header[k] = v
@@ -92,7 +93,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				response, err = netClient.Do(request)
 				if err != nil {
 					newState.Error = err.Error()
-					return &newState, err
+					return &newState, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
 				}
 			}
 			result := StepStateRest{}
@@ -100,7 +101,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 			bodyBytes, err := ioutil.ReadAll(response.Body)
 			if err != nil {
 				newState.Error = err.Error()
-				return &newState, err
+				return &newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
 			}
 			result.ContentType = "text/plain"
 			result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
@@ -109,7 +110,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				err = json.Unmarshal(bodyBytes, &result.Body)
 				if err != nil {
 					newState.Error = err.Error()
-					return &newState, err
+					return &newState, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
 				}
 			default:
 				result.Body = string(bodyBytes)
@@ -120,7 +121,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 			newState.Result = result
 			log.Debug(fmt.Sprintf("response status:%d, body:%s", response.StatusCode, result.Body))
 		default:
-			err := fmt.Errorf("unsupported do type: %s", doType)
+			err := api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 			newState.Error = err.Error()
 			return &newState, err
 		}

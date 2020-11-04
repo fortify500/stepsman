@@ -56,10 +56,7 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		query := api.ListQuery(p)
 		runs, runsRange, err := bl.ListRuns(&query)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 		result = api.ListRunsResult{
 			Range: *runsRange,
@@ -86,17 +83,13 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 				return errResult
 			}
 		}
-		vetErr := dao.VetIds(p.Ids)
-		if vetErr != nil {
-			return vetErr
+		if err := dao.VetIds(p.Ids); err != nil {
+			return resolveError(err)
 		}
 		query := api.GetRunsQuery(p)
 		runs, err := bl.GetRuns(&query)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 		result = runs
 		return nil
@@ -120,9 +113,8 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 				return errResult
 			}
 		}
-		vetErr := dao.VetIds([]string{p.Id})
-		if vetErr != nil {
-			return vetErr
+		if err := dao.VetIds([]string{p.Id}); err != nil {
+			return resolveError(err)
 		}
 		if len(p.Changes) > 0 {
 			if len(p.Changes) != 1 {
@@ -145,10 +137,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 			}
 			err = bl.UpdateRunStatus(p.Id, newStatus)
 			if err != nil {
-				return &jsonrpc.Error{
-					Code:    jsonrpc.ErrorCodeInternal,
-					Message: err.Error(),
-				}
+				return resolveError(err)
 			}
 		}
 
@@ -213,10 +202,7 @@ func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 		}
 		run, err := template.CreateRun(key)
 		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
+			return resolveError(err)
 		}
 		if p.Key == "" {
 			key = run.Key
