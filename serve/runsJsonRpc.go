@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
@@ -85,7 +86,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 				return errResult
 			}
 		}
-		vetErr := VetIds(p.Ids)
+		vetErr := dao.VetIds(p.Ids)
 		if vetErr != nil {
 			return vetErr
 		}
@@ -101,18 +102,6 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 		return nil
 	})
 	return result, jsonRPCErr
-}
-
-func VetIds(ids []string) *jsonrpc.Error {
-	if ids != nil {
-		for _, id := range ids {
-			_, err := uuid.Parse(id)
-			if err != nil {
-				return jsonrpc.ErrInvalidParams()
-			}
-		}
-	}
-	return nil
 }
 
 func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -131,7 +120,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 				return errResult
 			}
 		}
-		vetErr := VetIds([]string{p.Id})
+		vetErr := dao.VetIds([]string{p.Id})
 		if vetErr != nil {
 			return vetErr
 		}
@@ -163,7 +152,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 			}
 		}
 
-		result = &api.UpdateRunsResult{}
+		result = &api.UpdateRunResult{}
 		return nil
 	})
 	return result, jsonRPCErr

@@ -31,11 +31,8 @@ type StepState struct {
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
 
-func UpdateHeartBeat(s *api.StepRecord, uuid string) error {
-	if s.StatusUUID != uuid {
-		return fmt.Errorf("cannot update heartbeat for a different status_uuid in order to prevent a race condition")
-	}
-	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where run_id=$1 and \"index\"=$2 and status_uuid=$3", s.RunId, s.Index, s.StatusUUID)
+func UpdateHeartBeat(stepUUID string, statusUUID string) error {
+	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_uuid=$2", stepUUID, statusUUID)
 	if err == nil {
 		var affected int64
 		affected, err = res.RowsAffected()
@@ -339,10 +336,11 @@ func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.St
 	if err != nil {
 		panic(fmt.Errorf("failed to generate uuid: %w", err))
 	}
-	s.StatusUUID = uuid4.String()
-	if _, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP where run_id=$2 and \"index\"=$3", newStatus, s.RunId, s.Index); err != nil {
+
+	if _, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4", newStatus, uuid4.String(), s.RunId, s.Index); err != nil {
 		panic(err)
 	}
+	s.StatusUUID = uuid4.String()
 }
 
 func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType, newState *StepState) {
@@ -354,8 +352,9 @@ func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatu
 	if err != nil {
 		panic(err)
 	}
-	s.StatusUUID = uuid4.String()
-	if _, err = tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP where run_id=$3 and \"index\"=$4", newStatus, newStateStr, s.RunId, s.Index); err != nil {
+
+	if _, err = tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3 where run_id=$4 and \"index\"=$5", newStatus, newStateStr, uuid4.String(), s.RunId, s.Index); err != nil {
 		panic(err)
 	}
+	s.StatusUUID = uuid4.String()
 }

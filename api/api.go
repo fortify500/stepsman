@@ -32,8 +32,10 @@ const (
 	RPCUpdateRun = "updateRun"
 	RPCCreateRun = "createRun"
 
-	RPCListSteps = "listSteps"
-	RPCGetSteps  = "getSteps"
+	RPCListSteps  = "listSteps"
+	RPCGetSteps   = "getSteps"
+	RPCUpdateStep = "updateStep"
+	RPCDoStep     = "doStep"
 )
 
 const CurrentTimeStamp = "2006-01-02 15:04:05"
@@ -88,7 +90,7 @@ type UpdateQuery struct {
 	Changes map[string]interface{} `json:"changes,omitempty"`
 }
 type UpdateRunParams UpdateQuery
-type UpdateRunsResult struct{}
+type UpdateRunResult struct{}
 
 type CreateRunsResult RunRecord
 type CreateRunParams struct {
@@ -107,6 +109,14 @@ type GetStepsQuery struct {
 }
 type GetStepsResult []StepRecord
 type GetStepsParams GetStepsQuery
+
+type UpdateStepParams UpdateQuery
+type UpdateStepResult struct{}
+
+type DoStepParams struct {
+	UUID string `json:"uuid,omitempty"`
+}
+type DoStepResult struct{}
 
 type RunRecord struct {
 	Id              string        `json:"id,omitempty"`
@@ -206,15 +216,16 @@ func (s StepStatusType) MarshalJSON() ([]byte, error) {
 	buffer.WriteString(`"`)
 	return buffer.Bytes(), nil
 }
-func (s StepStatusType) UnmarshalJSON(data []byte) error {
+func (s *StepStatusType) UnmarshalJSON(data []byte) error {
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
 		return err
 	}
-	s, err := TranslateToStepStatus(str)
+	status, err := TranslateToStepStatus(str)
 	if err != nil {
 		return err
 	}
+	*s = status
 	return nil
 }
 
@@ -257,7 +268,7 @@ func (a *AnyTime) Scan(src interface{}) error {
 }
 
 const (
-	StepIdle       StepStatusType = 0
+	StepIdle       StepStatusType = 1
 	StepInProgress StepStatusType = 2
 	StepFailed     StepStatusType = 4
 	StepDone       StepStatusType = 5

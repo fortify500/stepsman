@@ -91,10 +91,10 @@ func RemoteGetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 }
 
 type UpdateRunResponse struct {
-	Version string               `json:"jsonrpc"`
-	Result  api.UpdateRunsResult `json:"result,omitempty"`
-	Error   JSONRPCError         `json:"error,omitempty"`
-	ID      string               `json:"id,omitempty"`
+	Version string              `json:"jsonrpc"`
+	Result  api.UpdateRunResult `json:"result,omitempty"`
+	Error   JSONRPCError        `json:"error,omitempty"`
+	ID      string              `json:"id,omitempty"`
 }
 
 func RemoteUpdateRun(query *api.UpdateQuery) error {

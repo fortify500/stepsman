@@ -45,6 +45,79 @@ func ListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error)
 	return listStepsByQuery(query)
 }
 
+func UpdateStep(query *api.UpdateQuery) error {
+	if dao.IsRemote {
+		return client.RemoteUpdateStep(query)
+	} else {
+		return updateStep(query)
+	}
+}
+
+func updateStep(query *api.UpdateQuery) error {
+	vetErr := dao.VetIds([]string{query.Id})
+	if vetErr != nil {
+		return fmt.Errorf("failed to update step: %w", vetErr)
+	}
+	if len(query.Changes) > 0 {
+		if len(query.Changes) > 2 {
+			return fmt.Errorf("more than 2 change types. currently only 2 change type are supported: status or heartbeat")
+		}
+		val, ok := query.Changes["status"]
+		if ok {
+			var statusStr string
+			statusStr, ok = val.(string)
+			if !ok {
+				return fmt.Errorf("status must be of string type")
+			}
+			newStatus, err := api.TranslateToStepStatus(statusStr)
+			if err != nil {
+				return fmt.Errorf("failed to update step: %w", err)
+			}
+
+			stepRecords, err := GetSteps(&api.GetStepsQuery{
+				UUIDs: []string{query.Id},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to update step: %w", err)
+			}
+			if len(stepRecords) != 1 {
+				return fmt.Errorf("failed to locate step record for uuid [%s]", query.Id)
+			}
+
+			stepRecord := stepRecords[0]
+			run, err := GetRun(stepRecord.RunId)
+			if err != nil {
+				return fmt.Errorf("failed to update step: %w", err)
+			}
+			template := Template{}
+			err = template.LoadFromBytes(false, []byte(run.Template))
+			if err != nil {
+				return fmt.Errorf("failed to update step: %w", err)
+			}
+			step := template.Steps[stepRecord.Index-1]
+
+			_, err = step.UpdateStateAndStatus(&stepRecord, newStatus, nil, false)
+			if err != nil {
+				return fmt.Errorf("failed to update step: %w", err)
+			}
+		} else {
+			val, ok = query.Changes["heartbeat"]
+			if !ok {
+				return fmt.Errorf("unsupported update fields provided")
+			}
+			var statusUUIDStr string
+			statusUUIDStr, ok = val.(string)
+			if !ok {
+				return fmt.Errorf("status must be of string type")
+			}
+			err := dao.UpdateHeartBeat(query.Id, statusUUIDStr)
+			if err != nil {
+				return fmt.Errorf("failed to update step: %w", err)
+			}
+		}
+	}
+	return nil
+}
 func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool) (*api.StepRecord, error) {
 	var stepRecord *api.StepRecord
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
@@ -107,10 +180,10 @@ func (s *Step) GetHeartBeatInterval() time.Duration {
 	}
 	return DefaultHeartBeatInterval
 }
-func (s *Step) StartDo(stepRecord *api.StepRecord) error {
-	stepRecord, err := s.UpdateStateAndStatus(stepRecord, api.StepInProgress, nil, false)
+func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
+	updatedStepRecord, err := s.UpdateStateAndStatus(stepRecord, api.StepInProgress, nil, false)
 	if err != nil {
-		return fmt.Errorf("failed to start do: %w", err)
+		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
 	heartbeatInterval := s.GetHeartBeatInterval() / 2
 	if heartbeatInterval < DefaultHeartBeatInterval {
@@ -128,7 +201,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) error {
 			case <-heartBeatDone2:
 				break OUT
 			case <-time.After(heartbeatInterval):
-				errBeat := dao.UpdateHeartBeat(stepRecord, stepRecord.StatusUUID)
+				errBeat := dao.UpdateHeartBeat(updatedStepRecord.UUID, updatedStepRecord.StatusUUID)
 				if errBeat != nil {
 					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
 				}
@@ -139,7 +212,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) error {
 	wg.Add(1)
 	go heartbeat()
 	defer close(heartBeatDone1) //in case of a panic
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(stepRecord.State)))
+	decoder := json.NewDecoder(bytes.NewBuffer([]byte(updatedStepRecord.State)))
 	decoder.DisallowUnknownFields()
 	var prevState dao.StepState
 	err = decoder.Decode(&prevState)
@@ -156,8 +229,49 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) error {
 	} else {
 		newStepStatus = api.StepDone
 	}
-	stepRecord, err = s.UpdateStateAndStatus(stepRecord, newStepStatus, newState, true)
-	return err
+	updatedStepRecord, err = s.UpdateStateAndStatus(updatedStepRecord, newStepStatus, newState, true)
+	return updatedStepRecord, err
+}
+
+func DoStep(uuid string) error {
+	if dao.IsRemote {
+		return client.RemoteDoStep(uuid)
+	} else {
+		return doStep(uuid)
+	}
+}
+
+func doStep(uuid string) error {
+	stepRecords, err := GetSteps(&api.GetStepsQuery{
+		UUIDs: []string{uuid},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to do step: %w", err)
+	}
+	if len(stepRecords) != 1 {
+		return fmt.Errorf("failed to locate step uuid [%s]", uuid)
+	}
+	stepRecord := stepRecords[0]
+	run, err := GetRun(stepRecord.RunId)
+	if err != nil {
+		return fmt.Errorf("failed to do step: %w", err)
+	}
+	if run.Status == api.RunDone {
+		//TODO: return a predefined error here
+		return fmt.Errorf("failed to do step, run is already done")
+	}
+
+	template := Template{}
+	err = template.LoadFromBytes(false, []byte(run.Template))
+	if err != nil {
+		return fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
+	}
+	step := template.Steps[stepRecord.Index-1]
+	_, err = step.StartDo(&stepRecord)
+	if err != nil {
+		return fmt.Errorf("failed to start do: %w", err)
+	}
+	return nil
 }
 
 func getStepsByQuery(query *api.GetStepsQuery) ([]api.StepRecord, error) {

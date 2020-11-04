@@ -73,7 +73,7 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 		log.Fatal(err)
 	}
 
-	if err := mr.RegisterMethod(api.RPCUpdateRun, UpdateRunHandler{}, api.UpdateRunParams{}, api.UpdateRunsResult{}); err != nil {
+	if err := mr.RegisterMethod(api.RPCUpdateRun, UpdateRunHandler{}, api.UpdateRunParams{}, api.UpdateRunResult{}); err != nil {
 		log.Fatal(err)
 	}
 
@@ -86,6 +86,14 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 	}
 
 	if err := mr.RegisterMethod(api.RPCGetSteps, GetStepsHandler{}, api.GetStepsParams{}, api.GetStepsResult{}); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := mr.RegisterMethod(api.RPCUpdateStep, UpdateStepHandler{}, api.UpdateStepParams{}, api.UpdateStepResult{}); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := mr.RegisterMethod(api.RPCDoStep, DoStepHandler{}, api.DoStepParams{}, api.DoStepResult{}); err != nil {
 		log.Fatal(err)
 	}
 	return mr

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
 )
 
@@ -38,33 +37,12 @@ Use run <run id>.`,
 			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
 			return
 		}
-		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
-			UUIDs: []string{stepUUID},
-		})
-		if len(stepRecords) != 1 {
-			msg := fmt.Sprintf("failed to locate step uuid [%s]", stepUUID)
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
+		changes := make(map[string]interface{})
+		updateQuery := &api.UpdateQuery{
+			Id:      stepUUID,
+			Changes: changes,
 		}
-		stepRecord := stepRecords[0]
-		run, err := getRun(stepRecord.RunId)
-		if err != nil {
-			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
-			return
-		}
-		template := bl.Template{}
-		err = template.LoadFromBytes(false, []byte(run.Template))
-		if err != nil {
-			msg := "failed to convert step record to step"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
-			return
-		}
-		step := template.Steps[stepRecord.Index-1]
+
 		if Parameters.Status != "" {
 			var status api.StepStatusType
 			status, err = api.TranslateToStepStatus(Parameters.Status)
@@ -72,28 +50,36 @@ Use run <run id>.`,
 				Parameters.Err = err
 				return
 			}
-			_, err = step.UpdateStateAndStatus(&stepRecord, status, nil, false)
+			changes["status"] = status.TranslateStepStatus()
+		} else if Parameters.StatusUUID != "" {
+			var statusUUID string
+			statusUUID, err = parseStepUUID(Parameters.StatusUUID)
 			if err != nil {
-				msg := "failed to update step status"
-				Parameters.Err = &Error{
-					Technical: fmt.Errorf(msg+": %w", err),
-					Friendly:  msg,
-				}
+				Parameters.Err = fmt.Errorf("failed to update step: %w", err)
 				return
 			}
+			changes["heartbeat"] = statusUUID
+		} else {
+			Parameters.Err = fmt.Errorf("failed to update step no argument provided")
+			return
 		}
-		if Parameters.StatusUUID != "" {
-			err = dao.UpdateHeartBeat(&stepRecord, Parameters.StatusUUID)
-			if err != nil {
-				msg := "failed to update heartbeat"
-				Parameters.Err = &Error{
-					Technical: fmt.Errorf(msg+": %w", err),
-					Friendly:  msg,
-				}
-				return
-			}
+		err = bl.UpdateStep(updateQuery)
+		if err != nil {
+			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
+			return
 		}
-		Parameters.CurrentStepIndex = fmt.Sprintf("%d", stepRecord.Index)
+		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+			UUIDs: []string{stepUUID},
+		})
+		if err != nil {
+			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
+			return
+		}
+		if len(stepRecords) != 1 {
+			Parameters.Err = fmt.Errorf("failed to locate step record for uuid [%s]", stepUUID)
+			return
+		}
+		Parameters.CurrentStepIndex = fmt.Sprintf("%d", stepRecords[0].Index)
 	},
 }
 

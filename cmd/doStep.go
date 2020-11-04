@@ -37,53 +37,27 @@ Use do step <step uuid>.`,
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
-		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
-			UUIDs: []string{stepUUID},
-		})
-		if len(stepRecords) != 1 {
-			msg := fmt.Sprintf("failed to locate step uuid [%s]", stepUUID)
+		err = bl.DoStep(stepUUID)
+		if err != nil {
+			msg := "failed to do step"
 			Parameters.Err = &Error{
 				Technical: fmt.Errorf(msg+": %w", err),
 				Friendly:  msg,
 			}
+			return
 		}
-		run, err := getRun(stepRecords[0].RunId)
+		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+			UUIDs: []string{stepUUID},
+		})
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
-		Parameters.CurrentRunId = run.Id
-		Parameters.CurrentRun = run
-		if run.Status == api.RunDone {
-			msg := "run is already done"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg),
-				Friendly:  msg,
-			}
+		if len(stepRecords) != 1 {
+			Parameters.Err = fmt.Errorf("failed to locate step uuid [%s]", stepUUID)
 			return
 		}
-
 		stepRecord := stepRecords[0]
-		template := bl.Template{}
-		err = template.LoadFromBytes(false, []byte(run.Template))
-		if err != nil {
-			msg := "failed to convert step record to step"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
-			return
-		}
-		step := template.Steps[stepRecord.Index-1]
-		err = step.StartDo(&stepRecord)
-		if err != nil {
-			msg := "failed to start do"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
-			}
-			return
-		}
 		Parameters.CurrentRun, err = getRun(stepRecord.RunId)
 		if err != nil {
 			Parameters.Err = err

@@ -89,3 +89,54 @@ func RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	})
 	return result, err
 }
+
+type UpdateStepResponse struct {
+	Version string               `json:"jsonrpc"`
+	Result  api.UpdateStepResult `json:"result,omitempty"`
+	Error   JSONRPCError         `json:"error,omitempty"`
+	ID      string               `json:"id,omitempty"`
+}
+
+func RemoteUpdateStep(query *api.UpdateQuery) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateStep, query)
+	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+		var jsonRPCResult UpdateStepResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return fmt.Errorf("failed to remote update step: %w", err)
+		}
+		return nil
+	})
+}
+
+type DoStepResponse struct {
+	Version string           `json:"jsonrpc"`
+	Result  api.DoStepResult `json:"result,omitempty"`
+	Error   JSONRPCError     `json:"error,omitempty"`
+	ID      string           `json:"id,omitempty"`
+}
+
+func RemoteDoStep(uuid string) error {
+	params := &api.DoStepParams{
+		UUID: uuid,
+	}
+	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStep, params)
+	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+		var jsonRPCResult DoStepResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return fmt.Errorf("failed to remote do step: %w", err)
+		}
+		return nil
+	})
+}

@@ -58,7 +58,9 @@ func TestLocal(t *testing.T) {
 		{"get -V %[1]s run %[2]s", false, false},
 		{"get -V %[1]s run %[2]s --only-template-type json", false, false},
 		{"get -V %[1]s step %[3]s", false, false},
-		{"do -V %[1]s run %[2]s --step 1", false, false},
+		{`update -V %[1]s step %[3]s -s "Done"`, false, false},
+		{`update -V %[1]s step %[3]s -s "Idle"`, false, false},
+		{"do -V %[1]s step %[3]s", false, false},
 	}
 	breakOut := false
 BreakOut:
@@ -292,6 +294,90 @@ BreakOut:
 			}
 			for _, step := range steps {
 				fmt.Println(fmt.Sprintf("%+v", step))
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
+			err := client.RemoteUpdateStep(&api.UpdateQuery{
+				Id:      stepUUID,
+				Changes: map[string]interface{}{"status": api.StepDone.TranslateStepStatus()},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
+			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+				UUIDs: []string{stepUUID},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
+				if step.Status != api.StepDone {
+					t.Errorf("step status must be done")
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
+			err := client.RemoteUpdateStep(&api.UpdateQuery{
+				Id:      stepUUID,
+				Changes: map[string]interface{}{"status": api.StepIdle.TranslateStepStatus()},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
+			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+				UUIDs: []string{stepUUID},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
+				if step.Status != api.StepIdle {
+					t.Errorf("step status must be idle")
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
+			err := client.RemoteDoStep(stepUUID)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
+			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+				UUIDs: []string{stepUUID},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
+				if step.Status != api.StepDone {
+					t.Errorf("step status must be idle")
+				}
 			}
 		})
 		serve.InterruptServe <- os.Interrupt

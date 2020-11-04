@@ -20,41 +20,19 @@ import (
 	"context"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	"github.com/intel-go/fastjson"
 	"github.com/osamingo/jsonrpc"
 )
 
 type (
-	ListStepsHandler struct{}
+	ListStepsHandler  struct{}
+	GetStepsHandler   struct{}
+	UpdateStepHandler struct{}
+	DoStepHandler     struct{}
 )
 
-//func StepRecordToStepRPCRecord(stepsRecords []*dao.StepRecord, translateStatus bool) ([]api.StepAPIRecord, error) {
-//	var stepRpcRecords []api.StepAPIRecord
-//	for _, stepRecord := range stepsRecords {
-//		var status string
-//		var err error
-//		if translateStatus {
-//			status, err = stepRecord.Status.TranslateStepStatus()
-//			if err != nil {
-//				return nil, err
-//			}
-//		}
-//		stepRpcRecords = append(stepRpcRecords, api.StepAPIRecord{
-//			RunId:      stepRecord.RunId,
-//			Index:      stepRecord.Index,
-//			Label:      stepRecord.Label,
-//			UUID:       stepRecord.UUID,
-//			Name:       stepRecord.Name,
-//			Status:     status,
-//			StatusUUID: stepRecord.StatusUUID,
-//			Heartbeat:  stepRecord.Heartbeat.(time.Time).Format(time.RFC3339),
-//			Now:        stepRecord.Now.(time.Time).Format(time.RFC3339),
-//			State:      stepRecord.State,
-//		})
-//	}
-//	return stepRpcRecords, nil
-//}
 func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
@@ -89,10 +67,6 @@ func (h ListStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 	return result, jsonRPCErr
 }
 
-type (
-	GetStepsHandler struct{}
-)
-
 func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	if err := valve.Lever(c).Open(); err != nil {
 		return nil, &jsonrpc.Error{
@@ -109,7 +83,7 @@ func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 				return errResult
 			}
 		}
-		vetErr := VetIds(p.UUIDs)
+		vetErr := dao.VetIds(p.UUIDs)
 		if vetErr != nil {
 			return vetErr
 		}
@@ -125,5 +99,68 @@ func (h GetStepsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 		return nil
 	})
 
+	return result, jsonRPCErr
+}
+
+func (h UpdateStepHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	if err := valve.Lever(c).Open(); err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	defer valve.Lever(c).Close()
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.UpdateStepParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
+		}
+		query := api.UpdateQuery(p)
+		err := bl.UpdateStep(&query)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		result = &api.UpdateStepResult{}
+		return nil
+	})
+	return result, jsonRPCErr
+}
+
+func (h DoStepHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	if err := valve.Lever(c).Open(); err != nil {
+		return nil, &jsonrpc.Error{
+			Code:    jsonrpc.ErrorCodeInternal,
+			Message: err.Error(),
+		}
+	}
+	defer valve.Lever(c).Close()
+	var result interface{}
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.DoStepParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
+		}
+		vetErr := dao.VetIds([]string{p.UUID})
+		if vetErr != nil {
+			return vetErr
+		}
+		err := bl.DoStep(p.UUID)
+		if err != nil {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInternal,
+				Message: err.Error(),
+			}
+		}
+		result = &api.DoStepResult{}
+		return nil
+	})
 	return result, jsonRPCErr
 }

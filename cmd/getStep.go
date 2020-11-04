@@ -38,6 +38,10 @@ var getStepCmd = &cobra.Command{
 		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
 			UUIDs: []string{stepUUID},
 		})
+		if err != nil {
+			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
+			return
+		}
 		if len(stepRecords) != 1 {
 			msg := fmt.Sprintf("failed to locate step uuid [%s]", stepUUID)
 			Parameters.Err = &Error{

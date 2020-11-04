@@ -19,7 +19,9 @@ package dao
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
@@ -191,4 +193,16 @@ func InitLogrus(out io.Writer) {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.TraceLevel)
 	log.SetOutput(out)
+}
+
+func VetIds(ids []string) *jsonrpc.Error {
+	if ids != nil {
+		for _, id := range ids {
+			_, err := uuid.Parse(id)
+			if err != nil {
+				return jsonrpc.ErrInvalidParams()
+			}
+		}
+	}
+	return nil
 }
