@@ -23,6 +23,7 @@ import (
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"io"
 )
 
@@ -37,6 +38,9 @@ func InitBL(daoParameters *dao.ParametersType) error {
 			return fmt.Errorf("failed to init: %w", err)
 		}
 	} else {
+		if viper.IsSet("MAX_RESPONSE_HEADER_BYTES") {
+			initDO(viper.GetInt64("MAX_RESPONSE_HEADER_BYTES"))
+		}
 		client.InitClient(dao.Parameters.DatabaseSSLMode, dao.Parameters.DatabaseHost, dao.Parameters.DatabasePort)
 	}
 	return nil

@@ -26,7 +26,6 @@ import (
 	"io"
 	"io/ioutil"
 	"mime"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -47,7 +46,16 @@ type StepStateRest struct {
 }
 
 var emptyMap = make(map[string]string)
+var netTransport = &http.Transport{
+	MaxResponseHeaderBytes: DefaultMaxResponseHeaderBytes,
+	IdleConnTimeout:        10 * time.Minute, //avoid overwhelming the infrastructure
+}
 
+func initDO(maxResponseHeaderByte int64) {
+	if maxResponseHeaderByte > 0 {
+		netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
+	}
+}
 func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.StepState, error) {
 	var newState dao.StepState
 	newState = *prevState
@@ -60,26 +68,12 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 			var response *http.Response
 
 			var timeout = DefaultDoRestTimeout * time.Second
-			var connectionTimeout = timeout
-			var tlsHandshakeTimeout = timeout
-			var responseHeaderTimeout = timeout
-			var maxResponseHeaderBytes int64 = DefaultMaxResponseHeaderBytes
 			var maxResponseBodyBytes int64 = DefaultMaxResponseBodyBytes
+
 			if doRest.Options.Timeout > 0 {
 				timeout = time.Duration(doRest.Options.Timeout) * time.Second
 			}
-			if doRest.Options.TLSHandshakeTimeout > 0 {
-				tlsHandshakeTimeout = time.Duration(doRest.Options.TLSHandshakeTimeout) * time.Second
-			}
-			if doRest.Options.ResponseHeaderTimeout > 0 {
-				responseHeaderTimeout = time.Duration(doRest.Options.ResponseHeaderTimeout) * time.Second
-			}
-			if doRest.Options.ConnectionTimeout > 0 {
-				connectionTimeout = time.Duration(doRest.Options.ConnectionTimeout) * time.Second
-			}
-			if doRest.Options.MaxResponseHeaderBytes > 0 {
-				maxResponseHeaderBytes = doRest.Options.MaxResponseHeaderBytes
-			}
+
 			if doRest.Options.MaxResponseBodyBytes > 0 {
 				maxResponseBodyBytes = doRest.Options.MaxResponseBodyBytes
 			}
@@ -87,16 +81,6 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				var body io.ReadCloser = nil
 				if len(doRest.Options.Body) > 0 {
 					body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
-				}
-				var netTransport = &http.Transport{
-					DialContext: (&net.Dialer{
-						Timeout: connectionTimeout,
-					}).DialContext,
-					TLSHandshakeTimeout:    tlsHandshakeTimeout,
-					ResponseHeaderTimeout:  responseHeaderTimeout,
-					MaxResponseHeaderBytes: maxResponseHeaderBytes,
-					MaxIdleConnsPerHost:    2,
-					IdleConnTimeout:        timeout,
 				}
 				var netClient = &http.Client{
 					Transport: netTransport,

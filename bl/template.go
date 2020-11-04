@@ -65,16 +65,12 @@ type StepDoREST struct {
 	Options StepDoRESTOptions `json:"options,omitempty"`
 }
 type StepDoRESTOptions struct {
-	Timeout                int64       `json:"timeout,omitempty"`
-	ConnectionTimeout      int64       `json:"connection-timeout,omitempty"`
-	TLSHandshakeTimeout    int64       `json:"tls-handshake-timeout,omitempty"`
-	ResponseHeaderTimeout  int64       `json:"response-header-timeout,omitempty"`
-	Method                 string      `json:"method,omitempty"`
-	Url                    string      `json:"url,omitempty"`
-	Headers                http.Header `json:"headers,omitempty"`
-	MaxResponseHeaderBytes int64       `json:"max-response-header-bytes,omitempty" mapstructure:"max-response-header-bytes" yaml:"max-response-header-bytes,omitempty"`
-	MaxResponseBodyBytes   int64       `json:"max-response-body-bytes,omitempty" mapstructure:"max-response-body-bytes" yaml:"max-response-body-bytes,omitempty"`
-	Body                   string      `json:"body,omitempty"`
+	Timeout              int64       `json:"timeout,omitempty"`
+	Method               string      `json:"method,omitempty"`
+	Url                  string      `json:"url,omitempty"`
+	Headers              http.Header `json:"headers,omitempty"`
+	MaxResponseBodyBytes int64       `json:"max-response-body-bytes,omitempty" mapstructure:"max-response-body-bytes" yaml:"max-response-body-bytes,omitempty"`
+	Body                 string      `json:"body,omitempty"`
 }
 
 func (do StepDoREST) Describe() string {
