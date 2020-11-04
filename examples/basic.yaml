@@ -8,7 +8,12 @@ steps:
       type: REST # heartbeats of set InProgress and finaly set Done. However, this doesn't mean events cannot already start for path_1_step_?
       heartbeat-timeout: 50 # seconds. the do will send heartbeats when calling the url. Currently only synchronous calls are supported.
       options:
-        timeout: 40 #make sense it would be less than the heartbeat-timeout
+        timeout: 40 #overall timeout make sense timeout would be less than the heartbeat-timeout
+        connection-timeout: 40
+        tls-handshake-timeout: 40
+        response-header-timeout: 40
+        max-response-header-bytes: 64000
+        max-response-body-bytes: 524288
         method: GET
         url: https://jsonplaceholder.typicode.com/todos/1
   - name: "execute test" # mandatory

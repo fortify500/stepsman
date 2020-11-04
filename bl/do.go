@@ -32,8 +32,11 @@ import (
 	"time"
 )
 
-//var ErrNoRunsDirectory = fmt.Errorf("no runs directory detected and make directory flag is false")
-const DefaultDoRestTimeout = 60
+const (
+	DefaultDoRestTimeout          = 60
+	DefaultMaxResponseHeaderBytes = 64 * 1024
+	DefaultMaxResponseBodyBytes   = 256 * 1024
+)
 
 type StepStateRest struct {
 	Body         interface{}         `json:"body,omitempty" mapstructure:"body" yaml:"body,omitempty"`
@@ -55,26 +58,45 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 		case DoTypeREST:
 			doRest := doInterface.(StepDoREST)
 			var response *http.Response
+
+			var timeout = DefaultDoRestTimeout * time.Second
+			var connectionTimeout = timeout
+			var tlsHandshakeTimeout = timeout
+			var responseHeaderTimeout = timeout
+			var maxResponseHeaderBytes int64 = DefaultMaxResponseHeaderBytes
+			var maxResponseBodyBytes int64 = DefaultMaxResponseBodyBytes
+			if doRest.Options.Timeout > 0 {
+				timeout = time.Duration(doRest.Options.Timeout) * time.Second
+			}
+			if doRest.Options.TLSHandshakeTimeout > 0 {
+				tlsHandshakeTimeout = time.Duration(doRest.Options.TLSHandshakeTimeout) * time.Second
+			}
+			if doRest.Options.ResponseHeaderTimeout > 0 {
+				responseHeaderTimeout = time.Duration(doRest.Options.ResponseHeaderTimeout) * time.Second
+			}
+			if doRest.Options.ConnectionTimeout > 0 {
+				connectionTimeout = time.Duration(doRest.Options.ConnectionTimeout) * time.Second
+			}
+			if doRest.Options.MaxResponseHeaderBytes > 0 {
+				maxResponseHeaderBytes = doRest.Options.MaxResponseHeaderBytes
+			}
+			if doRest.Options.MaxResponseBodyBytes > 0 {
+				maxResponseBodyBytes = doRest.Options.MaxResponseBodyBytes
+			}
 			{
-				var timeout = DefaultDoRestTimeout * time.Second
-				if doRest.Options.Timeout > 0 {
-					timeout = time.Duration(doRest.Options.Timeout) * time.Second
-				}
-				var maxResponseHeaderBytes int64 = 256 * 1024
-				if doRest.Options.MaxResponseHeaderBytes > 0 {
-					maxResponseHeaderBytes = doRest.Options.MaxResponseHeaderBytes
-				}
 				var body io.ReadCloser = nil
 				if len(doRest.Options.Body) > 0 {
 					body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
 				}
 				var netTransport = &http.Transport{
 					DialContext: (&net.Dialer{
-						Timeout: timeout,
+						Timeout: connectionTimeout,
 					}).DialContext,
-					TLSHandshakeTimeout:    timeout,
-					ResponseHeaderTimeout:  timeout * time.Second,
+					TLSHandshakeTimeout:    tlsHandshakeTimeout,
+					ResponseHeaderTimeout:  responseHeaderTimeout,
 					MaxResponseHeaderBytes: maxResponseHeaderBytes,
+					MaxIdleConnsPerHost:    2,
+					IdleConnTimeout:        timeout,
 				}
 				var netClient = &http.Client{
 					Transport: netTransport,
@@ -98,7 +120,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 			}
 			result := StepStateRest{}
 			defer response.Body.Close()
-			bodyBytes, err := ioutil.ReadAll(response.Body)
+			bodyBytes, err := ioutil.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes))
 			if err != nil {
 				newState.Error = err.Error()
 				return &newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)

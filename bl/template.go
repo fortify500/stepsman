@@ -44,17 +44,17 @@ type Template struct {
 }
 
 type Step struct {
-	Name        string      `json:"name"`
-	Label       string      `json:"label"`
-	Description string      `json:"description"`
+	Name        string      `json:"name,omitempty"`
+	Label       string      `json:"label,omitempty"`
+	Description string      `json:"description,omitempty"`
 	Do          interface{} `json:"do,omitempty"`
 	stepDo      StepDo
 	doType      DoType
 }
 
 type StepDo struct {
-	Type             DoType `json:"type" mapstructure:"type"`
-	HeartBeatTimeout int64  `json:"heartbeat-timeout" mapstructure:"heartbeat-timeout" yaml:"heartbeat-timeout"`
+	Type             DoType `json:"type,omitempty" mapstructure:"type" yaml:"type,omitempty"`
+	HeartBeatTimeout int64  `json:"heartbeat-timeout,omitempty" mapstructure:"heartbeat-timeout" yaml:"heartbeat-timeout,omitempty"`
 }
 
 type DO interface {
@@ -62,15 +62,19 @@ type DO interface {
 }
 type StepDoREST struct {
 	StepDo  `yaml:",inline" mapstructure:",squash"`
-	Options StepDoRESTOptions `json:"options"`
+	Options StepDoRESTOptions `json:"options,omitempty"`
 }
 type StepDoRESTOptions struct {
-	Timeout                int64       `json:"timeout"`
-	Method                 string      `json:"method"`
-	Url                    string      `json:"url"`
-	Headers                http.Header `json:"headers"`
-	MaxResponseHeaderBytes int64       `json:"max-response-header-bytes" mapstructure:"max-response-header-bytes" yaml:"max-response-header-bytes"`
-	Body                   string
+	Timeout                int64       `json:"timeout,omitempty"`
+	ConnectionTimeout      int64       `json:"connection-timeout,omitempty"`
+	TLSHandshakeTimeout    int64       `json:"tls-handshake-timeout,omitempty"`
+	ResponseHeaderTimeout  int64       `json:"response-header-timeout,omitempty"`
+	Method                 string      `json:"method,omitempty"`
+	Url                    string      `json:"url,omitempty"`
+	Headers                http.Header `json:"headers,omitempty"`
+	MaxResponseHeaderBytes int64       `json:"max-response-header-bytes,omitempty" mapstructure:"max-response-header-bytes" yaml:"max-response-header-bytes,omitempty"`
+	MaxResponseBodyBytes   int64       `json:"max-response-body-bytes,omitempty" mapstructure:"max-response-body-bytes" yaml:"max-response-body-bytes,omitempty"`
+	Body                   string      `json:"body,omitempty"`
 }
 
 func (do StepDoREST) Describe() string {
