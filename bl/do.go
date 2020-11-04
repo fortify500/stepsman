@@ -35,8 +35,11 @@ import (
 const DefaultDoRestTimeout = 60
 
 type StepStateRest struct {
-	Body        interface{} `json:"body,omitempty" mapstructure:"body" yaml:"body,omitempty"`
-	ContentType string      `json:"content-type,omitempty" mapstructure:"content-type" yaml:"content-type,omitempty"`
+	Body         interface{}         `json:"body,omitempty" mapstructure:"body" yaml:"body,omitempty"`
+	ContentType  string              `json:"content-type,omitempty" mapstructure:"content-type" yaml:"content-type,omitempty"`
+	StatusCode   int                 `json:"status-code,omitempty" mapstructure:"status-code" yaml:"status-code,omitempty"`
+	StatusPhrase string              `json:"status-phrase,omitempty" mapstructure:"status-phrase" yaml:"status-phrase,omitempty"`
+	Header       map[string][]string `json:"header,omitempty" mapstructure:"header" yaml:"header,omitempty"`
 }
 
 var emptyMap = make(map[string]string)
@@ -111,6 +114,9 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 			default:
 				result.Body = string(bodyBytes)
 			}
+			result.StatusCode = response.StatusCode
+			result.StatusPhrase = response.Status
+			result.Header = response.Header
 			newState.Result = result
 			log.Debug(fmt.Sprintf("response status:%d, body:%s", response.StatusCode, result.Body))
 		default:
