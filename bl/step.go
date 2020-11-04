@@ -145,6 +145,12 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 		if newStatus == stepRecord.Status {
 			return ErrStatusNotChanged
 		}
+		//remote state if we are back to idle.
+		if newStatus == api.StepIdle {
+			if newState == nil {
+				newState = &dao.StepState{}
+			}
+		}
 		if newState == nil {
 			dao.UpdateStatusAndHeartBeatTx(tx, stepRecord, newStatus)
 		} else {
