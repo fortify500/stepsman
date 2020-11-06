@@ -24,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io"
+	"runtime"
 	"runtime/debug"
 	"time"
 )
@@ -387,11 +388,16 @@ var ErrRunIsAlreadyDone = &ErrorCode{
 	Message: "run is already done, no change is possible",
 }
 
+type ErrorCaller struct {
+	File string
+	Line int
+}
 type Error struct {
-	msg   string
-	stack []byte //only available if debug is enabled.
-	code  *ErrorCode
-	err   error
+	msg    string
+	code   *ErrorCode
+	err    error
+	caller *ErrorCaller
+	stack  []byte //only available if debug is enabled.
 }
 
 func NewError(code *ErrorCode, msg string, args ...interface{}) *Error {
@@ -406,11 +412,23 @@ func NewWrapError(code *ErrorCode, wrapErr error, msg string, args ...interface{
 	if log.IsLevelEnabled(log.DebugLevel) {
 		newErr.stack = debug.Stack()
 	}
+	if log.IsLevelEnabled(log.ErrorLevel) {
+		_, file, line, ok := runtime.Caller(1)
+		if ok {
+			newErr.caller = &ErrorCaller{
+				File: file,
+				Line: line,
+			}
+		}
+	}
 	return newErr
 }
 
 func (e *Error) Error() string {
 	return e.msg
+}
+func (e *Error) Caller() *ErrorCaller {
+	return e.caller
 }
 func (e *Error) Stack() []byte {
 	return e.stack
