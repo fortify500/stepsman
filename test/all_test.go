@@ -355,7 +355,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
-			err := client.RemoteDoStep(stepUUID)
+			_, err := client.RemoteDoStep(stepUUID)
 			if err != nil {
 				t.Error(err)
 				return

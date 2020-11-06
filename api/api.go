@@ -119,7 +119,9 @@ type UpdateStepResult struct{}
 type DoStepParams struct {
 	UUID string `json:"uuid,omitempty"`
 }
-type DoStepResult struct{}
+type DoStepResult struct {
+	StatusUUID string `json:"status-uuid,omitempty"`
+}
 
 type RunRecord struct {
 	Id              string        `json:"id,omitempty"`

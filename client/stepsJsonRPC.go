@@ -121,12 +121,13 @@ type DoStepResponse struct {
 	ID      string           `json:"id,omitempty"`
 }
 
-func RemoteDoStep(uuid string) error {
+func RemoteDoStep(uuid string) (*api.DoStepResult, error) {
+	var result *api.DoStepResult
 	params := &api.DoStepParams{
 		UUID: uuid,
 	}
 	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStep, params)
-	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult DoStepResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -137,6 +138,8 @@ func RemoteDoStep(uuid string) error {
 		if err != nil {
 			return fmt.Errorf("failed to remote do step: %w", err)
 		}
+		result = &jsonRPCResult.Result
 		return nil
 	})
+	return result, err
 }

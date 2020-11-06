@@ -245,7 +245,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
 	return updatedStepRecord, err
 }
 
-func DoStep(uuid string) error {
+func DoStep(uuid string) (*api.DoStepResult, error) {
 	if dao.IsRemote {
 		return client.RemoteDoStep(uuid)
 	} else {
@@ -253,36 +253,38 @@ func DoStep(uuid string) error {
 	}
 }
 
-func doStep(uuid string) error {
+func doStep(uuid string) (*api.DoStepResult, error) {
 	stepRecords, err := GetSteps(&api.GetStepsQuery{
 		UUIDs: []string{uuid},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to do step: %w", err)
+		return nil, fmt.Errorf("failed to do step: %w", err)
 	}
 	if len(stepRecords) != 1 {
-		return api.NewError(api.ErrRecordNotFound, "failed to locate step uuid [%s]", uuid)
+		return nil, api.NewError(api.ErrRecordNotFound, "failed to locate step uuid [%s]", uuid)
 	}
 	stepRecord := stepRecords[0]
 	run, err := GetRun(stepRecord.RunId)
 	if err != nil {
-		return fmt.Errorf("failed to do step: %w", err)
+		return nil, fmt.Errorf("failed to do step: %w", err)
 	}
 	if run.Status == api.RunDone {
-		return api.NewError(api.ErrRunIsAlreadyDone, "failed to do step, run is already done and no change is possible")
+		return nil, api.NewError(api.ErrRunIsAlreadyDone, "failed to do step, run is already done and no change is possible")
 	}
 
 	template := Template{}
 	err = template.LoadFromBytes(false, []byte(run.Template))
 	if err != nil {
-		return fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
+		return nil, fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
 	}
 	step := template.Steps[stepRecord.Index-1]
-	_, err = step.StartDo(&stepRecord)
+	updatedStepRecord, err := step.StartDo(&stepRecord)
 	if err != nil {
-		return fmt.Errorf("failed to start do: %w", err)
+		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
-	return nil
+	return &api.DoStepResult{
+		StatusUUID: updatedStepRecord.StatusUUID,
+	}, nil
 }
 
 func getStepsByQuery(query *api.GetStepsQuery) ([]api.StepRecord, error) {
