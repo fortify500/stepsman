@@ -273,10 +273,11 @@ func (a *AnyTime) Scan(src interface{}) error {
 }
 
 const (
-	StepIdle       StepStatusType = 1
-	StepInProgress StepStatusType = 2
-	StepFailed     StepStatusType = 4
-	StepDone       StepStatusType = 5
+	StepIdle       StepStatusType = 10
+	StepPending    StepStatusType = 20
+	StepInProgress StepStatusType = 30
+	StepFailed     StepStatusType = 40
+	StepDone       StepStatusType = 50
 )
 
 type AnyTime time.Time
@@ -326,6 +327,8 @@ func (s StepStatusType) TranslateStepStatus() string {
 	switch s {
 	case StepIdle:
 		return "Idle"
+	case StepPending:
+		return "Pending"
 	case StepInProgress:
 		return "In Progress"
 	case StepFailed:
@@ -340,6 +343,8 @@ func TranslateToStepStatus(status string) (StepStatusType, error) {
 	switch status {
 	case "Idle":
 		return StepIdle, nil
+	case "Pending":
+		return StepPending, nil
 	case "In Progress":
 		return StepInProgress, nil
 	case "Failed":
@@ -392,6 +397,10 @@ var ErrRunIsAlreadyDone = &ErrorCode{
 var ErrShuttingDown = &ErrorCode{
 	Code:    1006,
 	Message: "shutting down server",
+}
+var ErrPrevStepStatusDoesNotMatch = &ErrorCode{
+	Code:    1007,
+	Message: "prev step status does not match an in transaction status",
 }
 
 type ErrorCaller struct {

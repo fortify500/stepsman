@@ -96,7 +96,7 @@ func updateStep(query *api.UpdateQuery) error {
 			}
 			step := template.Steps[stepRecord.Index-1]
 
-			_, err = step.UpdateStateAndStatus(&stepRecord, newStatus, nil, false)
+			_, err = step.UpdateStateAndStatus(&stepRecord, newStatus, nil, false, false)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
@@ -118,22 +118,25 @@ func updateStep(query *api.UpdateQuery) error {
 	}
 	return nil
 }
-func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool) (*api.StepRecord, error) {
+func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool, mustMatchPrevStatus bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		runId := prevStepRecord.RunId
-		steps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
+		partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
 			UUIDs:            []string{prevStepRecord.UUID},
 			ReturnAttributes: []string{dao.HeartBeat, dao.StatusUUID, dao.Status},
 		})
 		if err != nil {
 			panic(err)
 		}
-		if len(steps) != 1 {
+		if len(partialSteps) != 1 {
 			panic(fmt.Errorf("only 1 step record expected while updating"))
 		}
-		partialStepRecord := steps[0]
+		partialStepRecord := partialSteps[0]
+		if mustMatchPrevStatus && partialStepRecord.Status != prevStepRecord.Status {
+			return api.NewError(api.ErrPrevStepStatusDoesNotMatch, "failed an assumption checking, prev status: %s, transaction status: %s", prevStepRecord.Status.TranslateStepStatus(), partialStepRecord.Status.TranslateStepStatus())
+		}
 		// if we are starting check if the stepRecord is already in-progress.
 		if !doFinish && partialStepRecord.Status == api.StepInProgress {
 			delta := time.Time(partialStepRecord.Now).Sub(time.Time(partialStepRecord.Heartbeat))
@@ -159,9 +162,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 			if newState == nil {
 				newState = &dao.StepState{}
 			}
-		}
-
-		if newStatus != api.StepIdle {
+		} else {
 			var run *api.RunRecord
 			run, err = GetRunByIdTx(tx, runId)
 			if err != nil {
@@ -176,7 +177,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 
 		updatedStepRecord = *prevStepRecord
 		if newState == nil {
-			updatedStepRecord.StatusUUID = dao.UpdateStatusAndHeartBeatTx(tx, prevStepRecord.RunId, prevStepRecord.Index, newStatus)
+			updatedStepRecord.StatusUUID = dao.UpdateStatusAndHeartBeatTx(tx, prevStepRecord.RunId, prevStepRecord.Index, newStatus).StatusUUID
 		} else {
 			var newStateBytes []byte
 			newStateBytes, err = json.Marshal(newState)
@@ -199,13 +200,14 @@ func (s *Step) GetHeartBeatInterval() time.Duration {
 	}
 	return DefaultHeartBeatInterval
 }
-func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
-	updatedStepRecord, err := s.UpdateStateAndStatus(stepRecord, api.StepInProgress, nil, false)
+func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.StepRecord, error) {
+	updatedStepRecord, err := s.UpdateStateAndStatus(stepRecord, api.StepInProgress, nil, false, checkPending)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
 	heartbeatInterval := s.GetHeartBeatInterval() / 2
 	if heartbeatInterval < DefaultHeartBeatInterval {
+		log.Warnf("heartbeatInterval must be at least %d, got %d", (DefaultHeartBeatInterval/time.Second)*2, s.GetHeartBeatInterval())
 		heartbeatInterval = DefaultHeartBeatInterval
 	}
 	var wg sync.WaitGroup
@@ -252,22 +254,55 @@ func (s *Step) StartDo(stepRecord *api.StepRecord) (*api.StepRecord, error) {
 		newStepStatus = api.StepFailed
 	} else {
 		newStepStatus = api.StepDone
+		if s.On.PreDone != nil {
+			for _, rule := range s.On.PreDone.Rules {
+				if rule.Then != nil {
+					if len(rule.Then.Do) > 0 {
+						var indices []int64
+						for _, do := range rule.Then.Do {
+							index, ok := s.template.labelsToIndices[do.Label]
+							if !ok {
+								panic(fmt.Errorf("label should have an index"))
+							}
+							indices = append(indices, index)
+						}
+						if len(indices) > 0 {
+							var uuidsToEnqueue []dao.UUIDAndStatusUUID
+							if tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+								uuidsToEnqueue = dao.UpdateManyStatusAndHeartBeatTx(tx, stepRecord.RunId, indices, api.StepPending, []api.StepStatusType{api.StepIdle})
+								return nil
+							}); tErr != nil {
+								panic(tErr)
+							}
+							for _, item := range uuidsToEnqueue {
+								if err = Enqueue(&DoWork{
+									UUID: item.UUID,
+								}); err != nil {
+									return nil, err
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
 	}
-	updatedStepRecord, err = s.UpdateStateAndStatus(updatedStepRecord, newStepStatus, newState, true)
+	updatedStepRecord, err = s.UpdateStateAndStatus(updatedStepRecord, newStepStatus, newState, true, true)
 	return updatedStepRecord, err
 }
 
-func DoStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, error) {
+func DoStep(params *api.DoStepParams, synchronous bool, checkPending bool) (*api.DoStepResult, error) {
 	if dao.IsRemote {
 		return client.RemoteDoStep(params) //always async
 	} else {
-		return doStep(params, synchronous)
+		return doStep(params, synchronous, checkPending)
 	}
 }
 
 var emptyDoStepResult = api.DoStepResult{}
 
-func doStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, error) {
+func doStep(params *api.DoStepParams, synchronous bool, checkPending bool) (*api.DoStepResult, error) {
 	if !synchronous {
 		err := Enqueue((*DoWork)(params))
 		if err != nil {
@@ -299,7 +334,7 @@ func doStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, erro
 		return nil, fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
 	}
 	step := template.Steps[stepRecord.Index-1]
-	_, err = step.StartDo(&stepRecord)
+	_, err = step.StartDo(&stepRecord, checkPending)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}

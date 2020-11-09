@@ -25,7 +25,6 @@ import (
 	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
@@ -59,8 +58,6 @@ func InitLogrus(out io.Writer, level log.Level) {
 	output = out
 }
 func Serve(port int64) {
-	shutdownValve := valve.New()
-	baseCtx := shutdownValve.Context()
 	newLog := log.New()
 	newLog.SetFormatter(&log.JSONFormatter{})
 	newLog.SetLevel(log.GetLevel())
@@ -93,12 +90,11 @@ func Serve(port int64) {
 
 	serverAddress := fmt.Sprintf(":%v", port)
 	log.Info(fmt.Sprintf("using server address: %s", serverAddress))
-	srv := http.Server{Addr: serverAddress, Handler: chi.ServerBaseContext(baseCtx, r)}
+	srv := http.Server{Addr: serverAddress, Handler: chi.ServerBaseContext(bl.ValveCtx, r)}
 
 	InterruptServe = make(chan os.Signal, 1)
 	signal.Notify(InterruptServe, os.Interrupt, syscall.SIGTERM)
 	exit := make(chan int, 1)
-	bl.InitQueue(baseCtx)
 	go func() {
 		viper.SetDefault("SHUTDOWN_INTERVAL", time.Duration(120))
 		<-InterruptServe
@@ -120,7 +116,7 @@ func Serve(port int64) {
 		go func() {
 			defer wg.Done()
 			//  shutdownValve is for long running jobs if any.
-			if err := shutdownValve.Shutdown(shutdownInterval * time.Second); err != nil {
+			if err := bl.ShutdownValve.Shutdown(shutdownInterval * time.Second); err != nil {
 				log.Error(fmt.Errorf("failed to start shutting down valve: %w", err))
 			}
 		}()

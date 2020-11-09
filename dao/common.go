@@ -68,6 +68,8 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 			if err != nil {
 				return fmt.Errorf("failed to verify sqlite file existance: %s", dataSourceName)
 			}
+		} else {
+			dataSourceName = fmt.Sprintf("%s?cache=shared", dataSourceName)
 		}
 	case "postgresql":
 		internalDriverName = "pgx"
@@ -89,6 +91,9 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 			_, err = DB.SQL().Exec("PRAGMA journal_mode = WAL")
 			if err != nil {
 				panic(fmt.Errorf("failed to set journal mode: %w", err))
+			}
+			if strings.Contains(strings.ToLower(dataSourceName), ":memory:") {
+				DB.SQL().SetMaxOpenConns(1)
 			}
 			_, err = DB.SQL().Exec("PRAGMA synchronous = NORMAL")
 			if err != nil {

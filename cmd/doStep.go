@@ -37,7 +37,7 @@ Use do step <step uuid>.`,
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
-		_, err = bl.DoStep(&api.DoStepParams{UUID: stepUUID}, true)
+		_, err = bl.DoStep(&api.DoStepParams{UUID: stepUUID}, true, false)
 		if err != nil {
 			msg := "failed to do step"
 			Parameters.Err = &Error{

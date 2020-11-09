@@ -38,18 +38,37 @@ const (
 )
 
 type Template struct {
-	Title   string `json:"title"`
-	Version int64  `json:"version"`
-	Steps   []Step `json:"steps"`
+	Title           string `json:"title"`
+	Version         int64  `json:"version"`
+	Steps           []Step `json:"steps"`
+	labelsToIndices map[string]int64
 }
 
+type ThenDo struct {
+	Label   string `json:"label,omitempty"`
+	Context string `json:"context,omitempty"`
+}
+type Then struct {
+	Do []ThenDo `json:"do,omitempty"`
+}
+type Rule struct {
+	Then *Then `json:"then,omitempty"`
+}
+type Event struct {
+	Rules []Rule `json:"rules,omitempty"`
+}
+type On struct {
+	PreDone *Event `json:"pre-done,omitempty" mapstructure:"pre-done" yaml:"pre-done,omitempty"`
+}
 type Step struct {
 	Name        string      `json:"name,omitempty"`
 	Label       string      `json:"label,omitempty"`
 	Description string      `json:"description,omitempty"`
 	Do          interface{} `json:"do,omitempty"`
+	On          On          `json:"on,omitempty"`
 	stepDo      StepDo
 	doType      DoType
+	template    *Template
 }
 
 type StepDo struct {
@@ -95,8 +114,9 @@ func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	if err != nil {
 		return api.NewWrapError(api.ErrInvalidParams, err, "failed to load from bytes: %w", err)
 	}
+	s.labelsToIndices = make(map[string]int64)
 	for i := range s.Steps {
-		err = (&s.Steps[i]).AdjustUnmarshalStep()
+		err = (&s.Steps[i]).AdjustUnmarshalStep(s, int64(i)+1)
 		if err != nil {
 			return fmt.Errorf("failed to load from bytes: %w", err)
 		}
@@ -134,7 +154,7 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 
 }
 
-func (s *Step) AdjustUnmarshalStep() error {
+func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 	if s.Label == "" {
 		random, err := uuid.NewRandom()
 		if err != nil {
@@ -142,7 +162,8 @@ func (s *Step) AdjustUnmarshalStep() error {
 		}
 		s.Label = random.String()
 	}
-
+	s.template = t
+	s.template.labelsToIndices[s.Label] = index
 	if s.Do == nil {
 		return nil
 	} else {

@@ -43,6 +43,7 @@ func InitBL(daoParameters *dao.ParametersType) error {
 		}
 		client.InitClient(dao.Parameters.DatabaseSSLMode, dao.Parameters.DatabaseHost, dao.Parameters.DatabasePort)
 	}
+	InitQueue()
 	return nil
 }
 

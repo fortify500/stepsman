@@ -61,6 +61,7 @@ func TestLocal(t *testing.T) {
 		{`update -V %[1]s step %[3]s -s "Done"`, false, false},
 		{`update -V %[1]s step %[3]s -s "Idle"`, false, false},
 		{"do -V %[1]s step %[3]s", false, false},
+		{"get -V %[1]s step %[3]s", false, false},
 	}
 	breakOut := false
 BreakOut:
@@ -77,6 +78,7 @@ BreakOut:
 				if err != nil {
 					t.Error(err)
 				}
+				waitForQueuesToFinish()
 				cmdErr := &cmd.Error{}
 				if cmd.Parameters.Err != nil {
 					if errors.As(cmd.Parameters.Err, &cmdErr) {
@@ -131,7 +133,7 @@ func TestRemotePostgreSQL(t *testing.T) {
 		databaseVendor string
 		command        string
 	}{
-		{"postgresql", "serve -V %s"},
+		{"postgresql", "serve -M -V %s"},
 	}
 	breakOut := false
 BreakOut:
@@ -253,7 +255,7 @@ BreakOut:
 				return
 			}
 		})
-		var stepUUID string
+		var stepUUIDs []string
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
 			steps, _, err := client.RemoteListSteps(&api.ListQuery{
 				Filters: []api.Expression{{
@@ -272,8 +274,8 @@ BreakOut:
 				breakOut = true
 				return
 			}
-			stepUUID = steps[0].UUID
 			for _, step := range steps {
+				stepUUIDs = append(stepUUIDs, step.UUID)
 				fmt.Println(fmt.Sprintf("%+v", step))
 			}
 		})
@@ -282,7 +284,7 @@ BreakOut:
 		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUID},
+				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
 				t.Error(err)
@@ -298,7 +300,7 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
 			err := client.RemoteUpdateStep(&api.UpdateQuery{
-				Id:      stepUUID,
+				Id:      stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepDone.TranslateStepStatus()},
 			})
 			if err != nil {
@@ -308,7 +310,7 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUID},
+				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
 				t.Error(err)
@@ -327,7 +329,7 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
 			err := client.RemoteUpdateStep(&api.UpdateQuery{
-				Id:      stepUUID,
+				Id:      stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepIdle.TranslateStepStatus()},
 			})
 			if err != nil {
@@ -337,7 +339,7 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUID},
+				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
 				t.Error(err)
@@ -355,25 +357,16 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
-			_, err := client.RemoteDoStep(&api.DoStepParams{UUID: stepUUID})
+			_, err := client.RemoteDoStep(&api.DoStepParams{UUID: stepUUIDs[0]})
 			if err != nil {
 				t.Error(err)
 				return
 			}
 		})
-		{
-			i := 0
-			for !bl.QueuesIdle() {
-				i++
-				time.Sleep(1 * time.Second)
-				if i > 60 {
-					break
-				}
-			}
-		}
+		waitForQueuesToFinish()
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUID},
+				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
 				t.Error(err)
@@ -386,13 +379,43 @@ BreakOut:
 			for _, step := range steps {
 				fmt.Println(fmt.Sprintf("%+v", step))
 				if step.Status != api.StepDone {
-					t.Errorf("step status must be done")
+					t.Errorf("step %s status must be done", step.UUID)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
+			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+				UUIDs: []string{stepUUIDs[1]},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
+				if step.Status != api.StepDone {
+					t.Errorf("step %s status must be done", step.UUID)
 				}
 			}
 		})
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end")
+	}
+}
+
+func waitForQueuesToFinish() {
+	i := 0
+	for !bl.QueuesIdle() {
+		i++
+		time.Sleep(1 * time.Second)
+		if i > 60 {
+			break
+		}
 	}
 }
 func TestMain(m *testing.M) {

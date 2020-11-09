@@ -23,14 +23,17 @@ import (
 	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 )
+
+var ShutdownValve *valve.Valve
+var ValveCtx context.Context
 
 type DoWork api.DoStepParams
 
 var memoryQueue chan *DoWork
 var queue = make(chan *DoWork)
-var valveContext context.Context
 var stop <-chan struct{}
 
 type WorkCounter int32
@@ -67,7 +70,7 @@ func checkShuttingDown() *api.Error {
 	select {
 	case <-stop:
 		return api.NewError(api.ErrShuttingDown, "server is shutting down")
-	case <-valveContext.Done():
+	case <-ValveCtx.Done():
 		return api.NewError(api.ErrShuttingDown, "server is shutting down")
 	default:
 	}
@@ -109,18 +112,18 @@ func processMsg(msg *DoWork) {
 		log.Tracef("processing msg: %#v", msg)
 	}
 	recoverable(func() error {
-		_, err := doStep((*api.DoStepParams)(msg), true)
+		_, err := doStep((*api.DoStepParams)(msg), true, true)
 		return err
 	})
 }
 
 func startWorkers() {
 	for w := 0; w < 1000; w++ {
-		if err := valve.Lever(valveContext).Open(); err != nil {
+		if err := valve.Lever(ValveCtx).Open(); err != nil {
 			panic(err)
 		}
 		go func() {
-			defer valve.Lever(valveContext).Close()
+			defer valve.Lever(ValveCtx).Close()
 			for item := range queue {
 				processMsg(item)
 			}
@@ -136,7 +139,7 @@ func startWorkLoop() {
 			case <-stop:
 				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
 				return
-			case <-valveContext.Done():
+			case <-ValveCtx.Done():
 				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
 				return
 			case msg := <-memoryQueue:
@@ -145,9 +148,17 @@ func startWorkLoop() {
 		}
 	}()
 }
-func InitQueue(ctx context.Context) {
-	valveContext = ctx
-	stop = valve.Lever(valveContext).Stop()
-	memoryQueue = make(chan *DoWork, 1*1000*1000)
-	startWorkLoop()
+
+var mu sync.Mutex
+
+func InitQueue() {
+	mu.Lock()
+	defer mu.Unlock()
+	if ShutdownValve == nil {
+		ShutdownValve = valve.New()
+		ValveCtx = ShutdownValve.Context()
+		stop = valve.Lever(ValveCtx).Stop()
+		memoryQueue = make(chan *DoWork, 1*1000*1000)
+		startWorkLoop()
+	}
 }

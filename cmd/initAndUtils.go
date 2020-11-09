@@ -165,6 +165,9 @@ func InitConfig() {
 	logLevel := "error"
 	if viper.IsSet("STORE_DIR") {
 		StoreDir = viper.GetString("STORE_DIR")
+		if strings.Contains(StoreDir, "~") {
+			fmt.Println("WARNING: ~ are not supported and are treated as a file or directory part!")
+		}
 	}
 	if viper.IsSet("LOG_LEVEL") {
 		logLevel = strings.ToLower(viper.GetString("LOG_LEVEL"))
