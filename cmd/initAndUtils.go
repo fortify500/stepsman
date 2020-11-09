@@ -27,7 +27,6 @@ import (
 	"github.com/fortify500/stepsman/serve"
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/mitchellh/go-homedir"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -160,13 +159,16 @@ func recoverAndLog(msg string) {
 
 func InitConfig() {
 	flag.Parse()
-	dir, err := homedir.Dir()
-	if err != nil {
-		err = fmt.Errorf("failed to detect home directory: %w", err)
-		fmt.Println(err)
-		log.Fatal(err)
+	viper.SetEnvPrefix("STEPSMAN")
+	viper.AutomaticEnv() // read in environment variables that match
+
+	logLevel := "error"
+	if viper.IsSet("STORE_DIR") {
+		StoreDir = viper.GetString("STORE_DIR")
 	}
-	StoreDir = path.Join(dir, ".stepsman")
+	if viper.IsSet("LOG_LEVEL") {
+		logLevel = strings.ToLower(viper.GetString("LOG_LEVEL"))
+	}
 
 	if Parameters.CfgFile != "" {
 		// Use config file from the flag.
@@ -175,31 +177,46 @@ func InitConfig() {
 		viper.AddConfigPath(StoreDir)
 		viper.SetConfigName(".stepsman")
 	}
-	viper.SetEnvPrefix("STEPSMAN")
-	viper.AutomaticEnv() // read in environment variables that match
-	LumberJack = &lumberjack.Logger{
-		Filename:   path.Join(StoreDir, "stepsman.log"),
-		MaxSize:    100, // megabytes
-		MaxBackups: 2,
-		MaxAge:     1, // days
-		Compress:   true,
+	// If a config file is found, read it in.
+	if err := viper.ReadInConfig(); err == nil {
+		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
-	args := flag.Args()
-	if args != nil && len(args) > 0 && strings.EqualFold("serve", args[0]) {
-		InitLogrusALL(os.Stdout)
+	level, err := log.ParseLevel(logLevel)
+	if err != nil {
+		panic(fmt.Errorf("failed to parse log level: %s", logLevel))
+	}
+	if StoreDir != "" {
+		_, err = os.Stat(StoreDir)
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(StoreDir, 0700)
+			if err != nil {
+				err = fmt.Errorf("failed to create the .stepsman diretory: %w", err)
+				fmt.Println(err)
+				log.Fatal(err)
+			}
+		} else if err != nil {
+			err = fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
+			fmt.Println(err)
+			log.Fatal(err)
+		}
+		LumberJack = &lumberjack.Logger{
+			Filename:   path.Join(StoreDir, "stepsman.log"),
+			MaxSize:    100, // megabytes
+			MaxBackups: 2,
+			MaxAge:     1, // days
+			Compress:   true,
+		}
+	}
+	if StoreDir == "" {
+		InitLogrusALL(os.Stdout, level)
 	} else {
-		InitLogrusALL(LumberJack)
+		InitLogrusALL(LumberJack, level)
 	}
 
 	log.Info(fmt.Sprintf("stepsman starting [build commit id: %s]", dao.GitCommit))
 	bi, ok := debug.ReadBuildInfo()
 	if ok {
 		log.WithField("build-info", bi).Info()
-	}
-
-	// If a config file is found, read it in.
-	if err = viper.ReadInConfig(); err == nil {
-		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
 
 	if viper.IsSet("DB_VENDOR") {
@@ -233,19 +250,6 @@ func InitConfig() {
 		Parameters.DatabaseAutoMigrate = viper.GetBool("DB_AUTO_MIGRATE")
 	}
 
-	_, err = os.Stat(StoreDir)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(StoreDir, 0700)
-		if err != nil {
-			err = fmt.Errorf("failed to create the .stepsman diretory: %w", err)
-			fmt.Println(err)
-			log.Fatal(err)
-		}
-	} else if err != nil {
-		err = fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
-		fmt.Println(err)
-		log.Fatal(err)
-	}
 }
 
 func getRun(id string) (*api.RunRecord, error) {
@@ -332,16 +336,16 @@ var NoBordersStyle = table.Style{
 	Title:   table.TitleOptionsDefault,
 }
 
-func InitLogrusALL(out io.Writer) {
-	InitLogrus(out)
-	api.InitLogrus(out)
-	dao.InitLogrus(out)
-	serve.InitLogrus(out)
-	client.InitLogrus(out)
-	bl.InitLogrus(out)
+func InitLogrusALL(out io.Writer, level log.Level) {
+	InitLogrus(out, level)
+	api.InitLogrus(out, level)
+	dao.InitLogrus(out, level)
+	serve.InitLogrus(out, level)
+	client.InitLogrus(out, level)
+	bl.InitLogrus(out, level)
 }
-func InitLogrus(out io.Writer) {
+func InitLogrus(out io.Writer, level log.Level) {
 	log.SetFormatter(&log.JSONFormatter{})
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(level)
 	log.SetOutput(out)
 }

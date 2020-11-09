@@ -46,8 +46,8 @@ func InitBL(daoParameters *dao.ParametersType) error {
 	return nil
 }
 
-func InitLogrus(out io.Writer) {
+func InitLogrus(out io.Writer, level log.Level) {
 	log.SetFormatter(&log.JSONFormatter{})
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(level)
 	log.SetOutput(out)
 }

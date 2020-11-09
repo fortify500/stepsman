@@ -120,7 +120,6 @@ type DoStepParams struct {
 	UUID string `json:"uuid,omitempty"`
 }
 type DoStepResult struct {
-	StatusUUID string `json:"status-uuid,omitempty"`
 }
 
 type RunRecord struct {
@@ -258,6 +257,7 @@ func (a *AnyTime) Scan(src interface{}) error {
 	var result time.Time
 	switch v := src.(type) {
 	case time.Time:
+		result = src.(time.Time)
 	case string:
 		result, err = time.Parse(CurrentTimeStamp, v)
 	case []byte:
@@ -288,7 +288,7 @@ type StepRecord struct {
 	Name       string         `json:"name,omitempty"`
 	Status     StepStatusType `json:"status,omitempty"`
 	StatusUUID string         `db:"status_uuid" json:"status-uuid,omitempty"`
-	Now        AnyTime        `json:"now,omitempty"`
+	Now        AnyTime        `db:"now" json:"now,omitempty"`
 	Heartbeat  AnyTime        `json:"heartbeat,omitempty"`
 	State      string         `json:"state,omitempty"`
 }
@@ -350,9 +350,9 @@ func TranslateToStepStatus(status string) (StepStatusType, error) {
 		return StepIdle, NewError(ErrInvalidParams, "failed to translate to step status: %s", status)
 	}
 }
-func InitLogrus(out io.Writer) {
+func InitLogrus(out io.Writer, level log.Level) {
 	log.SetFormatter(&log.JSONFormatter{})
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(level)
 	log.SetOutput(out)
 }
 
@@ -388,6 +388,10 @@ var ErrStepAlreadyInProgress = &ErrorCode{
 var ErrRunIsAlreadyDone = &ErrorCode{
 	Code:    1005,
 	Message: "run is already done, no change is possible",
+}
+var ErrShuttingDown = &ErrorCode{
+	Code:    1006,
+	Message: "shutting down server",
 }
 
 type ErrorCaller struct {

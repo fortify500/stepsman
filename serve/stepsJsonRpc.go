@@ -141,7 +141,7 @@ func (h DoStepHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessa
 		if err := dao.VetIds([]string{p.UUID}); err != nil {
 			return resolveError(err)
 		}
-		doResult, err := bl.DoStep(p.UUID)
+		doResult, err := bl.DoStep(&p, false)
 		if err != nil {
 			return resolveError(err)
 		}

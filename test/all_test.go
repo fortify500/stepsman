@@ -355,12 +355,22 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
-			_, err := client.RemoteDoStep(stepUUID)
+			_, err := client.RemoteDoStep(&api.DoStepParams{UUID: stepUUID})
 			if err != nil {
 				t.Error(err)
 				return
 			}
 		})
+		{
+			i := 0
+			for !bl.QueuesIdle() {
+				i++
+				time.Sleep(1 * time.Second)
+				if i > 60 {
+					break
+				}
+			}
+		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
 				UUIDs: []string{stepUUID},
@@ -376,7 +386,7 @@ BreakOut:
 			for _, step := range steps {
 				fmt.Println(fmt.Sprintf("%+v", step))
 				if step.Status != api.StepDone {
-					t.Errorf("step status must be idle")
+					t.Errorf("step status must be done")
 				}
 			}
 		})

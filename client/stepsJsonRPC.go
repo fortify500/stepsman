@@ -121,11 +121,8 @@ type DoStepResponse struct {
 	ID      string           `json:"id,omitempty"`
 }
 
-func RemoteDoStep(uuid string) (*api.DoStepResult, error) {
+func RemoteDoStep(params *api.DoStepParams) (*api.DoStepResult, error) {
 	var result *api.DoStepResult
-	params := &api.DoStepParams{
-		UUID: uuid,
-	}
 	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStep, params)
 	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult DoStepResponse

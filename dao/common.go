@@ -191,9 +191,9 @@ func Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err error) {
 	err = transactionalFunction(tx)
 	return err
 }
-func InitLogrus(out io.Writer) {
+func InitLogrus(out io.Writer, level log.Level) {
 	log.SetFormatter(&log.JSONFormatter{})
-	log.SetLevel(log.TraceLevel)
+	log.SetLevel(level)
 	log.SetOutput(out)
 }
 

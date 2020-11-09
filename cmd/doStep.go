@@ -37,7 +37,7 @@ Use do step <step uuid>.`,
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
-		doResult, err := bl.DoStep(stepUUID)
+		_, err = bl.DoStep(&api.DoStepParams{UUID: stepUUID}, true)
 		if err != nil {
 			msg := "failed to do step"
 			Parameters.Err = &Error{
@@ -46,7 +46,6 @@ Use do step <step uuid>.`,
 			}
 			return
 		}
-		fmt.Printf("status uuid: %s\n", doResult.StatusUUID)
 		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
 			UUIDs: []string{stepUUID},
 		})

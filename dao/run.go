@@ -222,6 +222,7 @@ func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		default:
 			return "", api.NewError(api.ErrInvalidParams, "invalid attribute name in return-attributes: %s", attribute)
 		}
+		set[strings.ReplaceAll(attribute, "-", "_")] = true
 		set[attribute] = true
 	}
 	var sb strings.Builder

@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
@@ -36,13 +35,55 @@ func UpdateHeartBeat(stepUUID string, statusUUID string) error {
 	if err == nil {
 		var affected int64
 		affected, err = res.RowsAffected()
-		if err == nil {
-			if affected < 1 {
-				return api.NewError(api.ErrRecordNotAffected, "while updating step heartbeat, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", stepUUID, statusUUID)
-			}
+		if err != nil {
+			panic(err)
+		}
+		if affected != 1 {
+			return api.NewError(api.ErrRecordNotAffected, "while updating step heartbeat, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", stepUUID, statusUUID)
 		}
 	}
 	return nil
+}
+
+func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType) string {
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate uuid: %w", err))
+	}
+
+	res, err := tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4", newStatus, uuid4.String(), runId, index)
+	if err != nil {
+		panic(err)
+	}
+	var affected int64
+	affected, err = res.RowsAffected()
+	if err != nil {
+		panic(err)
+	}
+	if affected != 1 {
+		panic(fmt.Errorf("illegal state, cannot retrieve more than 1 step row for update"))
+	}
+	return uuid4.String()
+}
+
+func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string) string {
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate uuid: %w", err))
+	}
+	res, err := tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3 where run_id=$4 and \"index\"=$5", newStatus, newState, uuid4.String(), runId, index)
+	if err != nil {
+		panic(err)
+	}
+	var affected int64
+	affected, err = res.RowsAffected()
+	if err != nil {
+		panic(err)
+	}
+	if affected != 1 {
+		panic(fmt.Errorf("illegal state, cannot retrieve more than 1 step row for update"))
+	}
+	return uuid4.String()
 }
 
 func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, error) {
@@ -81,32 +122,33 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, err
 	return result, nil
 }
 
-func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*api.StepRecord, error) {
-	var result *api.StepRecord
-
-	const query = "SELECT *,CURRENT_TIMESTAMP as now FROM steps where run_id=$1 and \"index\"=$2"
-	var rows *sqlx.Rows
-	var err error
-	rows, err = tx.Queryx(query, runId, index)
-	if err != nil {
-		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
-	}
-
-	defer rows.Close()
-	for rows.Next() {
-		var step api.StepRecord
-		err = rows.StructScan(&step)
-		if err != nil {
-			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
-		}
-		result = &step
-		break
-	}
-	if result == nil {
-		return nil, api.NewError(api.ErrRecordNotFound, "failed to get step record, no record found")
-	}
-	return result, nil
-}
+//unused currently
+//func GetStepTx(tx *sqlx.Tx, runId string, index int64) (*api.StepRecord, error) {
+//	var result *api.StepRecord
+//
+//	const query = "SELECT *,CURRENT_TIMESTAMP as now FROM steps where run_id=$1 and \"index\"=$2"
+//	var rows *sqlx.Rows
+//	var err error
+//	rows, err = tx.Queryx(query, runId, index)
+//	if err != nil {
+//		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
+//	}
+//
+//	defer rows.Close()
+//	for rows.Next() {
+//		var step api.StepRecord
+//		err = rows.StructScan(&step)
+//		if err != nil {
+//			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
+//		}
+//		result = &step
+//		break
+//	}
+//	if result == nil {
+//		return nil, api.NewError(api.ErrRecordNotFound, "failed to get step record, no record found")
+//	}
+//	return result, nil
+//}
 
 func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 	if attributes == nil || len(attributes) == 0 {
@@ -128,7 +170,7 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		default:
 			return "", api.NewError(api.ErrInvalidParams, "invalid attribute name in return-attributes: %s", attribute)
 		}
-		set[attribute] = true
+		set[strings.ReplaceAll(attribute, "-", "_")] = true
 	}
 	var sb strings.Builder
 	first := true
@@ -326,32 +368,4 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 		}
 		return result, &rangeResult, nil
 	}
-}
-
-func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType) {
-	uuid4, err := uuid.NewRandom()
-	if err != nil {
-		panic(fmt.Errorf("failed to generate uuid: %w", err))
-	}
-
-	if _, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4", newStatus, uuid4.String(), s.RunId, s.Index); err != nil {
-		panic(err)
-	}
-	s.StatusUUID = uuid4.String()
-}
-
-func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, s *api.StepRecord, newStatus api.StepStatusType, newState *StepState) {
-	uuid4, err := uuid.NewRandom()
-	if err != nil {
-		panic(fmt.Errorf("failed to generate uuid: %w", err))
-	}
-	newStateStr, err := json.Marshal(newState)
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err = tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3 where run_id=$4 and \"index\"=$5", newStatus, newStateStr, uuid4.String(), s.RunId, s.Index); err != nil {
-		panic(err)
-	}
-	s.StatusUUID = uuid4.String()
 }

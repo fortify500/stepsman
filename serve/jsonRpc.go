@@ -24,7 +24,6 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
-	"io"
 	"runtime/debug"
 )
 
@@ -118,10 +117,4 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 		log.Fatal(err)
 	}
 	return mr
-}
-
-func InitLogrus(out io.Writer) {
-	log.SetFormatter(&log.JSONFormatter{})
-	log.SetLevel(log.TraceLevel)
-	log.SetOutput(out)
 }
