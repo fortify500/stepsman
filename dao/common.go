@@ -42,6 +42,7 @@ const (
 	UUID            = "uuid"
 	StatusUUID      = "status-uuid"
 	HeartBeat       = "heartbeat"
+	CompleteBy      = "complete-by"
 	Now             = "now"
 	State           = "state"
 	Label           = "label"
@@ -55,6 +56,9 @@ type DBI interface {
 	VerifyDBCreation(tx *sqlx.Tx) error
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
+	UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
+	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
+	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string
 }
 
 func OpenDatabase(databaseVendor string, dataSourceName string) error {

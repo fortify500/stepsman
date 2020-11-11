@@ -112,7 +112,7 @@ func processMsg(msg *DoWork) {
 		log.Tracef("processing msg: %#v", msg)
 	}
 	recoverable(func() error {
-		_, err := doStep((*api.DoStepParams)(msg), true, true)
+		_, err := doStepSynchronous((*api.DoStepParams)(msg), true)
 		return err
 	})
 }

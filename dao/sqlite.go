@@ -17,8 +17,10 @@
 package dao
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -62,6 +64,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	                                 status INTEGER NOT NULL,
 	                                 status_uuid TEXT NOT NULL,
 	                                 heartbeat TIMESTAMP NOT NULL,
+									 complete_by TIMESTAMP NULL,
 	                                 state text,
 	                                 PRIMARY KEY (run_id, "index")
                                      )`)
@@ -79,8 +82,94 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,0,:state)"
+	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, complete_by, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,0,null,:state)"
 	if _, err := tx.NamedExec(query, stepRecord); err != nil {
 		panic(err)
 	}
+}
+
+func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, by *int64) []UUIDAndStatusUUID {
+	var result []UUIDAndStatusUUID
+	for _, stepUUID := range uuids {
+		uuid4, err := uuid.NewRandom()
+		if err != nil {
+			panic(fmt.Errorf("failed to generate uuid: %w", err))
+		}
+		var res sql.Result
+		if len(prevStatus) == 1 {
+			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where uuid=$3 and status=$4", newStatus, uuid4.String(), stepUUID, prevStatus[0])
+		} else {
+			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where uuid=$3", newStatus, uuid4.String(), stepUUID)
+		}
+		if err != nil {
+			panic(err)
+		}
+		var affected int64
+		affected, err = res.RowsAffected()
+		if err != nil {
+			panic(err)
+		}
+		if affected == 1 {
+			result = append(result, UUIDAndStatusUUID{
+				UUID:       stepUUID,
+				StatusUUID: uuid4.String(),
+			})
+		}
+	}
+	return result
+}
+
+func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID {
+	var result []UUIDAndStatusUUID
+	for _, index := range indices {
+		uuid4, err := uuid.NewRandom()
+		if err != nil {
+			panic(fmt.Errorf("failed to generate uuid: %w", err))
+		}
+		var res sql.Result
+		if len(prevStatus) == 1 {
+			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4 and status=$5", newStatus, uuid4.String(), runId, index, prevStatus[0])
+		} else {
+			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4", newStatus, uuid4.String(), runId, index)
+		}
+		if err != nil {
+			panic(err)
+		}
+		var affected int64
+		affected, err = res.RowsAffected()
+		if err != nil {
+			panic(err)
+		}
+		if affected == 1 {
+			partialStep, err := GetStepTx(tx, runId, index, []string{UUID})
+			if err != nil {
+				panic(err)
+			}
+			result = append(result, UUIDAndStatusUUID{
+				UUID:       partialStep.UUID,
+				StatusUUID: uuid4.String(),
+			})
+		}
+	}
+	return result
+}
+
+func (db *Sqlite3SqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string {
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate uuid: %w", err))
+	}
+	res, err := tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3 where run_id=$4 and \"index\"=$5", newStatus, newState, uuid4.String(), runId, index)
+	if err != nil {
+		panic(err)
+	}
+	var affected int64
+	affected, err = res.RowsAffected()
+	if err != nil {
+		panic(err)
+	}
+	if affected != 1 {
+		panic(fmt.Errorf("illegal state, cannot retrieve more than 1 step row for update"))
+	}
+	return uuid4.String()
 }

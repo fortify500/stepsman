@@ -17,8 +17,10 @@
 package dao
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -55,6 +57,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"status" Bigint NOT NULL,
 	"status_uuid" uuid NOT NULL,
 	"heartbeat" TIMESTAMP NOT NULL,
+	"complete_by" TIMESTAMP NULL,
 	"label" Text NOT NULL,
 	"name" Text,
 	"state" jsonb,
@@ -69,11 +72,119 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_status: %w", err)
 	}
+	_, err = tx.Exec(`CREATE INDEX "index_steps_complete_by" ON "public"."steps" USING btree( "complete_by" Asc NULLS Last )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_steps_complete_by: %w", err)
+	}
 	return nil
 }
 
 func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),:state)", stepRecord); err != nil {
+	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, complete_by, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),null,:state)", stepRecord); err != nil {
 		panic(err)
 	}
+}
+
+func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID {
+	var result []UUIDAndStatusUUID
+	for _, stepUUID := range uuids {
+		uuid4, err := uuid.NewRandom()
+		if err != nil {
+			panic(fmt.Errorf("failed to generate uuid: %w", err))
+		}
+		var res sql.Result
+		var completeByStr string
+		if completeBy != nil {
+			completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", *completeBy)
+		} else {
+			completeByStr = "null"
+		}
+		if len(prevStatus) == 1 {
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2 where uuid=$3 and status=$4", completeByStr), newStatus, uuid4.String(), stepUUID, prevStatus[0])
+		} else {
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2 where uuid=$3", completeByStr), newStatus, uuid4.String(), stepUUID)
+		}
+		if err != nil {
+			panic(err)
+		}
+		var affected int64
+		affected, err = res.RowsAffected()
+		if err != nil {
+			panic(err)
+		}
+		if affected == 1 {
+			result = append(result, UUIDAndStatusUUID{
+				UUID:       stepUUID,
+				StatusUUID: uuid4.String(),
+			})
+		}
+	}
+	return result
+}
+
+func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID {
+	var result []UUIDAndStatusUUID
+	for _, index := range indices {
+		uuid4, err := uuid.NewRandom()
+		if err != nil {
+			panic(fmt.Errorf("failed to generate uuid: %w", err))
+		}
+		var res sql.Result
+		var completeByStr string
+		if completeBy != nil {
+			completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", *completeBy)
+		} else {
+			completeByStr = "null"
+		}
+		if len(prevStatus) == 1 {
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2 where run_id=$3 and \"index\"=$4 and status=$5", completeByStr), newStatus, uuid4.String(), runId, index, prevStatus[0])
+		} else {
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2 where run_id=$3 and \"index\"=$4", completeByStr), newStatus, uuid4.String(), runId, index)
+		}
+		if err != nil {
+			panic(err)
+		}
+		var affected int64
+		affected, err = res.RowsAffected()
+		if err != nil {
+			panic(err)
+		}
+		if affected == 1 {
+			partialStep, err := GetStepTx(tx, runId, index, []string{UUID})
+			if err != nil {
+				panic(err)
+			}
+			result = append(result, UUIDAndStatusUUID{
+				UUID:       partialStep.UUID,
+				StatusUUID: uuid4.String(),
+			})
+		}
+	}
+	return result
+}
+
+func (db *PostgreSQLSqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string {
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate uuid: %w", err))
+	}
+	var completeByStr string
+	if completeBy != nil {
+		completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", *completeBy)
+	} else {
+		completeByStr = "null"
+	}
+	res, err := tx.Exec(fmt.Sprintf("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$3 where run_id=$4 and \"index\"=$5", completeByStr), newStatus, newState, uuid4.String(), runId, index)
+	if err != nil {
+		panic(err)
+	}
+	var affected int64
+	affected, err = res.RowsAffected()
+	if err != nil {
+		panic(err)
+	}
+	if affected != 1 {
+		panic(fmt.Errorf("illegal state, cannot retrieve more than 1 step row for update"))
+	}
+	return uuid4.String()
 }

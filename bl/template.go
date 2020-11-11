@@ -74,6 +74,8 @@ type Step struct {
 type StepDo struct {
 	Type             DoType `json:"type,omitempty" mapstructure:"type" yaml:"type,omitempty"`
 	HeartBeatTimeout int64  `json:"heartbeat-timeout,omitempty" mapstructure:"heartbeat-timeout" yaml:"heartbeat-timeout,omitempty"`
+	Retries          int64  `json:"retries,omitempty" mapstructure:"retries" yaml:"retries,omitempty"`
+	CompleteBy       int64  `json:"complete-by,omitempty" mapstructure:"complete-by" yaml:"complete-by,omitempty"`
 }
 
 type DO interface {

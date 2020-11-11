@@ -291,6 +291,7 @@ type StepRecord struct {
 	StatusUUID string         `db:"status_uuid" json:"status-uuid,omitempty"`
 	Now        AnyTime        `db:"now" json:"now,omitempty"`
 	Heartbeat  AnyTime        `json:"heartbeat,omitempty"`
+	CompleteBy *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`
 	State      string         `json:"state,omitempty"`
 }
 

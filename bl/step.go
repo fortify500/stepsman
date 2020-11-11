@@ -29,6 +29,9 @@ import (
 
 const DefaultHeartBeatInterval = 10 * time.Second
 
+var CompleteByInProgressInterval int64 = 3600
+var CompleteByPendingInterval int64 = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
+
 func GetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	if dao.IsRemote {
 		return client.RemoteGetSteps(query)
@@ -108,7 +111,7 @@ func updateStep(query *api.UpdateQuery) error {
 			if !ok {
 				return api.NewError(api.ErrInvalidParams, "status uuid must be of string type")
 			}
-			err := dao.UpdateHeartBeat(query.Id, statusUUIDStr)
+			err := dao.UpdateStepHeartBeat(query.Id, statusUUIDStr)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
@@ -184,15 +187,21 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 		}
 
 		updatedStepRecord = *prevStepRecord
+		var completeBy *int64
+		if newStatus == api.StepPending {
+			completeBy = &CompleteByPendingInterval
+		} else if newStatus == api.StepInProgress {
+			completeBy = s.GetCompleteBy()
+		}
 		if newState == nil {
-			updatedStepRecord.StatusUUID = dao.UpdateStatusAndHeartBeatTx(tx, prevStepRecord.RunId, prevStepRecord.Index, newStatus).StatusUUID
+			updatedStepRecord.StatusUUID = dao.UpdateStepStatusAndHeartBeatTx(tx, prevStepRecord.RunId, prevStepRecord.Index, newStatus, completeBy).StatusUUID
 		} else {
 			var newStateBytes []byte
 			newStateBytes, err = json.Marshal(newState)
 			if err != nil {
 				panic(err)
 			}
-			updatedStepRecord.StatusUUID = dao.UpdateStateAndStatusAndHeartBeatTx(tx, prevStepRecord.RunId, prevStepRecord.Index, newStatus, string(newStateBytes))
+			updatedStepRecord.StatusUUID = dao.DB.UpdateStepStateAndStatusAndHeartBeatTx(tx, prevStepRecord.RunId, prevStepRecord.Index, newStatus, string(newStateBytes), completeBy)
 			updatedStepRecord.State = string(newStateBytes)
 		}
 		updatedStepRecord.Status = newStatus
@@ -203,6 +212,12 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 		tErr = stopErr
 	}
 	return &updatedStepRecord, tErr
+}
+func (s *Step) GetCompleteBy() *int64 {
+	if s.stepDo.CompleteBy > 0 {
+		return &s.stepDo.CompleteBy
+	}
+	return &CompleteByInProgressInterval
 }
 
 func (s *Step) GetHeartBeatTimeout() time.Duration {
@@ -249,7 +264,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 						if len(indices) > 0 {
 							var uuidsToEnqueue []dao.UUIDAndStatusUUID
 							if tErr := dao.Transactional(func(tx *sqlx.Tx) error {
-								uuidsToEnqueue = dao.UpdateManyStatusAndHeartBeatTx(tx, stepRecord.RunId, indices, api.StepPending, []api.StepStatusType{api.StepIdle})
+								uuidsToEnqueue = dao.DB.UpdateManyStatusAndHeartBeatTx(tx, stepRecord.RunId, indices, api.StepPending, []api.StepStatusType{api.StepIdle}, &CompleteByPendingInterval)
 								return nil
 							}); tErr != nil {
 								panic(tErr)
@@ -284,12 +299,23 @@ var emptyDoStepResult = api.DoStepResult{}
 
 func doStep(params *api.DoStepParams, synchronous bool, checkPending bool) (*api.DoStepResult, error) {
 	if !synchronous {
+		tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+			_ = dao.UpdateStepStatusAndHeartBeatByUUIDTx(tx, params.UUID, api.StepPending, &CompleteByPendingInterval)
+			return nil
+		})
+		if tErr != nil {
+			panic(tErr)
+		}
 		err := Enqueue((*DoWork)(params))
 		if err != nil {
 			return nil, fmt.Errorf("failed to equeue step:%w", err)
 		}
 		return &emptyDoStepResult, nil
 	}
+	return doStepSynchronous(params, checkPending)
+}
+
+func doStepSynchronous(params *api.DoStepParams, checkPending bool) (*api.DoStepResult, error) {
 	stepRecords, err := GetSteps(&api.GetStepsQuery{
 		UUIDs: []string{params.UUID},
 	})

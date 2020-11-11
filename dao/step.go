@@ -17,10 +17,8 @@
 package dao
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"strings"
 )
@@ -31,7 +29,7 @@ type StepState struct {
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
 
-func UpdateHeartBeat(stepUUID string, statusUUID string) error {
+func UpdateStepHeartBeat(stepUUID string, statusUUID string) error {
 	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_uuid=$2", stepUUID, statusUUID)
 	if err == nil {
 		var affected int64
@@ -45,8 +43,8 @@ func UpdateHeartBeat(stepUUID string, statusUUID string) error {
 	}
 	return nil
 }
-func UpdateStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType) UUIDAndStatusUUID {
-	updated := UpdateManyStatusAndHeartBeatTx(tx, runId, []int64{index}, newStatus, nil)
+func UpdateStepStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusUUID {
+	updated := DB.UpdateManyStatusAndHeartBeatTx(tx, runId, []int64{index}, newStatus, nil, completeBy)
 	if len(updated) != 1 {
 		panic(fmt.Errorf("illegal state, 1 updated record expected for runId:%s and index:%d", runId, index))
 	}
@@ -58,60 +56,12 @@ type UUIDAndStatusUUID struct {
 	StatusUUID string
 }
 
-func UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType) []UUIDAndStatusUUID {
-	var result []UUIDAndStatusUUID
-	for _, index := range indices {
-		uuid4, err := uuid.NewRandom()
-		if err != nil {
-			panic(fmt.Errorf("failed to generate uuid: %w", err))
-		}
-		var res sql.Result
-		if len(prevStatus) == 1 {
-			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4 and status=$5", newStatus, uuid4.String(), runId, index, prevStatus[0])
-		} else {
-			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4", newStatus, uuid4.String(), runId, index)
-		}
-		if err != nil {
-			panic(err)
-		}
-		var affected int64
-		affected, err = res.RowsAffected()
-		if err != nil {
-			panic(err)
-		}
-		if affected == 1 {
-
-			partialStep, err := GetStepTx(tx, runId, index, []string{UUID})
-			if err != nil {
-				panic(err)
-			}
-			result = append(result, UUIDAndStatusUUID{
-				UUID:       partialStep.UUID,
-				StatusUUID: uuid4.String(),
-			})
-		}
+func UpdateStepStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuid string, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusUUID {
+	updated := DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{uuid}, newStatus, nil, completeBy)
+	if len(updated) != 1 {
+		panic(fmt.Errorf("illegal state, 1 updated record expected for uuid:%s", uuid))
 	}
-	return result
-}
-
-func UpdateStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string) string {
-	uuid4, err := uuid.NewRandom()
-	if err != nil {
-		panic(fmt.Errorf("failed to generate uuid: %w", err))
-	}
-	res, err := tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3 where run_id=$4 and \"index\"=$5", newStatus, newState, uuid4.String(), runId, index)
-	if err != nil {
-		panic(err)
-	}
-	var affected int64
-	affected, err = res.RowsAffected()
-	if err != nil {
-		panic(err)
-	}
-	if affected != 1 {
-		panic(fmt.Errorf("illegal state, cannot retrieve more than 1 step row for update"))
-	}
-	return uuid4.String()
+	return updated[0]
 }
 
 func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, error) {
@@ -193,6 +143,7 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		case Status:
 		case StatusUUID:
 		case HeartBeat:
+		case CompleteBy:
 		case Label:
 		case Name:
 		case State:

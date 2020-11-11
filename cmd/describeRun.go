@@ -146,9 +146,13 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 	status := stepRecord.Status.TranslateStepStatus()
 	checked := "[ ]"
 	heartBeat := "N/A"
+	completeBy := "N/A"
 	switch stepRecord.Status {
 	case api.StepDone:
 		checked = "True"
+	}
+	if stepRecord.CompleteBy != nil {
+		completeBy = fmt.Sprintf("%s", time.Time(*stepRecord.CompleteBy).Format(time.RFC3339))
 	}
 	if stepRecord.Status == api.StepInProgress {
 		heartBeat = fmt.Sprintf("%s", time.Time(stepRecord.Heartbeat).Format(time.RFC3339))
@@ -165,6 +169,7 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		{"Status:", status},
 		{"Status UUID:", stepRecord.StatusUUID},
 		{"Heartbeat:", heartBeat},
+		{"Complete By:", completeBy},
 		{"Done:", checked},
 		{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
 	})

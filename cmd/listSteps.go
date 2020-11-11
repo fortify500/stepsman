@@ -47,7 +47,7 @@ func listStepsInternal() {
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "Heartbeat"})
+	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "Heartbeat", "Complete By"})
 	runId, err := parseRunId(Parameters.Run)
 	if err != nil {
 		Parameters.Err = fmt.Errorf("failed to list steps: %w", err)
@@ -131,15 +131,19 @@ func listStepsInternal() {
 		status := step.Status.TranslateStepStatus()
 		checked := "[ ]"
 		heartBeat := ""
+		completeBy := ""
 		switch step.Status {
 		case api.StepDone:
 			checked = "[V]"
+		}
+		if step.CompleteBy != nil {
+			completeBy = fmt.Sprintf("%s", time.Time(*step.CompleteBy).Format(time.RFC3339))
 		}
 		if step.Status == api.StepInProgress {
 			heartBeat = fmt.Sprintf("%s", time.Time(step.Heartbeat).Format(time.RFC3339))
 		}
 		t.AppendRows([]table.Row{
-			{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusUUID, heartBeat},
+			{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusUUID, heartBeat, completeBy},
 		})
 	}
 	if stepsRange != nil && stepsRange.Total > 0 {
