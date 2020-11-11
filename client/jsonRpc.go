@@ -23,31 +23,16 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"time"
 )
 
 //goland:noinspection GoDeprecation,SpellCheckingInspection
 var Transport = http.Transport{
-	Proxy: nil,
-	DialContext: (&net.Dialer{
-		Timeout:   60 * time.Second,
-		KeepAlive: 60 * time.Second,
-		DualStack: true,
-	}).DialContext,
-	ForceAttemptHTTP2:     true,
-	MaxIdleConns:          100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   30 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
-	//MaxIdleConnsPerHost:    0,
-	//MaxConnsPerHost:        0,
-	ResponseHeaderTimeout:  60 * time.Second,
-	MaxResponseHeaderBytes: 10 * 1024 * 1024,
+	MaxResponseHeaderBytes: 128 * 1024,
+	IdleConnTimeout:        10 * time.Minute,
 }
 var Client = &http.Client{
-	//Jar:           nil,
 	Timeout:   time.Second * 60,
 	Transport: &Transport,
 }

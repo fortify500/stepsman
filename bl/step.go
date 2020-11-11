@@ -24,8 +24,6 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
-	"sync"
 	"time"
 )
 
@@ -120,6 +118,7 @@ func updateStep(query *api.UpdateQuery) error {
 }
 func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool, mustMatchPrevStatus bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
+	var stopErr *api.Error
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		runId := prevStepRecord.RunId
@@ -143,7 +142,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 			if delta < 0 {
 				delta = delta * -1
 			}
-			heartBeatInterval := s.GetHeartBeatInterval()
+			heartBeatInterval := s.GetHeartBeatTimeout()
 			if delta <= heartBeatInterval {
 				return api.NewError(api.ErrStepAlreadyInProgress, "failed to update database stepRecord row, stepRecord is already in progress and has a heartbeat with an interval of %d", heartBeatInterval)
 			}
@@ -162,16 +161,25 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 			if newState == nil {
 				newState = &dao.StepState{}
 			}
-		} else {
-			var run *api.RunRecord
-			run, err = GetRunByIdTx(tx, runId)
-			if err != nil {
-				return fmt.Errorf("failed to update database stepRecord row: %w", err)
-			}
-			if run.Status == api.RunIdle {
-				dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
-			} else if run.Status == api.RunDone {
-				return api.NewError(api.ErrRunIsAlreadyDone, "failed to update database stepRecord status, run is already done and no change is possible")
+		}
+
+		var run *api.RunRecord
+		run, err = GetRunByIdTx(tx, runId)
+		if err != nil {
+			return fmt.Errorf("failed to update database stepRecord row: %w", err)
+		}
+		if run.Status == api.RunIdle {
+			dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
+		} else if run.Status == api.RunDone {
+			stopErr = api.NewError(api.ErrRunIsAlreadyDone, "failed to update database stepRecord status, run is already done and no change is possible")
+			if newStatus == api.StepInProgress || newStatus == api.StepPending {
+				if partialStepRecord.Status == api.StepIdle || partialStepRecord.Status == api.StepDone {
+					return stopErr
+				}
+				newStatus = api.StepIdle // we want to finish this so it won't be revived.
+				newState = nil
+			} else {
+				return stopErr
 			}
 		}
 
@@ -191,10 +199,13 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 
 		return nil
 	})
+	if tErr == nil && stopErr != nil {
+		tErr = stopErr
+	}
 	return &updatedStepRecord, tErr
 }
 
-func (s *Step) GetHeartBeatInterval() time.Duration {
+func (s *Step) GetHeartBeatTimeout() time.Duration {
 	if s.stepDo.HeartBeatTimeout > 0 {
 		return time.Duration(s.stepDo.HeartBeatTimeout) * time.Second
 	}
@@ -205,36 +216,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
-	heartbeatInterval := s.GetHeartBeatInterval() / 2
-	if heartbeatInterval < DefaultHeartBeatInterval {
-		log.Warnf("heartbeatInterval must be at least %d, got %d", (DefaultHeartBeatInterval/time.Second)*2, s.GetHeartBeatInterval())
-		heartbeatInterval = DefaultHeartBeatInterval
-	}
-	var wg sync.WaitGroup
 	var errBeat error
-	heartBeatDone1 := make(chan int)
-	heartBeatDone2 := make(chan int)
-	heartbeat := func() {
-	OUT:
-		for {
-			select {
-			case <-heartBeatDone1:
-				break OUT
-			case <-heartBeatDone2:
-				break OUT
-			case <-time.After(heartbeatInterval):
-				errBeat = dao.UpdateHeartBeat(updatedStepRecord.UUID, updatedStepRecord.StatusUUID)
-				if errBeat != nil {
-					log.Warn(fmt.Errorf("while trying to update heartbeat: %w", errBeat))
-					break OUT
-				}
-			}
-		}
-		wg.Done()
-	}
-	wg.Add(1)
-	go heartbeat()
-	defer close(heartBeatDone1) //in case of a panic
 	decoder := json.NewDecoder(bytes.NewBuffer([]byte(updatedStepRecord.State)))
 	decoder.DisallowUnknownFields()
 	var prevState dao.StepState
@@ -247,8 +229,6 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 	if errBeat == nil {
 		newState, doErr = do(s.doType, s.Do, &prevState)
 	}
-	close(heartBeatDone2)
-	wg.Wait()
 	var newStepStatus api.StepStatusType
 	if doErr != nil || errBeat != nil {
 		newStepStatus = api.StepFailed

@@ -28,13 +28,8 @@ var wasInit = false
 var AllowChangeVendor = false
 var RootCmd = &cobra.Command{
 	Use:   "stepsman",
-	Short: "Step by step managed script",
-	Long: `Stepsman is a command line utility to manage processes such as:
-* Installations
-* Upgrades
-* Migrations
-* Tests
-* Anything that looks like a list of steps to complete
+	Short: "Step by step workflow manager",
+	Long: `StepsMan is a step by step event driven business process and workflow manager.
 
 hint: "stepsman prompt" will enter interactive mode`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

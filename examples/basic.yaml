@@ -6,7 +6,7 @@ steps:
     label: starting
     do: # optional
       type: REST # heartbeats of set InProgress and finally set Done. However, this doesn't mean events cannot already start for path_1_step_?
-      heartbeat-timeout: 50 # seconds. the do will send heartbeats when calling the url. Currently only synchronous calls are supported.
+      heartbeat-timeout: 50 # seconds. the do will send heartbeats when calling the url in asynchronous cases. Currently only synchronous calls are supported so heart-beat timeout is essentially a timeout.
       options:
         timeout: 40 #overall timeout make sense timeout would be less than the heartbeat-timeout
         max-response-body-bytes: 524288

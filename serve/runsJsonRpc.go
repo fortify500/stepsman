@@ -22,7 +22,6 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
-	"github.com/go-chi/valve"
 	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
 	"github.com/mitchellh/mapstructure"
@@ -38,13 +37,6 @@ type (
 )
 
 func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	if err := valve.Lever(c).Open(); err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
-		}
-	}
-	defer valve.Lever(c).Close()
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.ListParams
@@ -68,13 +60,6 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 }
 
 func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	if err := valve.Lever(c).Open(); err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
-		}
-	}
-	defer valve.Lever(c).Close()
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.GetRunsParams
@@ -98,13 +83,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 }
 
 func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	if err := valve.Lever(c).Open(); err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
-		}
-	}
-	defer valve.Lever(c).Close()
+
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.UpdateRunParams
@@ -148,13 +127,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 }
 
 func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-	if err := valve.Lever(c).Open(); err != nil {
-		return nil, &jsonrpc.Error{
-			Code:    jsonrpc.ErrorCodeInternal,
-			Message: err.Error(),
-		}
-	}
-	defer valve.Lever(c).Close()
+
 	var p api.CreateRunParams
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
