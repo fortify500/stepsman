@@ -57,20 +57,22 @@ func InitLogrus(out io.Writer, level log.Level) {
 	log.SetOutput(out)
 	output = out
 }
-func Serve(port int64) {
+func Serve(port int64, healthPort int64) {
 	newLog := log.New()
 	newLog.SetFormatter(&log.JSONFormatter{})
 	newLog.SetLevel(log.GetLevel())
 	newLog.SetOutput(output)
-	r := chi.NewRouter()
-	r.Use(middleware.AllowContentType("application/json"))
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(logger.Logger("router", newLog))
-	r.Use(middleware.NoCache)
-	r.Use(middleware.Compress(5))
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	InterruptServe = make(chan os.Signal, 1)
+	signal.Notify(InterruptServe, os.Interrupt, syscall.SIGTERM)
+
+	rHealth := chi.NewRouter()
+	rHealth.Use(middleware.AllowContentType("application/json"))
+	rHealth.Use(middleware.RequestID)
+	rHealth.Use(middleware.RealIP)
+	rHealth.Use(logger.Logger("router", newLog))
+	rHealth.Use(middleware.NoCache)
+	rHealth.Use(middleware.Recoverer)
+	rHealth.Use(middleware.Timeout(60 * time.Second))
 	h := health.New()
 	if err := h.AddChecks([]*health.Config{
 		{
@@ -85,18 +87,29 @@ func Serve(port int64) {
 	if err := h.Start(); err != nil {
 		panic(err)
 	}
-	r.Get("/health", CustomJSONHandlerFunc(h, nil))
+	rHealth.Get("/health", CustomJSONHandlerFunc(h, nil))
+	healthServerAddress := fmt.Sprintf(":%v", healthPort)
+	log.Info(fmt.Sprintf("using server address: %s", healthServerAddress))
+	srvHealth := http.Server{Addr: healthServerAddress, Handler: chi.ServerBaseContext(context.Background(), rHealth)}
+
+	r := chi.NewRouter()
+	r.Use(middleware.AllowContentType("application/json"))
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(logger.Logger("router", newLog))
+	r.Use(middleware.NoCache)
+	r.Use(middleware.Compress(5))
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
 	r.Post("/v0/json-rpc", GetJsonRpcHandler().ServeHTTP)
 
 	serverAddress := fmt.Sprintf(":%v", port)
 	log.Info(fmt.Sprintf("using server address: %s", serverAddress))
 	srv := http.Server{Addr: serverAddress, Handler: chi.ServerBaseContext(bl.ValveCtx, r)}
 
-	InterruptServe = make(chan os.Signal, 1)
-	signal.Notify(InterruptServe, os.Interrupt, syscall.SIGTERM)
 	exit := make(chan int, 1)
 	go func() {
-		viper.SetDefault("SHUTDOWN_INTERVAL", time.Duration(120))
+		viper.SetDefault("SHUTDOWN_INTERVAL", time.Duration(20)*time.Minute)
 		<-InterruptServe
 		shutdownInterval := viper.GetDuration("SHUTDOWN_INTERVAL")
 		log.Info("shutting down..")
@@ -122,6 +135,13 @@ func Serve(port int64) {
 		}()
 		wg.Wait()
 		exit <- 0
+	}()
+
+	go func() {
+		errHealth := srvHealth.ListenAndServe()
+		if errHealth != nil {
+			log.Fatal(errHealth)
+		}
 	}()
 
 	err := srv.ListenAndServe()

@@ -21,6 +21,7 @@ import (
 	"github.com/c-bata/go-prompt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/gobs/args"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -77,7 +78,7 @@ func Executor(s string, wasEnter bool) {
 	if s == "" && wasEnter {
 		return
 	} else if strings.EqualFold(s, "quit") || strings.EqualFold(s, "exit") || (s == "" && !wasEnter) {
-		fmt.Println("So Long, and Thanks for All the Fish!")
+		fmt.Println("Bye...")
 		os.Exit(0)
 	}
 	RootCmd.SetArgs(args.GetArgs(s))
@@ -206,7 +207,18 @@ OUT:
 	if strings.EqualFold(relevantCommand.Use, "run") &&
 		len(runWord) > len("run") &&
 		strings.EqualFold(strings.TrimSpace(runWord), "run") {
-		runs, _, err := bl.ListRuns(nil)
+		runs, _, err := bl.ListRuns(&api.ListQuery{
+			Range: api.RangeQuery{
+				Range: api.Range{
+					Start: 0,
+					End:   20,
+				},
+			},
+			Sort: api.Sort{
+				Fields: []string{dao.Id},
+				Order:  "desc",
+			},
+		})
 		if err != nil {
 			log.Error(fmt.Errorf("failed to list runs: %w", err))
 			return []prompt.Suggest{}

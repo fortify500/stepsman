@@ -72,6 +72,7 @@ type AllParameters struct {
 	CreateFileName      string
 	RunKey              string
 	ServerPort          int64
+	ServerHealthPort    int64
 	Step                string
 	OnlyTemplateType    string
 	Run                 string

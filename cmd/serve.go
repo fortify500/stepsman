@@ -27,11 +27,12 @@ var ServeCmd = &cobra.Command{
 	Long:  `Use serve to remote control stepsman via http. You can query, monitor and do remotely.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer recoverAndLog("failed to serve")
-		serveServe.Serve(Parameters.ServerPort)
+		serveServe.Serve(Parameters.ServerPort, Parameters.ServerHealthPort)
 	},
 }
 
 func init() {
 	ServeCmd.Flags().Int64VarP(&Parameters.ServerPort, "serve-port", "p", 3333, "server port number")
+	ServeCmd.Flags().Int64VarP(&Parameters.ServerHealthPort, "serve-health-port", "t", 3334, "server health port number")
 	RootCmd.AddCommand(ServeCmd)
 }
