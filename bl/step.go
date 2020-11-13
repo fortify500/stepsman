@@ -188,7 +188,7 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 		updatedStepRecord = *prevStepRecord
 		var completeBy *int64
 		if newStatus == api.StepPending {
-			completeBy = &CompleteByPendingInterval
+			completeBy = &dao.CompleteByPendingInterval
 		} else if newStatus == api.StepInProgress {
 			completeBy = s.GetCompleteBy()
 		}
@@ -263,7 +263,7 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 						if len(indices) > 0 {
 							var uuidsToEnqueue []dao.UUIDAndStatusUUID
 							if tErr := dao.Transactional(func(tx *sqlx.Tx) error {
-								uuidsToEnqueue = dao.DB.UpdateManyStatusAndHeartBeatTx(tx, stepRecord.RunId, indices, api.StepPending, []api.StepStatusType{api.StepIdle}, &CompleteByPendingInterval)
+								uuidsToEnqueue = dao.DB.UpdateManyStatusAndHeartBeatTx(tx, stepRecord.RunId, indices, api.StepPending, []api.StepStatusType{api.StepIdle}, &dao.CompleteByPendingInterval)
 								return nil
 							}); tErr != nil {
 								panic(tErr)
@@ -299,7 +299,7 @@ var emptyDoStepResult = api.DoStepResult{}
 func doStep(params *api.DoStepParams, synchronous bool, checkPending bool) (*api.DoStepResult, error) {
 	if !synchronous {
 		tErr := dao.Transactional(func(tx *sqlx.Tx) error {
-			updated := dao.DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{params.UUID}, api.StepPending, []api.StepStatusType{api.StepIdle}, &CompleteByPendingInterval)
+			updated := dao.DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{params.UUID}, api.StepPending, []api.StepStatusType{api.StepIdle}, &dao.CompleteByPendingInterval)
 			if len(updated) != 1 {
 				return api.NewError(api.ErrPrevStepStatusDoesNotMatch, "enqueue failed because it is highly probably the step with uuid:%s, is not in a pending state or the record is missing")
 			}

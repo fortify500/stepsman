@@ -27,6 +27,14 @@ import (
 
 type Sqlite3SqlxDB sqlx.DB
 
+func (db *Sqlite3SqlxDB) Notify(tx *sqlx.Tx, channel string, message string) {
+	panic("unsupported operation")
+}
+
+func (db *Sqlite3SqlxDB) RecoverSteps(tx *sqlx.Tx) []string {
+	panic("unsupported operation")
+}
+
 func (db *Sqlite3SqlxDB) VerifyDBCreation(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS migration (
     id INTEGER PRIMARY KEY NOT NULL,

@@ -17,9 +17,11 @@
 package bl
 
 import (
+	"context"
 	"fmt"
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/go-chi/valve"
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
@@ -28,10 +30,12 @@ import (
 )
 
 var (
+	ShutdownValve                *valve.Valve
+	ValveCtx                     context.Context
 	CompleteByInProgressInterval int64 = 3600
-	CompleteByPendingInterval    int64 = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
-	JobQueueNumberOfWorkers            = 5000
-	JobQueueMemoryQueueLimit           = 1 * 1000 * 1000
+
+	JobQueueNumberOfWorkers  = 5000
+	JobQueueMemoryQueueLimit = 1 * 1000 * 1000
 )
 
 func InitBL(daoParameters *dao.ParametersType) error {

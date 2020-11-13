@@ -17,7 +17,6 @@
 package bl
 
 import (
-	"context"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/go-chi/valve"
@@ -27,9 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-var ShutdownValve *valve.Valve
-var ValveCtx context.Context
 
 type DoWork api.DoStepParams
 
@@ -128,6 +124,7 @@ func startWorkers() {
 }
 func startWorkLoop() {
 	startWorkers()
+	go StartRecoveryListening()
 	go func() {
 		defer close(queue)
 		for {

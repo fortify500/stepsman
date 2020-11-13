@@ -188,3 +188,34 @@ func (db *PostgreSQLSqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, 
 	}
 	return uuid4.String()
 }
+func (db *PostgreSQLSqlxDB) Notify(tx *sqlx.Tx, channel string, message string) {
+	_, err := tx.Exec(`SELECT pg_notify($1, $2)`, channel, message)
+	if err != nil {
+		panic(err)
+	}
+}
+func (db *PostgreSQLSqlxDB) RecoverSteps(tx *sqlx.Tx) []string {
+	var result []string
+	rows, err := tx.Queryx(fmt.Sprintf(`with R as (select run_id, "index" from steps
+		where  complete_by<(NOW() - interval '10 second')
+		FOR UPDATE SKIP LOCKED)
+
+		update steps
+		set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
+		FROM R
+		where steps.run_id = R.run_id and steps.index = R.index
+		RETURNING steps.UUID`, CompleteByPendingInterval), api.StepPending)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uuid string
+		err = rows.Scan(&uuid)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
+		}
+		result = append(result, uuid)
+	}
+	return result
+}

@@ -159,6 +159,11 @@ func recoverAndLog(msg string) {
 }
 
 func InitConfig() {
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		panic(err)
+	}
+	api.InstanceId = uuid4.String()
 	flag.Parse()
 	viper.SetEnvPrefix("STEPSMAN")
 	viper.AutomaticEnv() // read in environment variables that match
@@ -217,6 +222,7 @@ func InitConfig() {
 		InitLogrusALL(LumberJack, level)
 	}
 
+	log.Info(fmt.Sprintf("stepsman instance id: %s", api.InstanceId))
 	log.Info(fmt.Sprintf("stepsman starting [build commit id: %s]", dao.GitCommit))
 	bi, ok := debug.ReadBuildInfo()
 	if ok {
@@ -232,7 +238,7 @@ func InitConfig() {
 	}
 
 	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
-		bl.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
+		dao.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
 	}
 
 	if viper.IsSet("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS") {

@@ -20,6 +20,7 @@ require (
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jedib0t/go-pretty/v6 v6.0.5
 	github.com/jmoiron/sqlx v1.2.0
+	github.com/lib/pq v1.0.0
 	github.com/magiconair/properties v1.8.4 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-sqlite3 v1.14.4

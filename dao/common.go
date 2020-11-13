@@ -30,6 +30,8 @@ import (
 
 var GitCommit string
 
+var CompleteByPendingInterval int64 = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
+
 const (
 	Id              = "id"
 	RunId           = "run-id"
@@ -59,6 +61,8 @@ type DBI interface {
 	UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
 	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
 	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string
+	RecoverSteps(tx *sqlx.Tx) []string
+	Notify(tx *sqlx.Tx, channel string, message string)
 }
 
 func OpenDatabase(databaseVendor string, dataSourceName string) error {
