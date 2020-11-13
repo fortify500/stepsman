@@ -25,6 +25,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var ShutdownValve *valve.Valve
@@ -52,11 +53,16 @@ func (c *WorkCounter) get() int32 {
 }
 
 func Enqueue(do *DoWork) error {
-	if err := checkShuttingDown(); err != nil {
-		return fmt.Errorf("leaving enqueue, shuttingdown: %w", err)
+	select {
+	case <-stop:
+		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
+	case <-ValveCtx.Done():
+		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
+	case memoryQueue <- do:
+		return nil
+	case <-time.After(5 * time.Second):
+		return api.NewError(api.ErrJobQueueUnavailable, "leaving enqueue, timeout writing to the job queue")
 	}
-	memoryQueue <- do
-	return nil
 }
 
 // try not to use this, this is primarily for testing
@@ -65,16 +71,6 @@ func QueuesIdle() bool {
 		return true
 	}
 	return false
-}
-func checkShuttingDown() *api.Error {
-	select {
-	case <-stop:
-		return api.NewError(api.ErrShuttingDown, "server is shutting down")
-	case <-ValveCtx.Done():
-		return api.NewError(api.ErrShuttingDown, "server is shutting down")
-	default:
-	}
-	return nil
 }
 
 //func Dequeue() (*DoWork, *api.Error) {
@@ -118,7 +114,7 @@ func processMsg(msg *DoWork) {
 }
 
 func startWorkers() {
-	for w := 0; w < 1000; w++ {
+	for w := 0; w < JobQueueNumberOfWorkers; w++ {
 		if err := valve.Lever(ValveCtx).Open(); err != nil {
 			panic(err)
 		}
@@ -158,7 +154,7 @@ func InitQueue() {
 		ShutdownValve = valve.New()
 		ValveCtx = ShutdownValve.Context()
 		stop = valve.Lever(ValveCtx).Stop()
-		memoryQueue = make(chan *DoWork, 1*1000*1000)
+		memoryQueue = make(chan *DoWork, JobQueueMemoryQueueLimit)
 		startWorkLoop()
 	}
 }

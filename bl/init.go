@@ -27,6 +27,13 @@ import (
 	"io"
 )
 
+var (
+	CompleteByInProgressInterval int64 = 3600
+	CompleteByPendingInterval    int64 = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
+	JobQueueNumberOfWorkers            = 5000
+	JobQueueMemoryQueueLimit           = 1 * 1000 * 1000
+)
+
 func InitBL(daoParameters *dao.ParametersType) error {
 	err := dao.InitDAO(daoParameters)
 	if err != nil {

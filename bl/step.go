@@ -29,9 +29,6 @@ import (
 
 const DefaultHeartBeatInterval = 10 * time.Second
 
-var CompleteByInProgressInterval int64 = 3600
-var CompleteByPendingInterval int64 = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
-
 func GetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	if dao.IsRemote {
 		return client.RemoteGetSteps(query)
@@ -139,19 +136,21 @@ func (s *Step) UpdateStateAndStatus(prevStepRecord *api.StepRecord, newStatus ap
 		if mustMatchPrevStatus && partialStepRecord.Status != prevStepRecord.Status {
 			return api.NewError(api.ErrPrevStepStatusDoesNotMatch, "failed an assumption checking, prev status: %s, transaction status: %s", prevStepRecord.Status.TranslateStepStatus(), partialStepRecord.Status.TranslateStepStatus())
 		}
-		// if we are starting check if the stepRecord is already in-progress.
-		if !doFinish && partialStepRecord.Status == api.StepInProgress {
-			delta := time.Time(partialStepRecord.Now).Sub(time.Time(partialStepRecord.Heartbeat))
-			if delta < 0 {
-				delta = delta * -1
-			}
-			heartBeatInterval := s.GetHeartBeatTimeout()
-			if delta <= heartBeatInterval {
-				return api.NewError(api.ErrStepAlreadyInProgress, "failed to update database stepRecord row, stepRecord is already in progress and has a heartbeat with an interval of %d", heartBeatInterval)
-			}
-		} else if partialStepRecord.Status == api.StepInProgress {
-			if partialStepRecord.StatusUUID != prevStepRecord.StatusUUID {
-				return api.NewError(api.ErrRecordNotAffected, "while updating step status, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", prevStepRecord.UUID, prevStepRecord.StatusUUID)
+
+		if partialStepRecord.Status == api.StepInProgress {
+			if doFinish {
+				if partialStepRecord.StatusUUID != prevStepRecord.StatusUUID {
+					return api.NewError(api.ErrRecordNotAffected, "while updating step status, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", prevStepRecord.UUID, prevStepRecord.StatusUUID)
+				}
+			} else {
+				delta := time.Time(partialStepRecord.Now).Sub(time.Time(partialStepRecord.Heartbeat))
+				if delta < 0 {
+					delta = delta * -1
+				}
+				heartBeatInterval := s.GetHeartBeatTimeout()
+				if delta <= heartBeatInterval {
+					return api.NewError(api.ErrStepAlreadyInProgress, "failed to update database stepRecord row, stepRecord is already in progress and has a heartbeat with an interval of %d", heartBeatInterval)
+				}
 			}
 		}
 
@@ -300,7 +299,10 @@ var emptyDoStepResult = api.DoStepResult{}
 func doStep(params *api.DoStepParams, synchronous bool, checkPending bool) (*api.DoStepResult, error) {
 	if !synchronous {
 		tErr := dao.Transactional(func(tx *sqlx.Tx) error {
-			_ = dao.UpdateStepStatusAndHeartBeatByUUIDTx(tx, params.UUID, api.StepPending, &CompleteByPendingInterval)
+			updated := dao.DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{params.UUID}, api.StepPending, []api.StepStatusType{api.StepIdle}, &CompleteByPendingInterval)
+			if len(updated) != 1 {
+				return api.NewError(api.ErrPrevStepStatusDoesNotMatch, "enqueue failed because it is highly probably the step with uuid:%s, is not in a pending state or the record is missing")
+			}
 			return nil
 		})
 		if tErr != nil {

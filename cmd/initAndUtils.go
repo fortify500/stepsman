@@ -223,6 +223,14 @@ func InitConfig() {
 		log.WithField("build-info", bi).Info()
 	}
 
+	if viper.IsSet("JOB_QUEUE_NUMBER_OF_WORKERS") {
+		bl.JobQueueNumberOfWorkers = viper.GetInt("JOB_QUEUE_NUMBER_OF_WORKERS")
+	}
+
+	if viper.IsSet("JOB_QUEUE_MEMORY_QUEUE_LIMIT") {
+		bl.JobQueueMemoryQueueLimit = viper.GetInt("JOB_QUEUE_MEMORY_QUEUE_LIMIT")
+	}
+
 	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
 		bl.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
 	}

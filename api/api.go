@@ -403,6 +403,10 @@ var ErrPrevStepStatusDoesNotMatch = &ErrorCode{
 	Code:    1007,
 	Message: "prev step status does not match an in transaction status",
 }
+var ErrJobQueueUnavailable = &ErrorCode{
+	Code:    1008,
+	Message: "job queue may be full or unresponsive",
+}
 
 type ErrorCaller struct {
 	File string
