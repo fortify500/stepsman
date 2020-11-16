@@ -149,16 +149,22 @@ func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 			if err != nil {
 				panic(fmt.Errorf("failed to create runs row and generate status uuid4: %w", err))
 			}
+			retriesLeft := step.Retries
+
+			if retriesLeft < 1 {
+				retriesLeft = 1
+			}
 
 			stepRecord := &api.StepRecord{
-				RunId:      runRecord.Id,
-				Index:      int64(i) + 1,
-				UUID:       uuid4.String(),
-				Status:     api.StepIdle,
-				StatusUUID: statusUuid4.String(),
-				Label:      step.Label,
-				Name:       step.Name,
-				State:      "{}",
+				RunId:       runRecord.Id,
+				Index:       int64(i) + 1,
+				UUID:        uuid4.String(),
+				Status:      api.StepIdle,
+				StatusUUID:  statusUuid4.String(),
+				Label:       step.Label,
+				Name:        step.Name,
+				State:       "{}",
+				RetriesLeft: retriesLeft,
 			}
 			dao.DB.CreateStepTx(tx, stepRecord)
 		}

@@ -41,6 +41,7 @@ const (
 	TemplateTitle   = "template-title"
 	Status          = "status"
 	Index           = "index"
+	RetriesLeft     = "retries-left"
 	UUID            = "uuid"
 	StatusUUID      = "status-uuid"
 	HeartBeat       = "heartbeat"
@@ -59,8 +60,8 @@ type DBI interface {
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
 	UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
-	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
-	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string
+	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int) []UUIDAndStatusUUID
+	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64, retriesLeft *int) string
 	RecoverSteps(tx *sqlx.Tx) []string
 	Notify(tx *sqlx.Tx, channel string, message string)
 }

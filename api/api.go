@@ -92,6 +92,7 @@ type GetRunsParams GetRunsQuery
 
 type UpdateQuery struct {
 	Id      string                 `json:"id,omitempty"`
+	Force   bool                   `json:"force,omitempty"`
 	Changes map[string]interface{} `json:"changes,omitempty"`
 }
 type UpdateRunParams UpdateQuery
@@ -284,17 +285,18 @@ const (
 
 type AnyTime time.Time
 type StepRecord struct {
-	RunId      string         `db:"run_id" json:"run-id,omitempty"`
-	Index      int64          `db:"index" json:"index,omitempty"`
-	Label      string         `json:"label,omitempty"`
-	UUID       string         `json:"uuid,omitempty"`
-	Name       string         `json:"name,omitempty"`
-	Status     StepStatusType `json:"status,omitempty"`
-	StatusUUID string         `db:"status_uuid" json:"status-uuid,omitempty"`
-	Now        AnyTime        `db:"now" json:"now,omitempty"`
-	Heartbeat  AnyTime        `json:"heartbeat,omitempty"`
-	CompleteBy *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`
-	State      string         `json:"state,omitempty"`
+	RunId       string         `db:"run_id" json:"run-id,omitempty"`
+	Index       int64          `db:"index" json:"index,omitempty"`
+	Label       string         `json:"label,omitempty"`
+	UUID        string         `json:"uuid,omitempty"`
+	Name        string         `json:"name,omitempty"`
+	Status      StepStatusType `json:"status,omitempty"`
+	StatusUUID  string         `db:"status_uuid" json:"status-uuid,omitempty"`
+	Now         AnyTime        `db:"now" json:"now,omitempty"`
+	Heartbeat   AnyTime        `json:"heartbeat,omitempty"`
+	CompleteBy  *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`
+	RetriesLeft int            `db:"retries_left" json:"retries-left,omitempty"`
+	State       string         `json:"state,omitempty"`
 }
 
 func (s *StepRecord) PrettyJSONState() string {
@@ -408,6 +410,11 @@ var ErrPrevStepStatusDoesNotMatch = &ErrorCode{
 var ErrJobQueueUnavailable = &ErrorCode{
 	Code:    1008,
 	Message: "job queue may be full or unresponsive",
+}
+
+var ErrStepNoRetriesLeft = &ErrorCode{
+	Code:    1009,
+	Message: "step status cannot be changed to in progress because no retries are left",
 }
 
 type ErrorCaller struct {

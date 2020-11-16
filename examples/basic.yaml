@@ -4,6 +4,7 @@ steps:
     description: > # optional
       example for a rest call
     label: starting
+    retries: 3
     do: # optional
       type: REST # heartbeats of set InProgress and finally set Done. However, this doesn't mean events cannot already start for path_1_step_?
       complete-by: 200 # default 3600. This is a hard limit whereby even an async or any error will cause a fail and move to pending.

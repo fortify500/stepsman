@@ -92,7 +92,7 @@ func updateStep(query *api.UpdateQuery) error {
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
-			_, err = template.TransitionStateAndStatus(run.Id, stepRecord.UUID, "", newStatus, nil, false)
+			_, err = template.TransitionStateAndStatus(run.Id, stepRecord.UUID, "", newStatus, nil, false, query.Force)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
@@ -114,14 +114,14 @@ func updateStep(query *api.UpdateQuery) error {
 	}
 	return nil
 }
-func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevStatusUUID string, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool) (*api.StepRecord, error) {
+func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevStatusUUID string, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
-	var stopErr *api.Error
+	var softError *api.Error
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
 			UUIDs:            []string{stepUUID},
-			ReturnAttributes: []string{dao.HeartBeat, dao.StatusUUID, dao.Status, dao.State, dao.Index},
+			ReturnAttributes: []string{dao.HeartBeat, dao.StatusUUID, dao.Status, dao.State, dao.Index, dao.RetriesLeft},
 		})
 		if err != nil {
 			panic(err)
@@ -133,12 +133,18 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 		step := t.Steps[partialStepRecord.Index-1]
 		partialStepRecord.UUID = stepUUID
 		partialStepRecord.RunId = runId
+
+		// don't change done if the status did not change.
+		if newStatus == partialStepRecord.Status {
+			return api.NewError(api.ErrStatusNotChanged, "step status have not changed")
+		}
+
 		if partialStepRecord.Status == api.StepInProgress {
 			if doFinish {
 				if partialStepRecord.StatusUUID != prevStatusUUID {
 					return api.NewError(api.ErrRecordNotAffected, "while updating step status, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", stepUUID, prevStatusUUID)
 				}
-			} else {
+			} else if !force {
 				delta := time.Time(partialStepRecord.Now).Sub(time.Time(partialStepRecord.Heartbeat))
 				if delta < 0 {
 					delta = delta * -1
@@ -150,15 +156,23 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			}
 		}
 
-		// don't change done if the status did not change.
-		if newStatus == partialStepRecord.Status {
-			return api.NewError(api.ErrStatusNotChanged, "step status have not changed")
-		}
-		//remote state if we are back to idle.
-		if newStatus == api.StepIdle {
-			if newState == nil {
-				newState = &dao.StepState{}
+		//must be first
+		if newStatus == api.StepInProgress || newStatus == api.StepFailed {
+			if partialStepRecord.RetriesLeft < 1 {
+				if partialStepRecord.Status == api.StepPending {
+					dao.UpdateStepStatusAndHeartBeatTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, nil, nil)
+				}
+				softError = api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status to in progress")
+				return nil
+			} else if newStatus == api.StepFailed {
+				// we have retries, let's shortcut to pending
+				newStatus = api.StepPending
 			}
+		}
+
+		//remote state if we are back to idle.
+		if newStatus != api.StepDone && newStatus != api.StepFailed {
+			newState = &dao.StepState{}
 		}
 
 		var run *api.RunRecord
@@ -169,42 +183,48 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 		if run.Status == api.RunIdle {
 			dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
 		} else if run.Status == api.RunDone {
-			stopErr = api.NewError(api.ErrRunIsAlreadyDone, "failed to update database stepRecord status, run is already done and no change is possible")
+			softError = api.NewError(api.ErrRunIsAlreadyDone, "failed to update database stepRecord status, run is already done and no change is possible")
 			if newStatus == api.StepInProgress || newStatus == api.StepPending {
 				if partialStepRecord.Status == api.StepIdle || partialStepRecord.Status == api.StepDone {
-					return stopErr
+					return softError
 				}
 				newStatus = api.StepIdle // we want to finish this so it won't be revived.
 				newState = nil
 			} else {
-				return stopErr
+				return softError
 			}
 		}
 
 		updatedStepRecord = partialStepRecord
+		var retriesLeft *int
 		var completeBy *int64
 		if newStatus == api.StepPending {
 			completeBy = &dao.CompleteByPendingInterval
 		} else if newStatus == api.StepInProgress {
 			completeBy = step.GetCompleteBy()
+			retriesLeftVar := updatedStepRecord.RetriesLeft - 1
+			retriesLeft = &retriesLeftVar
+		} else if newStatus == api.StepIdle {
+			retriesLeft = &step.Retries
 		}
+
 		if newState == nil {
-			updatedStepRecord.StatusUUID = dao.UpdateStepStatusAndHeartBeatTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, completeBy).StatusUUID
+			updatedStepRecord.StatusUUID = dao.UpdateStepStatusAndHeartBeatTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, completeBy, retriesLeft).StatusUUID
 		} else {
 			var newStateBytes []byte
 			newStateBytes, err = json.Marshal(newState)
 			if err != nil {
 				panic(err)
 			}
-			updatedStepRecord.StatusUUID = dao.DB.UpdateStepStateAndStatusAndHeartBeatTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, string(newStateBytes), completeBy)
+			updatedStepRecord.StatusUUID = dao.DB.UpdateStepStateAndStatusAndHeartBeatTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, string(newStateBytes), completeBy, retriesLeft)
 			updatedStepRecord.State = string(newStateBytes)
 		}
 		updatedStepRecord.Status = newStatus
 
 		return nil
 	})
-	if tErr == nil && stopErr != nil {
-		tErr = stopErr
+	if tErr == nil && softError != nil {
+		tErr = softError
 	}
 	return &updatedStepRecord, tErr
 }
@@ -222,7 +242,7 @@ func (s *Step) GetHeartBeatTimeout() time.Duration {
 	return DefaultHeartBeatInterval
 }
 func (t *Template) StartDo(runId string, stepUUID string) (*api.StepRecord, error) {
-	updatedPartialStepRecord, err := t.TransitionStateAndStatus(runId, stepUUID, "", api.StepInProgress, nil, false)
+	updatedPartialStepRecord, err := t.TransitionStateAndStatus(runId, stepUUID, "", api.StepInProgress, nil, false, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
@@ -257,7 +277,7 @@ func (t *Template) StartDo(runId string, stepUUID string) (*api.StepRecord, erro
 						if len(indices) > 0 {
 							var uuidsToEnqueue []dao.UUIDAndStatusUUID
 							if tErr := dao.Transactional(func(tx *sqlx.Tx) error {
-								uuidsToEnqueue = dao.DB.UpdateManyStatusAndHeartBeatTx(tx, runId, indices, api.StepPending, []api.StepStatusType{api.StepIdle}, &dao.CompleteByPendingInterval)
+								uuidsToEnqueue = dao.DB.UpdateManyStatusAndHeartBeatTx(tx, runId, indices, api.StepPending, []api.StepStatusType{api.StepIdle}, &dao.CompleteByPendingInterval, nil)
 								return nil
 							}); tErr != nil {
 								panic(tErr)
@@ -276,7 +296,7 @@ func (t *Template) StartDo(runId string, stepUUID string) (*api.StepRecord, erro
 		}
 
 	}
-	updatedPartialStepRecord, err = t.TransitionStateAndStatus(runId, stepUUID, updatedPartialStepRecord.StatusUUID, newStepStatus, newState, true)
+	updatedPartialStepRecord, err = t.TransitionStateAndStatus(runId, stepUUID, updatedPartialStepRecord.StatusUUID, newStepStatus, newState, true, false)
 	return updatedPartialStepRecord, err
 }
 

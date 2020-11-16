@@ -40,6 +40,7 @@ Use run <run id>.`,
 		changes := make(map[string]interface{})
 		updateQuery := &api.UpdateQuery{
 			Id:      stepUUID,
+			Force:   Parameters.Force,
 			Changes: changes,
 		}
 
@@ -88,6 +89,7 @@ func init() {
 	initFlags := func() error {
 		updateStepCmd.ResetFlags()
 		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
+		updateStepCmd.Flags().BoolVarP(&Parameters.Force, "force", "f", false, fmt.Sprintf("force change status - ignores heartbeat"))
 		updateStepCmd.Flags().StringVarP(&Parameters.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
 		return nil
 	}

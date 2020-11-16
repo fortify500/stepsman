@@ -55,11 +55,12 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"index" Bigint NOT NULL,
 	"uuid" uuid NOT NULL,
 	"status" Bigint NOT NULL,
+	"label" Text NOT NULL,
+	"name" Text,
 	"status_uuid" uuid NOT NULL,
 	"heartbeat" TIMESTAMP NOT NULL,
 	"complete_by" TIMESTAMP NULL,
-	"label" Text NOT NULL,
-	"name" Text,
+	"retries_left" INTEGER NOT NULL,
 	"state" jsonb,
 	PRIMARY KEY ( "run_id", "index" ),
 	CONSTRAINT "foreign_key_runs" FOREIGN KEY(run_id) REFERENCES runs(id),
@@ -80,7 +81,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 }
 
 func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, complete_by, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),null,:state)", stepRecord); err != nil {
+	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, complete_by, retries_left, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,to_timestamp(0),null,:retries_left,:state)", stepRecord); err != nil {
 		panic(err)
 	}
 }
@@ -122,7 +123,7 @@ func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uu
 	return result
 }
 
-func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID {
+func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int) []UUIDAndStatusUUID {
 	var result []UUIDAndStatusUUID
 	for _, index := range indices {
 		uuid4, err := uuid.NewRandom()
@@ -131,15 +132,19 @@ func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId st
 		}
 		var res sql.Result
 		var completeByStr string
+		var setRetriesLeftStr string
 		if completeBy != nil {
 			completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", *completeBy)
 		} else {
 			completeByStr = "null"
 		}
+		if retriesLeft != nil {
+			setRetriesLeftStr = fmt.Sprintf(", retries_left=%d", *retriesLeft)
+		}
 		if len(prevStatus) == 1 {
-			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2 where run_id=$3 and \"index\"=$4 and status=$5", completeByStr), newStatus, uuid4.String(), runId, index, prevStatus[0])
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2%s where run_id=$3 and \"index\"=$4 and status=$5", completeByStr, setRetriesLeftStr), newStatus, uuid4.String(), runId, index, prevStatus[0])
 		} else {
-			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2 where run_id=$3 and \"index\"=$4", completeByStr), newStatus, uuid4.String(), runId, index)
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$2%s where run_id=$3 and \"index\"=$4", completeByStr, setRetriesLeftStr), newStatus, uuid4.String(), runId, index)
 		}
 		if err != nil {
 			panic(err)
@@ -164,18 +169,22 @@ func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId st
 	return result
 }
 
-func (db *PostgreSQLSqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string {
+func (db *PostgreSQLSqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64, retriesLeft *int) string {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
 		panic(fmt.Errorf("failed to generate uuid: %w", err))
 	}
 	var completeByStr string
+	var setRetriesLeftStr string
 	if completeBy != nil {
 		completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", *completeBy)
 	} else {
 		completeByStr = "null"
 	}
-	res, err := tx.Exec(fmt.Sprintf("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$3 where run_id=$4 and \"index\"=$5", completeByStr), newStatus, newState, uuid4.String(), runId, index)
+	if retriesLeft != nil {
+		setRetriesLeftStr = fmt.Sprintf(", retries_left=%d", *retriesLeft)
+	}
+	res, err := tx.Exec(fmt.Sprintf("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=%s, status_uuid=$3%s where run_id=$4 and \"index\"=$5", completeByStr, setRetriesLeftStr), newStatus, newState, uuid4.String(), runId, index)
 	if err != nil {
 		panic(err)
 	}

@@ -66,6 +66,7 @@ type Step struct {
 	Description string      `json:"description,omitempty"`
 	Do          interface{} `json:"do,omitempty"`
 	On          On          `json:"on,omitempty"`
+	Retries     int         `json:"retries,omitempty"`
 	stepDo      StepDo
 	doType      DoType
 	template    *Template

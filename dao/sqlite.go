@@ -73,6 +73,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	                                 status_uuid TEXT NOT NULL,
 	                                 heartbeat TIMESTAMP NOT NULL,
 									 complete_by TIMESTAMP NULL,
+									 retries_left INTEGER NOT NULL,
 	                                 state text,
 	                                 PRIMARY KEY (run_id, "index")
                                      )`)
@@ -90,7 +91,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, complete_by, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,0,null,:state)"
+	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_uuid, heartbeat, complete_by, retries_left, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_uuid,0,null,:retries_left,:state)"
 	if _, err := tx.NamedExec(query, stepRecord); err != nil {
 		panic(err)
 	}
@@ -127,7 +128,7 @@ func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids
 	return result
 }
 
-func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, _ *int64) []UUIDAndStatusUUID {
+func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, _ *int64, retriesLeft *int) []UUIDAndStatusUUID {
 	var result []UUIDAndStatusUUID
 	for _, index := range indices {
 		uuid4, err := uuid.NewRandom()
@@ -135,10 +136,14 @@ func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId strin
 			panic(fmt.Errorf("failed to generate uuid: %w", err))
 		}
 		var res sql.Result
+		var setRetriesLeftStr string
+		if retriesLeft != nil {
+			setRetriesLeftStr = fmt.Sprintf(", retries_left=%d", *retriesLeft)
+		}
 		if len(prevStatus) == 1 {
-			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4 and status=$5", newStatus, uuid4.String(), runId, index, prevStatus[0])
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2%s where run_id=$3 and \"index\"=$4 and status=$5", setRetriesLeftStr), newStatus, uuid4.String(), runId, index, prevStatus[0])
 		} else {
-			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2 where run_id=$3 and \"index\"=$4", newStatus, uuid4.String(), runId, index)
+			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_uuid=$2%s where run_id=$3 and \"index\"=$4", setRetriesLeftStr), newStatus, uuid4.String(), runId, index)
 		}
 		if err != nil {
 			panic(err)
@@ -163,12 +168,16 @@ func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId strin
 	return result
 }
 
-func (db *Sqlite3SqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, _ *int64) string {
+func (db *Sqlite3SqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, _ *int64, retriesLeft *int) string {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
 		panic(fmt.Errorf("failed to generate uuid: %w", err))
 	}
-	res, err := tx.Exec("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3 where run_id=$4 and \"index\"=$5", newStatus, newState, uuid4.String(), runId, index)
+	var setRetriesLeftStr string
+	if retriesLeft != nil {
+		setRetriesLeftStr = fmt.Sprintf(", retries_left=%d", *retriesLeft)
+	}
+	res, err := tx.Exec(fmt.Sprintf("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_uuid=$3%s where run_id=$4 and \"index\"=$5", setRetriesLeftStr), newStatus, newState, uuid4.String(), runId, index)
 	if err != nil {
 		panic(err)
 	}

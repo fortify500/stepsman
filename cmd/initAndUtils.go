@@ -77,6 +77,7 @@ type AllParameters struct {
 	OnlyTemplateType    string
 	Run                 string
 	Status              string
+	Force               bool
 	StatusUUID          string
 	//ListQuery
 	RangeStart       int64

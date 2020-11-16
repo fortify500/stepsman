@@ -43,8 +43,8 @@ func UpdateStepHeartBeat(stepUUID string, statusUUID string) error {
 	}
 	return nil
 }
-func UpdateStepStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusUUID {
-	updated := DB.UpdateManyStatusAndHeartBeatTx(tx, runId, []int64{index}, newStatus, nil, completeBy)
+func UpdateStepStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, completeBy *int64, retriesLeft *int) UUIDAndStatusUUID {
+	updated := DB.UpdateManyStatusAndHeartBeatTx(tx, runId, []int64{index}, newStatus, nil, completeBy, retriesLeft)
 	if len(updated) != 1 {
 		panic(fmt.Errorf("illegal state, 1 updated record expected for runId:%s and index:%d", runId, index))
 	}
@@ -143,6 +143,7 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		case UUID:
 		case Status:
 		case StatusUUID:
+		case RetriesLeft:
 		case HeartBeat:
 		case CompleteBy:
 		case Label:
