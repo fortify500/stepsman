@@ -149,7 +149,7 @@ func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 			if err != nil {
 				panic(fmt.Errorf("failed to create runs row and generate status uuid4: %w", err))
 			}
-			retriesLeft := step.Retries
+			retriesLeft := step.Retries + 1
 
 			if retriesLeft < 1 {
 				retriesLeft = 1

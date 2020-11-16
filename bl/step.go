@@ -197,15 +197,17 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 
 		updatedStepRecord = partialStepRecord
 		var retriesLeft *int
+		var retriesLeftVar int
 		var completeBy *int64
 		if newStatus == api.StepPending {
 			completeBy = &dao.CompleteByPendingInterval
 		} else if newStatus == api.StepInProgress {
 			completeBy = step.GetCompleteBy()
-			retriesLeftVar := updatedStepRecord.RetriesLeft - 1
+			retriesLeftVar = updatedStepRecord.RetriesLeft - 1
 			retriesLeft = &retriesLeftVar
 		} else if newStatus == api.StepIdle {
-			retriesLeft = &step.Retries
+			retriesLeftVar = step.Retries + 1
+			retriesLeft = &retriesLeftVar
 		}
 
 		if newState == nil {
