@@ -139,6 +139,7 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		switch attribute {
 		case RunId:
 		case Index:
+			attribute = "\"index\""
 		case UUID:
 		case Status:
 		case StatusUUID:

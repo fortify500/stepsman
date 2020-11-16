@@ -102,23 +102,23 @@ func (do StepDoREST) Describe() string {
 	return string(doStr)
 }
 
-func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
+func (t *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	var err error
 	if isYaml {
 		decoder := yaml.NewDecoder(bytes.NewBuffer(yamlDocument))
 		decoder.SetStrict(true)
-		err = decoder.Decode(s)
+		err = decoder.Decode(t)
 	} else {
 		decoder := json.NewDecoder(bytes.NewBuffer(yamlDocument))
 		decoder.DisallowUnknownFields()
-		err = decoder.Decode(s)
+		err = decoder.Decode(t)
 	}
 	if err != nil {
 		return api.NewWrapError(api.ErrInvalidParams, err, "failed to load from bytes: %w", err)
 	}
-	s.labelsToIndices = make(map[string]int64)
-	for i := range s.Steps {
-		err = (&s.Steps[i]).AdjustUnmarshalStep(s, int64(i)+1)
+	t.labelsToIndices = make(map[string]int64)
+	for i := range t.Steps {
+		err = (&t.Steps[i]).AdjustUnmarshalStep(t, int64(i)+1)
 		if err != nil {
 			return fmt.Errorf("failed to load from bytes: %w", err)
 		}
@@ -126,12 +126,12 @@ func (s *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	return nil
 }
 
-func (s *Template) Start(key string, fileName string) (string, error) {
+func (t *Template) Start(key string, fileName string) (string, error) {
 	yamlDocument, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
-	err = s.LoadFromBytes(true, yamlDocument)
+	err = t.LoadFromBytes(true, yamlDocument)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
 	}
@@ -139,7 +139,7 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 		var runId string
 		runId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
 			Key:      key,
-			Template: s,
+			Template: t,
 		})
 		if err != nil {
 			return "", fmt.Errorf("failed to create run remotely for file %s: %w", fileName, err)
@@ -147,7 +147,7 @@ func (s *Template) Start(key string, fileName string) (string, error) {
 		return runId, err
 	} else {
 		var runRow *api.RunRecord
-		runRow, err = s.CreateRun(key)
+		runRow, err = t.CreateRun(key)
 		if err != nil {
 			return "", fmt.Errorf("failed to start: %w", err)
 		}

@@ -111,8 +111,8 @@ func UpdateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
 	return tErr
 }
 
-func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
-	title := s.Title
+func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
+	title := t.Title
 	var runRecord *api.RunRecord
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
@@ -123,14 +123,14 @@ func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
 				panic(fmt.Errorf("failed to generate uuid: %w", err))
 			}
 			var jsonBytes []byte
-			jsonBytes, err = json.Marshal(s)
+			jsonBytes, err = json.Marshal(t)
 			if err != nil {
 				panic(err)
 			}
 			runRecord = &api.RunRecord{
 				Id:              uuid4.String(),
 				Key:             key,
-				TemplateVersion: s.Version,
+				TemplateVersion: t.Version,
 				TemplateTitle:   title,
 				Status:          api.RunIdle,
 				Template:        string(jsonBytes),
@@ -138,7 +138,7 @@ func (s *Template) CreateRun(key string) (*api.RunRecord, error) {
 		}
 		dao.CreateRunTx(tx, runRecord)
 
-		for i, step := range s.Steps {
+		for i, step := range t.Steps {
 			var uuid4 uuid.UUID
 			var statusUuid4 uuid.UUID
 			uuid4, err = uuid.NewRandom()

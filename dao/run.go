@@ -38,7 +38,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 		sqlQuery = "SELECT * FROM runs"
 		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
 			var attributesStr string
-			attributesStr, err = buildRunsReturnAttributesStrAndVet(query.ReturnAttributes)
+			attributesStr, err = buildRunsReturnAttributesStrAndVet(false, query.ReturnAttributes)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to list runs: %w", err)
 			}
@@ -206,7 +206,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 	}
 }
 
-func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
+func buildRunsReturnAttributesStrAndVet(addPrefix bool, attributes []string) (string, error) {
 	if attributes == nil || len(attributes) == 0 {
 		return "*", nil
 	}
@@ -233,6 +233,12 @@ func buildRunsReturnAttributesStrAndVet(attributes []string) (string, error) {
 		} else {
 			first = false
 		}
+		if addPrefix {
+			_, err := sb.WriteString("runs.")
+			if err != nil {
+				panic(fmt.Errorf("failed to concatenate return-attribtues"))
+			}
+		}
 		_, err := sb.WriteString(str)
 		if err != nil {
 			panic(fmt.Errorf("failed to concatenate return-attribtues"))
@@ -246,12 +252,46 @@ func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) {
 		panic(err)
 	}
 }
+func GetRunsByStepUUIDsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {
+	var result []api.RunRecord
+	var rows *sqlx.Rows
+	var err error
+	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, getQuery.ReturnAttributes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get run transactional: %w", err)
+	}
+	queryStr := fmt.Sprintf("SELECT %s FROM runs inner join steps on runs.id=steps.run_id where steps.uuid IN (?)", attributesStr)
+	var query string
+	var args []interface{}
+	query, args, err = sqlx.In(queryStr, getQuery.Ids)
+	if err != nil {
+		panic(err)
+	}
+	query = tx.Rebind(query)
+	rows, err = tx.Queryx(query, args...)
+	if err != nil {
+		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var run api.RunRecord
+		err = rows.StructScan(&run)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database runs row - get: %w", err))
+		}
+		result = append(result, run)
+	}
+	if result == nil || len(result) != len(getQuery.Ids) {
+		return nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
+	}
+	return result, nil
+}
 
 func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {
 	var result []api.RunRecord
 	var rows *sqlx.Rows
 	var err error
-	attributesStr, err := buildRunsReturnAttributesStrAndVet(getQuery.ReturnAttributes)
+	attributesStr, err := buildRunsReturnAttributesStrAndVet(false, getQuery.ReturnAttributes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
