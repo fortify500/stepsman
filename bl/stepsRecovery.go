@@ -90,7 +90,7 @@ func StartRecoveryListening() {
 			}
 		}
 	}
-	waitForNotification := func(l *pq.Listener) error {
+	processAllNotifications := func(l *pq.Listener) error {
 		var msg *pq.Notification
 		for {
 			msg = nil
@@ -131,7 +131,7 @@ func StartRecoveryListening() {
 			if err != nil {
 				panic(fmt.Errorf("postgresql listener failed to LISTEN to channel: %w", err))
 			}
-			err = waitForNotification(listener)
+			err = processAllNotifications(listener)
 			return err
 		})
 	}

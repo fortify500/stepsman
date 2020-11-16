@@ -1,5 +1,6 @@
 # StepsMan (Steps Manager)
-* StepsMan is a step by step event driven business process, decision management and workflow manager over postgresql (additional technologies can be added for optimizations).
+* StepsMan is a step by step reliable event driven business process, decision management and workflow manager **completely over postgreSQL** (additional technologies can be added for optimizations).
+* StepsMan leverages operations such as postgreSQL Listen Notify to speed things up but main rely on transactions and events. The rational is to not compromise on reliability.
 * No SDKs required, stepsman utilizes a simple REST flow for both synchronous and asynchronous steps. It calls you.
 * You can also request to complete the task by yourself and submit the results to the engine.
 * Also, planned is support for remote workers which can be implemented by you or simply run stepsman as a foreperson->worker mode.
@@ -8,7 +9,7 @@
 * It has a small size footprint and does not require external dependencies.
 * It loads extremely fast.
 * The client and server code are in the same executable.
-* Works out of the box (with in-memory or local sqlite) with sensible defaults, but can be scaled by choosing to use postgresql as the state store.
+* Works out of the box (with in-memory or local sqlite) with sensible defaults, but can be scaled by choosing to use postgreSQL as the state store.
 * Supports single process mode, in-memory by default and so can achieve high performance out of the box. 
 * StepsMan is very useful for approval systems and is very friendly for developers.
 
