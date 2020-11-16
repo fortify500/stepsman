@@ -56,7 +56,7 @@ func Enqueue(do *DoWork) error {
 		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
 	case memoryQueue <- do:
 		return nil
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		return api.NewError(api.ErrJobQueueUnavailable, "leaving enqueue, timeout writing to the job queue")
 	}
 }

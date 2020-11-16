@@ -117,6 +117,7 @@ func updateStep(query *api.UpdateQuery) error {
 func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevStatusUUID string, newStatus api.StepStatusType, newState *dao.StepState, doFinish bool, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	var softError *api.Error
+	toEnqueue := false
 	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
@@ -167,6 +168,7 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			} else if newStatus == api.StepFailed {
 				// we have retries, let's shortcut to pending
 				newStatus = api.StepPending
+				toEnqueue = true
 			}
 		}
 
@@ -227,6 +229,10 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 	})
 	if tErr == nil && softError != nil {
 		tErr = softError
+	} else if tErr == nil && toEnqueue {
+		tErr = Enqueue(&DoWork{
+			UUID: updatedStepRecord.UUID,
+		})
 	}
 	return &updatedStepRecord, tErr
 }
