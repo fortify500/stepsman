@@ -56,13 +56,13 @@ type UUIDAndStatusUUID struct {
 	StatusUUID string
 }
 
-func UpdateStepStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuid string, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusUUID {
-	updated := DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{uuid}, newStatus, nil, completeBy)
-	if len(updated) != 1 {
-		panic(fmt.Errorf("illegal state, 1 updated record expected for uuid:%s", uuid))
-	}
-	return updated[0]
-}
+//func UpdateStepStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuid string, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusUUID {
+//	updated := DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{uuid}, newStatus, nil, completeBy)
+//	if len(updated) != 1 {
+//		panic(fmt.Errorf("illegal state, 1 updated record expected for uuid:%s", uuid))
+//	}
+//	return updated[0]
+//}
 
 func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, error) {
 	var result []api.StepRecord

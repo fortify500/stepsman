@@ -27,11 +27,11 @@ import (
 
 type Sqlite3SqlxDB sqlx.DB
 
-func (db *Sqlite3SqlxDB) Notify(tx *sqlx.Tx, channel string, message string) {
+func (db *Sqlite3SqlxDB) Notify(_ *sqlx.Tx, _ string, _ string) {
 	panic("unsupported operation")
 }
 
-func (db *Sqlite3SqlxDB) RecoverSteps(tx *sqlx.Tx) []string {
+func (db *Sqlite3SqlxDB) RecoverSteps(_ *sqlx.Tx) []string {
 	panic("unsupported operation")
 }
 
@@ -96,7 +96,7 @@ func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
 	}
 }
 
-func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, by *int64) []UUIDAndStatusUUID {
+func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, _ *int64) []UUIDAndStatusUUID {
 	var result []UUIDAndStatusUUID
 	for _, stepUUID := range uuids {
 		uuid4, err := uuid.NewRandom()
@@ -127,7 +127,7 @@ func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids
 	return result
 }
 
-func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID {
+func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, _ *int64) []UUIDAndStatusUUID {
 	var result []UUIDAndStatusUUID
 	for _, index := range indices {
 		uuid4, err := uuid.NewRandom()
@@ -149,7 +149,8 @@ func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId strin
 			panic(err)
 		}
 		if affected == 1 {
-			partialStep, err := GetStepTx(tx, runId, index, []string{UUID})
+			var partialStep *api.StepRecord
+			partialStep, err = GetStepTx(tx, runId, index, []string{UUID})
 			if err != nil {
 				panic(err)
 			}
@@ -162,7 +163,7 @@ func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId strin
 	return result
 }
 
-func (db *Sqlite3SqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64) string {
+func (db *Sqlite3SqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, _ *int64) string {
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
 		panic(fmt.Errorf("failed to generate uuid: %w", err))

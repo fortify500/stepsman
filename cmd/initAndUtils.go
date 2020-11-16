@@ -187,7 +187,7 @@ func InitConfig() {
 		viper.SetConfigName(".stepsman")
 	}
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
+	if err = viper.ReadInConfig(); err == nil {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
 	level, err := log.ParseLevel(logLevel)

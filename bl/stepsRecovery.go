@@ -123,12 +123,15 @@ func StartRecoveryListening() {
 		recoverable(func() error {
 			log.Info("starting to listen for postgresql notifications...")
 			listener := pq.NewListener(dao.Parameters.DataSourceName, time.Duration(2)*time.Second, time.Duration(64)*time.Second, reportErrFunc)
-			defer listener.Close()
+			defer func() {
+				err := listener.Close()
+				log.Errorf("failed to close listener: %w", err)
+			}()
 			err := listener.Listen(RecoveryChannelName)
 			if err != nil {
 				panic(fmt.Errorf("postgresql listener failed to LISTEN to channel: %w", err))
 			}
-			waitForNotification(listener)
+			err = waitForNotification(listener)
 			return err
 		})
 	}

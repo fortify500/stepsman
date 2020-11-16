@@ -230,7 +230,6 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
-	var errBeat error
 	decoder := json.NewDecoder(bytes.NewBuffer([]byte(updatedStepRecord.State)))
 	decoder.DisallowUnknownFields()
 	var prevState dao.StepState
@@ -240,11 +239,9 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 	}
 	var newState *dao.StepState
 	var doErr error
-	if errBeat == nil {
-		newState, doErr = do(s.doType, s.Do, &prevState)
-	}
+	newState, doErr = do(s.doType, s.Do, &prevState)
 	var newStepStatus api.StepStatusType
-	if doErr != nil || errBeat != nil {
+	if doErr != nil {
 		newStepStatus = api.StepFailed
 	} else {
 		newStepStatus = api.StepDone
@@ -253,8 +250,8 @@ func (s *Step) StartDo(stepRecord *api.StepRecord, checkPending bool) (*api.Step
 				if rule.Then != nil {
 					if len(rule.Then.Do) > 0 {
 						var indices []int64
-						for _, do := range rule.Then.Do {
-							index, ok := s.template.labelsToIndices[do.Label]
+						for _, thenDo := range rule.Then.Do {
+							index, ok := s.template.labelsToIndices[thenDo.Label]
 							if !ok {
 								panic(fmt.Errorf("label should have an index"))
 							}

@@ -36,7 +36,7 @@ type (
 	UpdateRunHandler struct{}
 )
 
-func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h ListRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.ListParams
@@ -59,7 +59,7 @@ func (h ListRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMes
 	return result, jsonRPCErr
 }
 
-func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h GetRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.GetRunsParams
@@ -82,8 +82,7 @@ func (h GetRunsHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMess
 	return result, jsonRPCErr
 }
 
-func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-
+func (h UpdateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.UpdateRunParams
@@ -126,8 +125,7 @@ func (h UpdateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMe
 	return result, jsonRPCErr
 }
 
-func (h CreateRunHandler) ServeJSONRPC(c context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
-
+func (h CreateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p api.CreateRunParams
 	var result interface{}
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {

@@ -150,7 +150,8 @@ func (db *PostgreSQLSqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId st
 			panic(err)
 		}
 		if affected == 1 {
-			partialStep, err := GetStepTx(tx, runId, index, []string{UUID})
+			var partialStep *api.StepRecord
+			partialStep, err = GetStepTx(tx, runId, index, []string{UUID})
 			if err != nil {
 				panic(err)
 			}
@@ -210,12 +211,12 @@ func (db *PostgreSQLSqlxDB) RecoverSteps(tx *sqlx.Tx) []string {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var uuid string
-		err = rows.Scan(&uuid)
+		var stepUUID string
+		err = rows.Scan(&stepUUID)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
 		}
-		result = append(result, uuid)
+		result = append(result, stepUUID)
 	}
 	return result
 }
