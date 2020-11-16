@@ -12,8 +12,8 @@
 * Works out of the box (with in-memory or local sqlite) with sensible defaults, but can be scaled by choosing to use postgreSQL as the state store.
 * Supports single process mode, in-memory by default and so can achieve high performance out of the box. 
 * StepsMan is very useful for approval systems and is very friendly for developers.
-(1) note that listen/notify would probably not work in postgresql cluster. At this point you can switch to a messaging technology such as redis pub/sub (contact @TzahiFadida).
-(2) it is possible to cloud host - contact @TzahiFadida  
+(1) note that listen/notify would probably not work in postgresql cluster. At this point you can switch to a messaging technology such as redis pub/sub (contact [@TzahiFadida](https://www.linkedin.com/in/tzahi/)).
+(2) it is possible to cloud host - contact [@TzahiFadida](https://www.linkedin.com/in/tzahi/)
 Built to save the day
 > If you think so, support us with a `star` and a `follow` 😘 
 
