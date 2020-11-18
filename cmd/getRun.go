@@ -28,6 +28,7 @@ var getRunCmd = &cobra.Command{
 	Long:  `Get run summary.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer recoverAndLog("failed to get run")
+		syncGetRunParams()
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to get run: %w", err)
@@ -70,12 +71,16 @@ var getRunCmd = &cobra.Command{
 		}
 	},
 }
+var getRunParams AllParameters
 
+func syncGetRunParams() {
+	Parameters.OnlyTemplateType = getRunParams.OnlyTemplateType
+}
 func init() {
 	getCmd.AddCommand(getRunCmd)
 	initFlags := func() error {
 		getRunCmd.ResetFlags()
-		getRunCmd.Flags().StringVar(&Parameters.OnlyTemplateType, "only-template-type", "", "will output a pretty template. possible values [json,yaml]")
+		getRunCmd.Flags().StringVar(&getRunParams.OnlyTemplateType, "only-template-type", "", "will output a pretty template. possible values [json,yaml]")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

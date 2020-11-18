@@ -32,6 +32,7 @@ var createRunCmd = &cobra.Command{
 	Long:  `Create a run. You must specify a file.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer recoverAndLog("failed to create run")
+		syncCreateRunParams()
 		var t bl.Template
 		Parameters.CurrentCommand = CommandCreateRun
 		Parameters.CreateFileName = strings.TrimSpace(Parameters.CreateFileName)
@@ -60,7 +61,12 @@ var createRunCmd = &cobra.Command{
 		Parameters.CurrentRunId = runId
 	},
 }
+var createRunParams AllParameters
 
+func syncCreateRunParams() {
+	Parameters.RunKey = createRunParams.RunKey
+	Parameters.CreateFileName = createRunParams.CreateFileName
+}
 func init() {
 	createCmd.AddCommand(createRunCmd)
 	initFlags := func() error {
@@ -69,8 +75,8 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		createRunCmd.Flags().StringVarP(&Parameters.RunKey, "key", "k", random.String(), "Run unique key. If omitted a random uuid will be used")
-		createRunCmd.Flags().StringVarP(&Parameters.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
+		createRunCmd.Flags().StringVarP(&createRunParams.RunKey, "key", "k", random.String(), "Run unique key. If omitted a random uuid will be used")
+		createRunCmd.Flags().StringVarP(&createRunParams.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
 		err = createRunCmd.MarkFlagRequired("file")
 		return err
 	}

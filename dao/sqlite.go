@@ -49,10 +49,11 @@ func (db *Sqlite3SqlxDB) SQL() *sqlx.DB {
 func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE runs (
                                      id varchar(128) PRIMARY KEY NOT NULL,
+                                     created_at TIMESTAMP NOT NULL,
+                                     template_version INTEGER NOT NULL,
+	                                 status INTEGER NOT NULL,
                                      key TEXT NOT NULL,
 	                                 template_title TEXT,
-	                                 template_version INTEGER NOT NULL,
-	                                 status INTEGER NOT NULL,
 	                                 template TEXT
                                      )`)
 	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_key ON runs (key)`)

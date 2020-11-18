@@ -39,6 +39,7 @@ You can also describe a single step by adding --step <Index>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandDescribeRun
 		defer recoverAndLog("failed to describe run")
+		syncDescribeRunParams()
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = err
@@ -111,6 +112,7 @@ You can also describe a single step by adding --step <Index>.`,
 					{"Key:", run.Key},
 					{"Template Title:", strings.TrimSpace(text.WrapText(run.TemplateTitle, 120))},
 					{"Status:", runStatus},
+					{"Created At:", time.Time(run.CreatedAt).Format(time.RFC3339)},
 				})
 				mainT.AppendRow(table.Row{t.Render()})
 			}
@@ -188,11 +190,16 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 	return t, nil
 }
 
+var describeRunParams AllParameters
+
+func syncDescribeRunParams() {
+	Parameters.Step = describeRunParams.Step
+}
 func init() {
 	describeCmd.AddCommand(describeRunCmd)
 	initFlags := func() error {
 		describeRunCmd.ResetFlags()
-		describeRunCmd.Flags().StringVarP(&Parameters.Step, "step", "s", "", "Step Index")
+		describeRunCmd.Flags().StringVarP(&describeRunParams.Step, "step", "s", "", "Step Index")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

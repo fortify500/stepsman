@@ -32,6 +32,7 @@ Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandUpdateStep
 		defer recoverAndLog("failed to update step")
+		syncUpdateStepParams()
 		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
@@ -84,13 +85,21 @@ Use run <run id>.`,
 	},
 }
 
+var updateStepParams AllParameters
+
+func syncUpdateStepParams() {
+	Parameters.Status = updateStepParams.Status
+	Parameters.Force = updateStepParams.Force
+	Parameters.StatusUUID = updateStepParams.StatusUUID
+}
+
 func init() {
 	updateCmd.AddCommand(updateStepCmd)
 	initFlags := func() error {
 		updateStepCmd.ResetFlags()
-		updateStepCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
-		updateStepCmd.Flags().BoolVarP(&Parameters.Force, "force", "f", false, fmt.Sprintf("force change status - ignores heartbeat"))
-		updateStepCmd.Flags().StringVarP(&Parameters.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
+		updateStepCmd.Flags().StringVarP(&updateStepParams.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
+		updateStepCmd.Flags().BoolVarP(&updateStepParams.Force, "force", "f", false, fmt.Sprintf("force change status - ignores heartbeat"))
+		updateStepCmd.Flags().StringVarP(&updateStepParams.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

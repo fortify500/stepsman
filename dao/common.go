@@ -42,6 +42,7 @@ const (
 	Status          = "status"
 	Index           = "index"
 	RetriesLeft     = "retries-left"
+	CreatedAt       = "created-at"
 	UUID            = "uuid"
 	StatusUUID      = "status-uuid"
 	HeartBeat       = "heartbeat"

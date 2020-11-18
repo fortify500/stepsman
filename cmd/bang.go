@@ -34,7 +34,7 @@ var bangCmd = &cobra.Command{
 		if !Parameters.InPromptMode {
 			msg := "! is only available from within prompt"
 			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
+				Technical: fmt.Errorf(msg),
 				Friendly:  msg,
 			}
 			return

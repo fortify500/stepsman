@@ -32,6 +32,7 @@ Use run <run id>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandUpdateRun
 		defer recoverAndLog("failed to update run")
+		syncUpdateRunParams()
 		runId, err := parseRunId(args[0])
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
@@ -60,11 +61,17 @@ Use run <run id>.`,
 	},
 }
 
+var updateRunParams AllParameters
+
+func syncUpdateRunParams() {
+	Parameters.Status = updateRunParams.Status
+}
+
 func init() {
 	updateCmd.AddCommand(updateRunCmd)
 	initFlags := func() error {
 		updateRunCmd.ResetFlags()
-		updateRunCmd.Flags().StringVarP(&Parameters.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
+		updateRunCmd.Flags().StringVarP(&updateRunParams.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
 		err := updateRunCmd.MarkFlagRequired("status")
 		return err
 	}

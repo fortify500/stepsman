@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	serveServe "github.com/fortify500/stepsman/serve"
 	"github.com/spf13/cobra"
 )
@@ -27,12 +28,27 @@ var ServeCmd = &cobra.Command{
 	Long:  `Use serve to remote control stepsman via http. You can query, monitor and do remotely.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer recoverAndLog("failed to serve")
+		syncServeParams()
+		if Parameters.InPromptMode {
+			msg := "serve is not available from within prompt"
+			Parameters.Err = &Error{
+				Technical: fmt.Errorf(msg),
+				Friendly:  msg,
+			}
+			return
+		}
 		serveServe.Serve(Parameters.ServerPort, Parameters.ServerHealthPort)
 	},
 }
 
+var serveParams AllParameters
+
+func syncServeParams() {
+	Parameters.ServerPort = serveParams.ServerPort
+	Parameters.ServerHealthPort = serveParams.ServerHealthPort
+}
 func init() {
-	ServeCmd.Flags().Int64VarP(&Parameters.ServerPort, "serve-port", "p", 3333, "server port number")
-	ServeCmd.Flags().Int64VarP(&Parameters.ServerHealthPort, "serve-health-port", "t", 3334, "server health port number")
+	ServeCmd.Flags().Int64VarP(&serveParams.ServerPort, "serve-port", "p", 3333, "server port number")
+	ServeCmd.Flags().Int64VarP(&serveParams.ServerHealthPort, "serve-health-port", "t", 3334, "server health port number")
 	RootCmd.AddCommand(ServeCmd)
 }

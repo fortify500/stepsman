@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
+	"time"
 )
 
 var listRunsCmd = &cobra.Command{
@@ -36,6 +37,7 @@ var listRunsCmd = &cobra.Command{
 	Long:  `A succinct list of runs and their status.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListRuns
+		syncListRunsParams()
 		defer recoverAndLog("failed to list runs")
 		listRunsInternal("")
 	},
@@ -46,7 +48,7 @@ func listRunsInternal(runId string) {
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status"})
+	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status", "Created At:"})
 	var runs []api.RunRecord
 	var runRange *api.RangeResult
 	if runId != "" {
@@ -98,7 +100,7 @@ func listRunsInternal(runId string) {
 	for _, run := range runs {
 		status := run.Status.TranslateRunStatus()
 		t.AppendRows([]table.Row{
-			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 120)), status},
+			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 120)), status, time.Time(run.CreatedAt).Format(time.RFC3339)},
 		})
 	}
 	if runRange != nil && runRange.Total > 0 {
@@ -114,40 +116,47 @@ func parseRunsFilters() ([]api.Expression, bool) {
 		name := ""
 		value := ""
 		operator := ""
-		if strings.HasPrefix(filter, "id") {
+		if strings.HasPrefix(filter, dao.Id) {
 			trimPrefix := strings.TrimPrefix(filter, dao.Id)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
-			name = "id"
+			name = dao.Id
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, dao.Key) {
 			trimPrefix := strings.TrimPrefix(filter, dao.Key)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
-			name = "uuid"
+			name = dao.Key
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, dao.TemplateTitle) {
 			trimPrefix := strings.TrimPrefix(filter, dao.TemplateTitle)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
-			name = "title"
+			name = dao.TemplateTitle
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, dao.TemplateVersion) {
 			trimPrefix := strings.TrimPrefix(filter, dao.TemplateVersion)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
-			name = "title"
+			name = dao.TemplateVersion
+			value = strings.TrimPrefix(trimPrefix, operator)
+		} else if strings.HasPrefix(filter, dao.CreatedAt) {
+			trimPrefix := strings.TrimPrefix(filter, dao.CreatedAt)
+			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
+				return nil, true
+			}
+			name = dao.CreatedAt
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, dao.Status) {
 			trimPrefix := strings.TrimPrefix(filter, dao.Status)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
-			name = "status"
+			name = dao.Status
 			value = strings.TrimPrefix(trimPrefix, operator)
 		} else if strings.HasPrefix(filter, "startsWith(") && strings.HasSuffix(filter, ")") {
 			operator = "startsWith"
@@ -228,16 +237,26 @@ func detectRunsStringOperator(filter string, operator string) ([]string, bool) {
 	return fields, false
 }
 
+var listRunsParams AllParameters
+
+func syncListRunsParams() {
+	Parameters.RangeStart = listRunsParams.RangeStart
+	Parameters.RangeEnd = listRunsParams.RangeEnd
+	Parameters.RangeReturnTotal = listRunsParams.RangeReturnTotal
+	Parameters.SortFields = listRunsParams.SortFields
+	Parameters.SortOrder = listRunsParams.SortOrder
+	Parameters.Filters = listRunsParams.Filters
+}
 func init() {
 	listCmd.AddCommand(listRunsCmd)
 	initFlags := func() error {
 		listRunsCmd.ResetFlags()
-		listRunsCmd.Flags().Int64Var(&Parameters.RangeStart, "range-start", 0, "Range Start")
-		listRunsCmd.Flags().Int64Var(&Parameters.RangeEnd, "range-end", -1, "Range End")
-		listRunsCmd.Flags().BoolVar(&Parameters.RangeReturnTotal, "range-return-total", false, "Range Return Total")
-		listRunsCmd.Flags().StringArrayVar(&Parameters.SortFields, "sort-field", []string{}, "Repeat sort-field for many fields")
-		listRunsCmd.Flags().StringVar(&Parameters.SortOrder, "sort-order", "desc", "Sort order asc/desc which are a short for ascending/descending respectively")
-		listRunsCmd.Flags().StringArrayVar(&Parameters.Filters, "filter", []string{}, "Repeat filter for many filters --filter=startsWith(\"title\",\"STEP\") --filter=title=STEPSMAN\\ Hello\\ World\npossible operators:startsWith,endsWith,contains,>,<,>=,<=,=,<>")
+		listRunsCmd.Flags().Int64Var(&listRunsParams.RangeStart, "range-start", 0, "Range Start")
+		listRunsCmd.Flags().Int64Var(&listRunsParams.RangeEnd, "range-end", -1, "Range End")
+		listRunsCmd.Flags().BoolVar(&listRunsParams.RangeReturnTotal, "range-return-total", false, "Range Return Total")
+		listRunsCmd.Flags().StringArrayVar(&listRunsParams.SortFields, "sort-field", []string{dao.CreatedAt}, "Repeat sort-field for many fields")
+		listRunsCmd.Flags().StringVar(&listRunsParams.SortOrder, "sort-order", "desc", "Sort order asc/desc which are a short for ascending/descending respectively")
+		listRunsCmd.Flags().StringArrayVar(&listRunsParams.Filters, "filter", []string{}, "Repeat filter for many filters --filter=startsWith(\"title\",\"STEP\") --filter=title=STEPSMAN\\ Hello\\ World\npossible operators:startsWith,endsWith,contains,>,<,>=,<=,=,<>")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

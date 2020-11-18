@@ -53,14 +53,14 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 				switch expression.AttributeName {
 				case Id:
 				case Key:
+				case CreatedAt:
 				case TemplateVersion:
-					attributeName = "template_version"
 				case TemplateTitle:
-					attributeName = "template_title"
 				case Status:
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in filter: %s", expression.AttributeName)
 				}
+				attributeName = strings.ReplaceAll(attributeName, "-", "_")
 				queryExpression = fmt.Sprintf("\"%s\"", attributeName)
 				switch expression.Operator {
 				case "<":
@@ -72,6 +72,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 				case ">=":
 					switch expression.AttributeName {
 					case TemplateVersion:
+					case CreatedAt:
 					default:
 						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 					}
@@ -128,14 +129,14 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 					switch field {
 					case Id:
 					case Key:
+					case CreatedAt:
 					case TemplateVersion:
-						fieldDB = "template_version"
 					case TemplateTitle:
-						fieldDB = "template_title"
 					case Status:
 					default:
 						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in sort fields: %s", field)
 					}
+					fieldDB = strings.ReplaceAll(fieldDB, "-", "_")
 					if sort != orderBy {
 						sort += ","
 					}
@@ -217,6 +218,7 @@ func buildRunsReturnAttributesStrAndVet(addPrefix bool, attributes []string) (st
 		case Key:
 		case TemplateVersion:
 		case TemplateTitle:
+		case CreatedAt:
 		case Status:
 		case Template:
 		default:
@@ -248,7 +250,7 @@ func buildRunsReturnAttributesStrAndVet(addPrefix bool, attributes []string) (st
 }
 
 func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) {
-	if _, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, template) values(:id,:key,:template_version,:template_title,:status,:template)", runRecord); err != nil {
+	if _, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, created_at, template) values(:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,:template)", runRecord); err != nil {
 		panic(err)
 	}
 }

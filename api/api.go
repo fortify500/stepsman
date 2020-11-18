@@ -128,6 +128,7 @@ type DoStepResult struct {
 type RunRecord struct {
 	Id              string        `json:"id,omitempty"`
 	Key             string        `json:"key,omitempty"`
+	CreatedAt       AnyTime       `db:"created_at" json:"created-at,omitempty"`
 	TemplateVersion int64         `db:"template_version" json:"template-version,omitempty"`
 	TemplateTitle   string        `db:"template_title" json:"template-title,omitempty"`
 	Status          RunStatusType `json:"status,omitempty"`

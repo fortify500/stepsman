@@ -38,6 +38,7 @@ var listStepsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandListSteps
 		defer recoverAndLog("failed to list steps")
+		syncListStepsParams()
 		listStepsInternal()
 	},
 }
@@ -289,17 +290,28 @@ func detectStepsStringOperator(filter string, operator string) ([]string, bool) 
 	return fields, false
 }
 
+var listStepsParams AllParameters
+
+func syncListStepsParams() {
+	Parameters.Run = listStepsParams.Run
+	Parameters.RangeStart = listStepsParams.RangeStart
+	Parameters.RangeEnd = listStepsParams.RangeEnd
+	Parameters.RangeReturnTotal = listStepsParams.RangeReturnTotal
+	Parameters.SortFields = listStepsParams.SortFields
+	Parameters.SortOrder = listStepsParams.SortOrder
+	Parameters.Filters = listStepsParams.Filters
+}
 func init() {
 	listCmd.AddCommand(listStepsCmd)
 	initFlags := func() error {
 		listStepsCmd.ResetFlags()
-		listStepsCmd.Flags().StringVarP(&Parameters.Run, "run", "r", "", "Run Id")
-		listStepsCmd.Flags().Int64Var(&Parameters.RangeStart, "range-start", 0, "Range Start")
-		listStepsCmd.Flags().Int64Var(&Parameters.RangeEnd, "range-end", -1, "Range End")
-		listStepsCmd.Flags().BoolVar(&Parameters.RangeReturnTotal, "range-return-total", false, "Range Return Total")
-		listStepsCmd.Flags().StringArrayVar(&Parameters.SortFields, "sort-field", []string{}, "Repeat sort-field for many fields")
-		listStepsCmd.Flags().StringVar(&Parameters.SortOrder, "sort-order", "asc", "Sort order asc/desc which are a short for ascending/descending respectively")
-		listStepsCmd.Flags().StringArrayVar(&Parameters.Filters, "filter", []string{}, "Repeat filter for many filters --filter=startsWith(\"name\",\"STEP\") \npossible operators:startsWith,endsWith,contains,>,<,>=,<=,=,<>")
+		listStepsCmd.Flags().StringVarP(&listStepsParams.Run, "run", "r", "", "Run Id")
+		listStepsCmd.Flags().Int64Var(&listStepsParams.RangeStart, "range-start", 0, "Range Start")
+		listStepsCmd.Flags().Int64Var(&listStepsParams.RangeEnd, "range-end", -1, "Range End")
+		listStepsCmd.Flags().BoolVar(&listStepsParams.RangeReturnTotal, "range-return-total", false, "Range Return Total")
+		listStepsCmd.Flags().StringArrayVar(&listStepsParams.SortFields, "sort-field", []string{dao.Index}, "Repeat sort-field for many fields")
+		listStepsCmd.Flags().StringVar(&listStepsParams.SortOrder, "sort-order", "asc", "Sort order asc/desc which are a short for ascending/descending respectively")
+		listStepsCmd.Flags().StringArrayVar(&listStepsParams.Filters, "filter", []string{}, "Repeat filter for many filters --filter=startsWith(\"name\",\"STEP\") \npossible operators:startsWith,endsWith,contains,>,<,>=,<=,=,<>")
 		return listStepsCmd.MarkFlagRequired("run")
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
