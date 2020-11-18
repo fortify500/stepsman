@@ -120,9 +120,11 @@ type UpdateStepParams UpdateQuery
 type UpdateStepResult struct{}
 
 type DoStepParams struct {
-	UUID string `json:"uuid,omitempty"`
+	UUID        string `json:"uuid,omitempty"`
+	StatusOwner string `json:"status-owner,omitempty"`
 }
 type DoStepResult struct {
+	StatusOwner string `json:"status-owner,omitempty"`
 }
 
 type RunRecord struct {
@@ -292,7 +294,7 @@ type StepRecord struct {
 	UUID        string         `json:"uuid,omitempty"`
 	Name        string         `json:"name,omitempty"`
 	Status      StepStatusType `json:"status,omitempty"`
-	StatusUUID  string         `db:"status_uuid" json:"status-uuid,omitempty"`
+	StatusOwner string         `db:"status_owner" json:"status-owner,omitempty"`
 	Now         AnyTime        `db:"now" json:"now,omitempty"`
 	Heartbeat   AnyTime        `json:"heartbeat,omitempty"`
 	CompleteBy  *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`

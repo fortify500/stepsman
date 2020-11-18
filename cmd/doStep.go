@@ -32,12 +32,21 @@ Use do step <step uuid>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandDoStep
 		defer recoverAndLog("failed to do step")
+		syncDoStepParams()
 		stepUUID, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
-		_, err = bl.DoStep(&api.DoStepParams{UUID: stepUUID}, true)
+		statusOwner := ""
+		if Parameters.StatusOwner != "" {
+			statusOwner = Parameters.StatusOwner
+		}
+		var doStepResult *api.DoStepResult
+		doStepResult, err = bl.DoStep(&api.DoStepParams{
+			UUID:        stepUUID,
+			StatusOwner: statusOwner,
+		}, true)
 		if err != nil {
 			msg := "failed to do step"
 			Parameters.Err = &Error{
@@ -46,6 +55,7 @@ Use do step <step uuid>.`,
 			}
 			return
 		}
+		fmt.Printf("returned status owner: %s\n", doStepResult.StatusOwner)
 		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
 			UUIDs: []string{stepUUID},
 		})
@@ -67,6 +77,17 @@ Use do step <step uuid>.`,
 	},
 }
 
+var doStepParams AllParameters
+
+func syncDoStepParams() {
+	Parameters.StatusOwner = doStepParams.Step
+}
 func init() {
 	doCmd.AddCommand(doRunCmd)
+	initFlags := func() error {
+		doRunCmd.ResetFlags()
+		doRunCmd.Flags().StringVarP(&doStepParams.StatusOwner, "step-owner", "s", "", "Step Owner - to prevent do step contentions and duplicate calls, a step owner will allow duplicate calls and behave as the first call")
+		return nil
+	}
+	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
 }

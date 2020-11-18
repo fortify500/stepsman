@@ -44,7 +44,7 @@ const (
 	RetriesLeft     = "retries-left"
 	CreatedAt       = "created-at"
 	UUID            = "uuid"
-	StatusUUID      = "status-uuid"
+	StatusOwner     = "status-owner"
 	HeartBeat       = "heartbeat"
 	CompleteBy      = "complete-by"
 	Now             = "now"
@@ -60,9 +60,9 @@ type DBI interface {
 	VerifyDBCreation(tx *sqlx.Tx) error
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
-	UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusUUID
-	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int) []UUIDAndStatusUUID
-	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newState string, completeBy *int64, retriesLeft *int) string
+	UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusOwner
+	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int) []UUIDAndStatusOwner
+	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, newState string, completeBy *int64, retriesLeft *int) string
 	RecoverSteps(tx *sqlx.Tx) []string
 	Notify(tx *sqlx.Tx, channel string, message string)
 }

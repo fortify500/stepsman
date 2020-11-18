@@ -48,7 +48,7 @@ func listStepsInternal() {
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status UUID", "Heartbeat", "Complete By"})
+	t.AppendHeader(table.Row{"", "Index", "UUID", "Title", "Status", "Status Owner", "Heartbeat", "Complete By"})
 	runId, err := parseRunId(Parameters.Run)
 	if err != nil {
 		Parameters.Err = fmt.Errorf("failed to list steps: %w", err)
@@ -144,7 +144,7 @@ func listStepsInternal() {
 			heartBeat = fmt.Sprintf("%s", time.Time(step.Heartbeat).Format(time.RFC3339))
 		}
 		t.AppendRows([]table.Row{
-			{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusUUID, heartBeat, completeBy},
+			{checked, step.Index, step.UUID, strings.TrimSpace(text.WrapText(step.Name, 120)), status, step.StatusOwner, heartBeat, completeBy},
 		})
 	}
 	if stepsRange != nil && stepsRange.Total > 0 {
@@ -188,8 +188,8 @@ func parseStepsFilters() ([]api.Expression, bool) {
 			}
 			name = "status"
 			value = strings.TrimPrefix(trimPrefix, operator)
-		} else if strings.HasPrefix(filter, dao.StatusUUID) {
-			trimPrefix := strings.TrimPrefix(filter, dao.StatusUUID)
+		} else if strings.HasPrefix(filter, dao.StatusOwner) {
+			trimPrefix := strings.TrimPrefix(filter, dao.StatusOwner)
 			if operator = detectStartsWithGTLTEquals(trimPrefix, filter); operator == "" {
 				return nil, true
 			}
@@ -276,7 +276,7 @@ func detectStepsStringOperator(filter string, operator string) ([]string, bool) 
 	case dao.RunId:
 	case dao.UUID:
 	case dao.Status:
-	case dao.StatusUUID:
+	case dao.StatusOwner:
 	case dao.Label:
 	case dao.Name:
 	default:

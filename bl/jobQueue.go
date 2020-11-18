@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-type DoWork api.DoStepParams
+type DoWork string
 
 var memoryQueue chan *DoWork
 var queue = make(chan *DoWork)
@@ -104,7 +104,9 @@ func processMsg(msg *DoWork) {
 		log.Tracef("processing msg: %#v", msg)
 	}
 	recoverable(func() error {
-		_, err := doStepSynchronous((*api.DoStepParams)(msg))
+		_, err := doStepSynchronous(&api.DoStepParams{
+			UUID: string(*msg),
+		})
 		return err
 	})
 }

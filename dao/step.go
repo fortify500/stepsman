@@ -29,8 +29,8 @@ type StepState struct {
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
 
-func UpdateStepHeartBeat(stepUUID string, statusUUID string) error {
-	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_uuid=$2", stepUUID, statusUUID)
+func UpdateStepHeartBeat(stepUUID string, statusOwner string) error {
+	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_owner=$2", stepUUID, statusOwner)
 	if err == nil {
 		var affected int64
 		affected, err = res.RowsAffected()
@@ -38,25 +38,25 @@ func UpdateStepHeartBeat(stepUUID string, statusUUID string) error {
 			panic(err)
 		}
 		if affected != 1 {
-			return api.NewError(api.ErrRecordNotAffected, "while updating step heartbeat, no rows where affected, suggesting status_uuid has changed (but possibly the record have been deleted) for step uuid: %s, and status uuid: %s", stepUUID, statusUUID)
+			return api.NewError(api.ErrRecordNotAffected, "while updating step heartbeat, no rows where affected, suggesting status-owner has changed (but possibly the record have been deleted) for step uuid: %s, and status owner: %s", stepUUID, statusOwner)
 		}
 	}
 	return nil
 }
-func UpdateStepStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, completeBy *int64, retriesLeft *int) UUIDAndStatusUUID {
-	updated := DB.UpdateManyStatusAndHeartBeatTx(tx, runId, []int64{index}, newStatus, nil, completeBy, retriesLeft)
+func UpdateStepStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int) UUIDAndStatusOwner {
+	updated := DB.UpdateManyStatusAndHeartBeatTx(tx, runId, []int64{index}, newStatus, newStatusOwner, nil, completeBy, retriesLeft)
 	if len(updated) != 1 {
 		panic(fmt.Errorf("illegal state, 1 updated record expected for runId:%s and index:%d", runId, index))
 	}
 	return updated[0]
 }
 
-type UUIDAndStatusUUID struct {
-	UUID       string
-	StatusUUID string
+type UUIDAndStatusOwner struct {
+	UUID        string
+	StatusOwner string
 }
 
-//func UpdateStepStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuid string, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusUUID {
+//func UpdateStepStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuid string, newStatus api.StepStatusType, completeBy *int64) UUIDAndStatusOwner {
 //	updated := DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{uuid}, newStatus, nil, completeBy)
 //	if len(updated) != 1 {
 //		panic(fmt.Errorf("illegal state, 1 updated record expected for uuid:%s", uuid))
@@ -142,7 +142,7 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 			attribute = "\"index\""
 		case UUID:
 		case Status:
-		case StatusUUID:
+		case StatusOwner:
 		case RetriesLeft:
 		case HeartBeat:
 		case CompleteBy:
@@ -200,8 +200,8 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 			case Index:
 			case UUID:
 			case Status:
-			case StatusUUID:
-				attributeName = "status_uuid"
+			case StatusOwner:
+				attributeName = "status_owner"
 			case Label:
 			case Name:
 			default:
@@ -277,8 +277,8 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				case Index:
 				case UUID:
 				case Status:
-				case StatusUUID:
-					fieldDB = "status_uuid"
+				case StatusOwner:
+					fieldDB = "status_owner"
 				case Label:
 				case Name:
 				default:

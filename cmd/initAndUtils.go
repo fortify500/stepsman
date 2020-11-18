@@ -78,7 +78,7 @@ type AllParameters struct {
 	Run                 string
 	Status              string
 	Force               bool
-	StatusUUID          string
+	StatusOwner         string
 	//ListQuery
 	RangeStart       int64
 	RangeEnd         int64

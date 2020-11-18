@@ -53,14 +53,8 @@ Use run <run id>.`,
 				return
 			}
 			changes["status"] = status.TranslateStepStatus()
-		} else if Parameters.StatusUUID != "" {
-			var statusUUID string
-			statusUUID, err = parseStepUUID(Parameters.StatusUUID)
-			if err != nil {
-				Parameters.Err = fmt.Errorf("failed to update step: %w", err)
-				return
-			}
-			changes["heartbeat"] = statusUUID
+		} else if Parameters.StatusOwner != "" {
+			changes["heartbeat"] = Parameters.StatusOwner
 		} else {
 			Parameters.Err = fmt.Errorf("failed to update step no argument provided")
 			return
@@ -90,7 +84,7 @@ var updateStepParams AllParameters
 func syncUpdateStepParams() {
 	Parameters.Status = updateStepParams.Status
 	Parameters.Force = updateStepParams.Force
-	Parameters.StatusUUID = updateStepParams.StatusUUID
+	Parameters.StatusOwner = updateStepParams.StatusOwner
 }
 
 func init() {
@@ -99,7 +93,7 @@ func init() {
 		updateStepCmd.ResetFlags()
 		updateStepCmd.Flags().StringVarP(&updateStepParams.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
 		updateStepCmd.Flags().BoolVarP(&updateStepParams.Force, "force", "f", false, fmt.Sprintf("force change status - ignores heartbeat"))
-		updateStepCmd.Flags().StringVarP(&updateStepParams.StatusUUID, "heartbeat", "b", "", "Will update the heartbeat. The status UUID must be supplied.")
+		updateStepCmd.Flags().StringVarP(&updateStepParams.StatusOwner, "heartbeat", "b", "", "Will update the heartbeat. The status Owner must be supplied.")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

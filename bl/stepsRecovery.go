@@ -69,9 +69,8 @@ func recoveryScheduler() {
 				log.Errorf("failed to recover steps: %w", tErr)
 			}
 			for _, item := range stepsUUIDs {
-				if err := Enqueue(&DoWork{
-					UUID: item,
-				}); err != nil {
+				work := DoWork(item)
+				if err := Enqueue(&work); err != nil {
 					log.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr)
 				}
 			}

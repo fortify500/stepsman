@@ -140,14 +140,14 @@ func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 
 		for i, step := range t.Steps {
 			var uuid4 uuid.UUID
-			var statusUuid4 uuid.UUID
+			var statusOwner uuid.UUID
 			uuid4, err = uuid.NewRandom()
 			if err != nil {
 				panic(fmt.Errorf("failed to create runs row and generate uuid4: %w", err))
 			}
-			statusUuid4, err = uuid.NewRandom()
+			statusOwner, err = uuid.NewRandom()
 			if err != nil {
-				panic(fmt.Errorf("failed to create runs row and generate status uuid4: %w", err))
+				panic(fmt.Errorf("failed to create runs row and generate status owner uuid4: %w", err))
 			}
 			retriesLeft := step.Retries + 1
 
@@ -160,7 +160,7 @@ func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 				Index:       int64(i) + 1,
 				UUID:        uuid4.String(),
 				Status:      api.StepIdle,
-				StatusUUID:  statusUuid4.String(),
+				StatusOwner: statusOwner.String(),
 				Label:       step.Label,
 				Name:        step.Name,
 				State:       "{}",
