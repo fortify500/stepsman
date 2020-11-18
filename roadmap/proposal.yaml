@@ -1,176 +1,347 @@
-title: "STEPSMAN Hello World"
+title: "namespace HR approvals"
 # optional, but recommended, if in the future we will have breaking changes this allows to migrate on the fly.
 version: 1
+# searchable tags. if you want to locate a template by an external key.
 tags:
   uuid:
     - e09d86c4-b907-4674-af4f-8aceeb2b7ef1
 steps:
-  - name: "expiration" # you can setup a scheduler to call this step after a timeout.
+  - name: "expiration" # you can setup a scheduler to call this step after a timeout. alternatively, flow will call this if it detects the timeout has expired on any call/query to it.
     description: expire the workflow
     label: expiration
     on:
       pre-done:
         rules:
           - then:
-              set:
-                - key: result
-                  value: '{"status":"failed"}'
-              set-run-status: done
-  - name: Starting
+              do:
+                - label: report_run_result
+                  context: >
+                    { "result": "expired"}
+  - name: "send emails to step path_1_step_1"
     description: >
-      Execute: echo "hello world" > stepsman_hello.world
-    # overrides the template/run level context
-    # a free form json which can contain additional information such as identifying or other info.
-    # when a run is created, they can be provided as overrides to the existing context or updated or per call when calling a step directly.
-    context: >
-      {"step_id": 2 }
-    label: hello #unique identifier for the step.
+      Send email by given step
+    label: path_1_step_1_email
     do:
+      type: REST
+      heartbeat-timeout: 180 # seconds. default 10. 
       options:
-        command: "/bin/sh"
-        arguments:
-          - "-c"
-          - 'echo "Hello World" > stepsman_hello.world'
-  - name: "Call REST API"
-    description: >
-      check that stepshello.world was created via rest
-    label: call_rest
-    do:
-      type: REST # 200 is synchronous done, 201 means asynchronous process(InProgress)
-      # the callee is supposed to perform heartbeats (PUT InProgress) and set resolution: Done, Failed
-      # any other http status is an automatic fail.
-      heartbeat-timeout: 180 # seconds. default 60. if the callee
-      options:
-        timeout: 180
-        method: POST
-        body: >
-          {}
+        timeout: 60 #seconds
+        method: GET
+        url: >
+          {{ env.flow}}/send-emails/path_1_step_1
         headers:
-          authorization: >
-            base64.encode(concat("privilegedUser:", "{{ vault["privilegedUser"] }}"))
+          authorization:
+            - >
+              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+          tenant:
+            - >
+              {{ context["tenant"] }}
+          namespace:
+            - 351d87f0-9d4a-411b-9a98-7d55a9792eac
+  - name: "Path 1 Step 1: role A"
+    label: path_1_step_1
+    description: >
+      this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
+    tags:
+      allowed-approval:
+        - b2e7ffb8-4d38-4d34-be80-126c532836b0
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+      allowed-skip:
+        - b2e7ffb8-4d38-4d34-be80-126c532836b0
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+    do:
+      type: evaluate
+      options:
+        - then:
+            set-result: >
+              {"status":{{ context["status"]}}}
     on:
+      pre-do: #important to note that pre-do is decided before locking the step into one execution of DO (i.e. in-progress status)
+        decisions:
+          - label: check_access
+          - label: check_valid_input
+            input: >
+              step_input:=request["data"]["status"]
+        rules:
+          - if: >
+              result{decision["check_access"]["result"]=="denied"}
+            then:
+              error:
+                code: 403
+                message: "access denied"
+                data: >
+                  {{ decision["check_access"]["result"]}}
+          - if: >
+              result{decision["check_valid_input"]["result"]!="valid"}
+            then:
+              error:
+                code: 400
+                message: "invalid input"
+                data: >
+                  {{ decision["check_valid_input"]["result"]}}
       pre-done:
         decisions:
-          - decision_1
+          - label: decision_step
+            input: >
+              step_status:=label["status"]
         rules:
           - if: >
-              decision["decision_1"]["result"]=="rollback"
+              result{decision["decision_step"]["result"]="approved"}
             then:
               do:
-                - label: end
-                  #just to demonstrate context, not really needed here
+                - label: path_1_step_2_email
                   context: >
-                    {"result": "rollback"}
+                    {{ object.union(context,{"step":"path_1_step_2"}) }}
           - then:
-              set-run-status: done
-              #optional: just for demonstration of return error code if this was a rest call
-              error:
-                code: 1
-                message: "return to the previous state"
-                data: >
-                  {{ decision["decision_1"]["result"]}}
+              do:
+                - label: report_run_result
+                  context: >
+                    { "result": "declined"}
+  - name: "send emails to step path_1_step_2"
+    description: >
+      Send email by given step
+    label: path_1_step_2_email
+    do:
+      type: REST # 201 with heartbeats of set InProgress and finaly set Done. 
+      heartbeat-timeout: 180 # seconds. default 10. 
+      options:
+        timeout: 60
+        method: GET
+        url: >
+          {{ env.flow}}/send-emails/path_1_step_2
+        headers:
+          authorization:
+            - >
+              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+          tenant:
+            - >
+              {{ context["tenant"] }}
+          namespace:
+            - 351d87f0-9d4a-411b-9a98-7d55a9792eac
+  - name: "Path 1 Step 2: role B"
+    description: >
+      this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
+    label: path_1_step_2
+    tags:
+      allowed-approval:
+        - b2e7ffb8-4d38-4d34-be80-126c532836b0
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+      allowed-skip:
+        - b2e7ffb8-4d38-4d34-be80-126c532836b0
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+    do:
+      type: evaluate
+      options:
+        - then:
+            set-result: >
+              {"status":{{ context["status"]}}}
+    on:
+      pre-do:
+        decisions:
+          - label: check_access
+          - label: check_valid_input
+            input: >
+              step_input:=request["data"]["status"]
+        rules:
           - if: >
-              decision["decision_1"]["result"]=="next"
+              result{decision["check_access"]["result"]=="denied"}
+            then:
+              error:
+                code: 403
+                message: "access denied"
+                data: >
+                  {{ decision["check_access"]["result"]}}
+          - if: >
+              result{decision["check_valid_input"]["result"]!="valid"}
+            then:
+              error:
+                code: 400
+                message: "invalid input"
+                data: >
+                  {{ decision["check_valid_input"]["result"]}}
+      pre-done:
+        decisions:
+          - label: decision_step
+            input: >
+              step_status:=label["status"]
+        rules:
+          - if: >
+              result{decision["decision_step"]["result"]="approved"}
             then:
               do:
-                - label: end
-                  #just to demonstrate context, not really needed here
+                - label: check_resolution
+          - then:
+              do:
+                - label: report_run_result
                   context: >
-                    {"result": "next"}
-  - name: "end of run"
-    label: end
+                    { "result": "declined"}
+  #.... path 2 path3....
+  # last path do: report_run_result in the event of approved decision
+  - name: Check Resolution
+    label: check_resolution
+    on:
+      pre-do:
+        decisions:
+          - label: decision_resolution
+            input: >
+              path_1_step_1:=inputs["labels"]["path_1_step_1"]["status"]
+              path_1_step_2:=inputs["labels"]["path_1_step_2"]["status"]
+              path_2_step_1:=inputs["labels"]["path_2_step_1"]["status"]
+              path_2_step_2:=inputs["labels"]["path_1_step_2"]["status"]
+        rules:
+          - if: >
+              result{
+                decision["decision_resolution"]["result"]=="approved"
+              } else {
+                decision["decision_resolution"]["result"]=="declined"
+              }
+            then:
+              do:
+                - label: report_run_result
+                  context: >
+                    { "result": {{ decision["decision_resolution"]["result"] }} }
+          - then:
+              abort: true #don't continue to "do"
+  - name: Report Run Result
+    label: report_run_result
+    do:
+      type: REST
+      options:
+        method: POST
+        url: >
+          {{ env.rulengine}}/re_notification
+        body: >
+          { "result": {{ context["result"] }} }
+        headers:
+          authorization:
+            - >
+              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+          tenant:
+            - >
+              {{ context["tenant"] }}
+          namespace:
+            - 351d87f0-9d4a-411b-9a98-7d55a9792eac
     on:
       pre-done:
         rules:
+          - if: >
+              result{label["report_run_result"]["status"]!=200}
+            then:
+              set-run-status: done
+              error:
+                code: 500
+                message: "failed"
+                data: >
+                  {{ label["report_run_result"]["status"] }}
           - then:
-            set-run-status: done
-            set: # record this status in the step. label["end"]["kv"]["result"]
-              - key: result
-                value: >
-                  {{ context["result"] }}
+              set: # record this status in the step. label["report_run_result"]["kv"]["result"]
+                - key: result
+                  value: >
+                    {{ context["result"] }}
+              set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are descarded.
 
 #---------------------------------------------------------
 decisions:
-  # example input for a decision
-  #{
-  #"input": {
-  #  "labels": {
-  #      "hello": {
-  #          "exit-code": 0
-  #          }
-  #      }
-  #  }
-  #}
-  - name: "check label success and do another step"
-    label: decision_1 # label must be unique
-    attributes:
-      - exit:
-          # the current label content is available in input
-          _: >
-            input["exit-code"]
-          type: int64 #one of the built-in types.
-      - degrees:
-          # all the labels are available in inputs
-          _: >
-            inputs[{{ current-step }}]["result"]["body"]["degrees"]
-          type: degree # a concept allows for validation before deciding. validation fail, means the attribute will be evaluated as undefined internally.
-    #rules-options: #optional
-    #  order: "first" # default is first. However, it can be "all" which means all "if"s will be evaluated.
-    rules: # the IFs are first one true. we stop.
-      # custom functions are memoized by default
+  - name: check access
+    label: check_access # label must be unique
+    rules:
       - if: >
-          result{mlinference("0", exit)>3}
+          allowed-roles{context["roles"][_]==tags["allowed-approval"][_]}
+          result{v:=["approve","decline"];context["status"]=v[_];not allowed-roles}
         then:
-          result: rollback #simply assigns to an attribute called do the value "rollback"
+          result: denied
       - if: >
-          result{exit>-3;exit<1}
-      - then: #fallback/default rule, "if" is defaulted to true if unspecified
-          result: next
+          allowed-roles{context["roles"][_]==tags["allowed-skipped"][_]}
+          result{context["status"]="skipped";not allowed-roles}
+        then:
+          result: denied
+  - name: check valid input
+    label: check_valid_input
+    attributes:
+      - label: step_input
+        type: flow_status
+    rules:
+      - then:
+          result: valid
+  - name: check a step has resolution
+    label: decision_step # label must be unique
+    attributes: # essentially these are both validation an if neccessary type conversion if possible.
+      - label: step_status
+        type: flow_status
+    rules: # the IFs are first one true. we stop.
+      - if: >
+          result{v:=["skipped","approved"];step_status=v[_]}
+        then:
+          result: approved
+      - if: >
+          result{step_status="declined"}
+        then:
+          result: declined
+  - name: check run has resolution
+    label: decision_resolution
+    attributes:
+      - label: path_1_step_1
+        type: flow_status
+      - label: path_1_step_2
+        type: flow_status
+      - label: path_2_step_1
+        type: flow_status
+      - label: path_2_step_2
+        type: flow_status
+    dependencies:
+      decisions:
+        - label: decision_step
+          as: path_1_step_1_decision
+          input: >
+            step_status:=path_1_step_1
+        - label: decision_step
+          as: path_1_step_2_decision
+          input: >
+            step_status:=path_1_step_2
+        - label: decision_step
+          as: path_2_step_1_decision
+          input: >
+            step_status:=path_2_step_1
+        - label: decision_step
+          as: path_2_step_2_decision
+          input: >
+            step_status:=path_2_step_2
+    rules:
+      - if: >
+          result{
+            v:=["skipped","approved"]
+            path_1_step_1_decision["result"]=v[_]
+            path_1_step_2_decision["result"]=v[_]
+            path_2_step_1_decision["result"]=v[_]
+            path_2_step_2_decision["result"]=v[_]
+          }
+        then:
+          result: approved
+      - if: >
+          result{path_1_step_1_decision="declined"}
+        then:
+          result: declined
+      - if: >
+          result{path_1_step_2_decision="declined"}
+        then:
+          result: declined
+      - if: >
+          result{path_2_step_1_decision="declined"}
+        then:
+          result: declined
+      - if: >
+          result{path_2_step_2_decision="declined"}
+        then:
+          result: declined
 concepts: # int64, float64 and string, bool are reserved and need not specified.
-  - name: degree #unique name
+  - name: flow_status #unique name
     type: string
     validations:
       - >
-        result{degree=="bsc"}else{degree=="msc"}
-functions:
-  - name: mlinference
-    type: externa-ml # can be plugged-in
-    #memoized: true by default
+        default result=false
+        result{flow_status=="skipped"}else{flow_status=="approved"}else{flow_status=="declined"}
 
 # notes:
-# * cyclic calls are not allowed.
-# * The cursor is a helpful aid but is not mandatory. Interactive mode usually benefits from it.
-# * A run and its steps state is stored in a database so it is important not to strain it by storing huge amounts of data since it is loaded for each step.
-# * run state: not started, stopping, stopped, in progress, done (done must be specified by a step and is not automatic)
-# * You can only "do" a step from a stopped position unless done. So, if it was done or in-progress, it stays done and returns conflict (409),
-#   if it is canceled/stopped, failed, skipped, not started it can be restarted and its state is erased and returns 201.
-#   You can also change a step from a running state to a stopped state and then restart it.
-#   step states: not started, stopping, stopped, failed, in progress, skipped, done.
-#   Important to note that if a step schedueled another step to start then it cannot be stopped unless the run is currently stopped and reset (if started again without a reset it will continue)
-#   Another possiblity is to put a validation on the run that will make sure older scheduled steps will retire.
-#   There will probably be an atomic operations series that will be transactional such as reset and start.
-# * future: it is possible to generate a streaming process providing a multi-line. E.g. If a command line process prints a ndjson
-#   or a json list we can read it line by line and the next step will start receiving it and doing it even before the current step is over. When finished the current step will be done.
-#   and the next step will be done as soon as it finished processing the steps. Important to note, that the next step will fail if any line fails as a whole. i.e. there are only unique steps not multiples.
-#   it is also possible that behind the scenes they will run concurrently but their final state will be considered as a whole.
 # * as a convinience a response body is first attempted to be converted to a json. if it does not succeed it is stored as a string in the ["result"]["body"]
-# * you can register a webhook for notifications. So for example, you can register a specific run or all runs for notifications for some or all events.
-#   alternatively or on top of it, we can consider supporting a queue/topic like for notifications. We can start with redis pub/sub
-# * Quite obviously you will be able to query the state and all information via a REST API.
-# * Future: A security system to guard the APIs will be in place. Quite possibly connected to an external or internal OPA.
-#   Every step should be contained in an Audit trail so a history mechanism will be in place. Quite possibly a syslog audit log or file.
-# * To have an ability for a kind of atomic operations. A run with a name and inprogress status cannot be created with the same name (of the run not the title of the template).
-#   So that when a run can be run only one concurrently then this will throw an error if the run is created. You can cancel the run by making a stop request on it.
-#   Once stopped, you can reset all or a specific step and start the run.
-# * A run contains a reference to a specific version of a template so that once created a modification to the actual template has no effect on the run.
-# * Tags can be set also when creating a run which will override existing tag names (from the template)
-# * The serve restapi will be a json-rpc style with 1 endpoint. /v0/json-rpc
-# * Important to note that a decision should not have side effects. If you do, then you have to understand that if you done event asynchronously concurrently then only one
-#   will take effect. It will done event with a transaction, and only then execute the "then" clauses. if it will detect that the status is already done, you will get an error back,
-#   which is ok to ignore if, for example, it was caused by unaware callers (such as a link from a bunch of emails like in approvals process).
 # * Vault secrets and properties (such as tenant properties) will be retrieved by default from a static text file or hashicorp vault client.
 # * You can access environment variables via "env.".
-# * Each step record will have a label json/jsonb(where applicable) to hold state do result
-# * The template will be loaded for each step for every do. In serve mode we can cache it and initialize the updated state.
-#   The state of the other labels may not be updated as expected but that is fine if the steps do are being run concurrently.
-# * Step and Run state should be updated in different transaction to avoid contention. It is ok for an update of run state to fail after updating a step state.
