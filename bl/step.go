@@ -395,10 +395,30 @@ func DoStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, erro
 func doStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, error) {
 	if !synchronous {
 		var owner dao.UUIDAndStatusOwner
+		var toEnqueue = true
 		tErr := dao.Transactional(func(tx *sqlx.Tx) error {
 			updated := dao.DB.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{params.UUID}, api.StepPending, params.StatusOwner, []api.StepStatusType{api.StepIdle}, &dao.CompleteByPendingInterval)
 			if len(updated) != 1 {
-				return api.NewError(api.ErrPrevStepStatusDoesNotMatch, "enqueue failed because it is highly probably the step with uuid:%s, is not in a pending state or the record is missing")
+				partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
+					UUIDs:            []string{params.UUID},
+					ReturnAttributes: []string{dao.HeartBeat, dao.StatusOwner, dao.Status, dao.State, dao.Index, dao.RetriesLeft},
+				})
+				if err != nil {
+					return fmt.Errorf("failed to do step when investigating a failed enqueue: %w", err)
+				}
+				if len(partialSteps) != 1 {
+					panic("only 1 record expected on search for uuid in do step failed enqueue investigation")
+				}
+				partialStepRecord := &partialSteps[0]
+				if partialStepRecord.StatusOwner != params.StatusOwner || (partialStepRecord.Status != api.StepPending && partialStepRecord.Status != api.StepInProgress) {
+					return api.NewError(api.ErrPrevStepStatusDoesNotMatch, "enqueue failed because it is highly probably the step with uuid:%s, is not in a pending state or the record is missing")
+				}
+				owner = dao.UUIDAndStatusOwner{
+					UUID:        params.UUID,
+					StatusOwner: params.StatusOwner,
+				}
+				toEnqueue = false
+				return nil
 			}
 			owner = updated[0]
 			return nil
@@ -409,9 +429,11 @@ func doStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, erro
 		} else if tErr != nil {
 			panic(tErr)
 		}
-		err := Enqueue((*DoWork)(&params.UUID))
-		if err != nil {
-			return nil, fmt.Errorf("failed to equeue step:%w", err)
+		if toEnqueue {
+			err := Enqueue((*DoWork)(&params.UUID))
+			if err != nil {
+				return nil, fmt.Errorf("failed to equeue step:%w", err)
+			}
 		}
 		return &api.DoStepResult{StatusOwner: owner.StatusOwner}, nil
 	}

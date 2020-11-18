@@ -371,6 +371,21 @@ BreakOut:
 				return
 			}
 		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
+			statusOwner := "allTestOwner"
+			response, err := client.RemoteDoStep(&api.DoStepParams{
+				UUID:        stepUUIDs[0],
+				StatusOwner: statusOwner,
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if response.StatusOwner != statusOwner {
+				t.Error(fmt.Sprintf("status owner should be: %s, got %s", statusOwner, response.StatusOwner))
+				return
+			}
+		})
 		waitForQueuesToFinish()
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
