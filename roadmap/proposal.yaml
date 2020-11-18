@@ -28,14 +28,14 @@ steps:
         timeout: 60 #seconds
         method: GET
         url: >
-          {{ env.flow}}/send-emails/path_1_step_1
+          {{ input.env.flow}}/send-emails/path_1_step_1
         headers:
           authorization:
             - >
-              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+              {{ base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) }}
           tenant:
             - >
-              {{ context["tenant"] }}
+              {{ input.context["tenant"] }}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
   - name: "Path 1 Step 1: role A"
@@ -54,7 +54,7 @@ steps:
       options:
         - then:
             set-result: >
-              {"status":{{ context["status"]}}}
+              {"status":{{ input.context["status"]}}}
     on:
       pre-do: #important to note that pre-do is decided before locking the step into one execution of DO (i.e. in-progress status)
         decisions:
@@ -64,21 +64,21 @@ steps:
               step_input:=request["data"]["status"]
         rules:
           - if: >
-              result{decision["check_access"]["result"]=="denied"}
+              result{input.decision["check_access"]["result"]=="denied"}
             then:
               error:
                 code: 403
                 message: "access denied"
                 data: >
-                  {{ decision["check_access"]["result"]}}
+                  {{ input.decision["check_access"]["result"]}}
           - if: >
-              result{decision["check_valid_input"]["result"]!="valid"}
+              result{input.decision["check_valid_input"]["result"]!="valid"}
             then:
               error:
                 code: 400
                 message: "invalid input"
                 data: >
-                  {{ decision["check_valid_input"]["result"]}}
+                  {{ input.decision["check_valid_input"]["result"]}}
       pre-done:
         decisions:
           - label: decision_step
@@ -86,12 +86,12 @@ steps:
               step_status:=label["status"]
         rules:
           - if: >
-              result{decision["decision_step"]["result"]="approved"}
+              result{input.decision["decision_step"]["result"]="approved"}
             then:
               do:
                 - label: path_1_step_2_email
                   context: >
-                    {{ object.union(context,{"step":"path_1_step_2"}) }}
+                    {{ object.union(input.context,{"step":"path_1_step_2"}) }}
           - then:
               do:
                 - label: report_run_result
@@ -108,14 +108,14 @@ steps:
         timeout: 60
         method: GET
         url: >
-          {{ env.flow}}/send-emails/path_1_step_2
+          {{ input.env.flow}}/send-emails/path_1_step_2
         headers:
           authorization:
             - >
-              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+              {{ base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) }}
           tenant:
             - >
-              {{ context["tenant"] }}
+              {{ input.context["tenant"] }}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
   - name: "Path 1 Step 2: role B"
@@ -134,7 +134,7 @@ steps:
       options:
         - then:
             set-result: >
-              {"status":{{ context["status"]}}}
+              {"status":{{ input.context["status"]}}}
     on:
       pre-do:
         decisions:
@@ -144,21 +144,21 @@ steps:
               step_input:=request["data"]["status"]
         rules:
           - if: >
-              result{decision["check_access"]["result"]=="denied"}
+              result{input.decision["check_access"]["result"]=="denied"}
             then:
               error:
                 code: 403
                 message: "access denied"
                 data: >
-                  {{ decision["check_access"]["result"]}}
+                  {{ input.decision["check_access"]["result"]}}
           - if: >
-              result{decision["check_valid_input"]["result"]!="valid"}
+              result{input.decision["check_valid_input"]["result"]!="valid"}
             then:
               error:
                 code: 400
                 message: "invalid input"
                 data: >
-                  {{ decision["check_valid_input"]["result"]}}
+                  {{ input.decision["check_valid_input"]["result"]}}
       pre-done:
         decisions:
           - label: decision_step
@@ -166,7 +166,7 @@ steps:
               step_status:=label["status"]
         rules:
           - if: >
-              result{decision["decision_step"]["result"]="approved"}
+              result{input.decision["decision_step"]["result"]="approved"}
             then:
               do:
                 - label: check_resolution
@@ -191,15 +191,15 @@ steps:
         rules:
           - if: >
               result{
-                decision["decision_resolution"]["result"]=="approved"
+                input.decision["decision_resolution"]["result"]=="approved"
               } else {
-                decision["decision_resolution"]["result"]=="declined"
+                input.decision["decision_resolution"]["result"]=="declined"
               }
             then:
               do:
                 - label: report_run_result
                   context: >
-                    { "result": {{ decision["decision_resolution"]["result"] }} }
+                    { "result": {{ input.decision["decision_resolution"]["result"] }} }
           - then:
               abort: true #don't continue to "do"
   - name: Report Run Result
@@ -209,35 +209,35 @@ steps:
       options:
         method: POST
         url: >
-          {{ env.rulengine}}/re_notification
+          {{ input.env.rulengine}}/re_notification
         body: >
-          { "result": {{ context["result"] }} }
+          { "result": {{ input.context["result"] }} }
         headers:
           authorization:
             - >
-              {{ base64.encode(concat("privilegedUser:",  vault["privilegedUser path"])) }}
+              {{ base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) }}
           tenant:
             - >
-              {{ context["tenant"] }}
+              {{ input.context["tenant"] }}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
     on:
       pre-done:
         rules:
           - if: >
-              result{label["report_run_result"]["status"]!=200}
+              result{input.label["report_run_result"]["status"]!=200}
             then:
               set-run-status: done
               error:
                 code: 500
                 message: "failed"
                 data: >
-                  {{ label["report_run_result"]["status"] }}
+                  {{ input.label["report_run_result"]["status"] }}
           - then:
               set: # record this status in the step. label["report_run_result"]["kv"]["result"]
                 - key: result
                   value: >
-                    {{ context["result"] }}
+                    {{ input.context["result"] }}
               set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are descarded.
 
 #---------------------------------------------------------
@@ -247,12 +247,12 @@ decisions:
     rules:
       - if: >
           allowed-roles{context["roles"][_]==tags["allowed-approval"][_]}
-          result{v:=["approve","decline"];context["status"]=v[_];not allowed-roles}
+          result{v:=["approve","decline"];input.context["status"]=v[_];not allowed-roles}
         then:
           result: denied
       - if: >
           allowed-roles{context["roles"][_]==tags["allowed-skipped"][_]}
-          result{context["status"]="skipped";not allowed-roles}
+          result{input.context["status"]="skipped";not allowed-roles}
         then:
           result: denied
   - name: check valid input
@@ -270,11 +270,11 @@ decisions:
         type: flow_status
     rules: # the IFs are first one true. we stop.
       - if: >
-          result{v:=["skipped","approved"];step_status=v[_]}
+          result{v:=["skipped","approved"];input.step_status=v[_]}
         then:
           result: approved
       - if: >
-          result{step_status="declined"}
+          result{input.step_status="declined"}
         then:
           result: declined
   - name: check run has resolution
@@ -310,27 +310,27 @@ decisions:
       - if: >
           result{
             v:=["skipped","approved"]
-            path_1_step_1_decision["result"]=v[_]
-            path_1_step_2_decision["result"]=v[_]
-            path_2_step_1_decision["result"]=v[_]
-            path_2_step_2_decision["result"]=v[_]
+            input.path_1_step_1_decision["result"]=v[_]
+            input.path_1_step_2_decision["result"]=v[_]
+            input.path_2_step_1_decision["result"]=v[_]
+            input.path_2_step_2_decision["result"]=v[_]
           }
         then:
           result: approved
       - if: >
-          result{path_1_step_1_decision="declined"}
+          result{input.path_1_step_1_decision="declined"}
         then:
           result: declined
       - if: >
-          result{path_1_step_2_decision="declined"}
+          result{input.path_1_step_2_decision="declined"}
         then:
           result: declined
       - if: >
-          result{path_2_step_1_decision="declined"}
+          result{input.path_2_step_1_decision="declined"}
         then:
           result: declined
       - if: >
-          result{path_2_step_2_decision="declined"}
+          result{input.path_2_step_2_decision="declined"}
         then:
           result: declined
 concepts: # int64, float64 and string, bool are reserved and need not specified.
@@ -339,7 +339,7 @@ concepts: # int64, float64 and string, bool are reserved and need not specified.
     validations:
       - >
         default result=false
-        result{flow_status=="skipped"}else{flow_status=="approved"}else{flow_status=="declined"}
+        result{input.flow_status=="skipped"}else{input.flow_status=="approved"}else{input.flow_status=="declined"}
 
 # notes:
 # * as a convinience a response body is first attempted to be converted to a json. if it does not succeed it is stored as a string in the ["result"]["body"]

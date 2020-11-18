@@ -37,6 +37,11 @@ const (
 	DefaultMaxResponseBodyBytes   = 256 * 1024
 )
 
+type DoubleCurlyToken struct {
+	Start int
+	End   int
+}
+
 type StepStateRest struct {
 	Body         interface{}         `json:"body,omitempty" mapstructure:"body" yaml:"body,omitempty"`
 	ContentType  string              `json:"content-type,omitempty" mapstructure:"content-type" yaml:"content-type,omitempty"`
@@ -134,4 +139,48 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 	}
 
 	return &newState, nil
+}
+
+func DoubleCurlyBracesTokenize(s string) (result []DoubleCurlyToken) {
+	c := 0
+	d := 0
+	start := -1
+	end := -1
+	for i := 0; i < len(s); i++ {
+		if start == -1 {
+			if d == 1 && s[i] == '{' {
+				d = 0
+				start = i + 1
+				if start >= len(s) {
+					return
+				}
+			} else if s[i] == '{' {
+				d++
+				continue
+			}
+			d = 0
+			continue
+		} else {
+			if s[i] == '{' {
+				d = 0
+				c++
+			} else if c > 0 && s[i] == '}' {
+				d = 0
+				c--
+			} else if d == 1 && s[i] == '}' {
+				d = 0
+				end = i - 1
+				result = append(result, DoubleCurlyToken{
+					Start: start,
+					End:   end,
+				})
+				break
+			} else if s[i] == '}' {
+				d++
+				continue
+			}
+			d = 0
+		}
+	}
+	return
 }

@@ -17,6 +17,7 @@
 package test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
@@ -27,6 +28,7 @@ import (
 	"github.com/fortify500/stepsman/serve"
 	"github.com/gobs/args"
 	"github.com/google/uuid"
+	"github.com/open-policy-agent/opa/rego"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -41,6 +43,58 @@ func setup() {
 }
 func teardown() {
 }
+func TestParsing(t *testing.T) {
+	s := "hello {{input.context[\"status\"]}}"
+	tokens := bl.DoubleCurlyBracesTokenize(s)
+	if len(tokens) != 1 {
+		t.Error("failed to parse double curly braces - len")
+	}
+	token := tokens[0]
+	fmt.Println(fmt.Sprintf("token[%d:%d]:%s", token.Start, token.End, s[token.Start:token.End]))
+	if token.Start != 8 || token.End != 31 {
+		t.Error("failed to parse double curly braces")
+		return
+	}
+
+	input := map[string]interface{}{
+		"context": map[string]interface{}{
+			"status": "in-progress",
+		},
+	}
+	query, err := rego.New(
+		rego.Query(fmt.Sprintf("data.s%d.result", 1)),
+		rego.Module(fmt.Sprintf("s%d", 1), fmt.Sprintf("package s%d\n%s", 1, "result{input.context[\"status\"]=\"in-progress\"}")),
+	).PrepareForEval(context.Background())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	eval, err := query.Eval(context.Background(), rego.EvalInput(input))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	for _, result := range eval {
+		fmt.Println(result)
+	}
+	query, err = rego.New(
+		rego.Query(s[token.Start:token.End]),
+	).PrepareForEval(context.Background())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	eval, err = query.Eval(context.Background(), rego.EvalInput(input))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	for _, result := range eval {
+		fmt.Println(result)
+	}
+}
+
 func TestLocal(t *testing.T) {
 	var createdRunId string
 	var createdRunIdStepUUID string

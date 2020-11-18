@@ -25,6 +25,7 @@ require (
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-sqlite3 v1.14.4
 	github.com/mitchellh/mapstructure v1.3.3
+	github.com/open-policy-agent/opa v0.24.0
 	github.com/osamingo/jsonrpc v0.0.0-20200219081550-352acaa9f2b2
 	github.com/pelletier/go-toml v1.8.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
