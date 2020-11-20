@@ -145,30 +145,56 @@ func (h CreateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 			}
 			key = random.String()
 		}
-		var md mapstructure.Metadata
 		var template bl.Template
-		decoder, err := mapstructure.NewDecoder(
-			&mapstructure.DecoderConfig{
-				Metadata: &md,
-				Result:   &template,
-			})
-		if err != nil {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInternal,
-				Message: err.Error(),
-			}
-		}
-		err = decoder.Decode(p.Template)
-		if err != nil {
+		var isString bool
+		isYaml := false
+		if strings.EqualFold(p.TemplateType, "yaml") {
+			isYaml = true
+		} else if p.TemplateType != "" && !strings.EqualFold(p.TemplateType, "json") {
 			return &jsonrpc.Error{
 				Code:    jsonrpc.ErrorCodeInvalidParams,
-				Message: err.Error(),
+				Message: "template-type must be either empty (=json), json or yaml",
 			}
 		}
-		if len(md.Unused) > 0 {
+		switch p.Template.(type) {
+		case string:
+			isString = true
+		}
+		if isString {
+			err := template.LoadFromBytes(isYaml, []byte(p.Template.(string)))
+			if err != nil {
+				return resolveError(err)
+			}
+		} else if isYaml {
 			return &jsonrpc.Error{
 				Code:    jsonrpc.ErrorCodeInvalidParams,
-				Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
+				Message: "specified template-type is yaml but template type is not string",
+			}
+		} else {
+			var md mapstructure.Metadata
+			decoder, err := mapstructure.NewDecoder(
+				&mapstructure.DecoderConfig{
+					Metadata: &md,
+					Result:   &template,
+				})
+			if err != nil {
+				return &jsonrpc.Error{
+					Code:    jsonrpc.ErrorCodeInternal,
+					Message: err.Error(),
+				}
+			}
+			err = decoder.Decode(p.Template)
+			if err != nil {
+				return &jsonrpc.Error{
+					Code:    jsonrpc.ErrorCodeInvalidParams,
+					Message: err.Error(),
+				}
+			}
+			if len(md.Unused) > 0 {
+				return &jsonrpc.Error{
+					Code:    jsonrpc.ErrorCodeInvalidParams,
+					Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
+				}
 			}
 		}
 		run, err := template.CreateRun(key)

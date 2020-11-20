@@ -46,7 +46,7 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		runId, err := t.Start(Parameters.RunKey, Parameters.CreateFileName)
+		runId, err := t.Start(Parameters.RunKey, Parameters.CreateFileName, Parameters.FileType)
 		if err != nil {
 			msg := "failed to create run"
 			Parameters.Err = &Error{
@@ -66,6 +66,7 @@ var createRunParams AllParameters
 func syncCreateRunParams() {
 	Parameters.RunKey = createRunParams.RunKey
 	Parameters.CreateFileName = createRunParams.CreateFileName
+	Parameters.FileType = createRunParams.FileType
 }
 func init() {
 	createCmd.AddCommand(createRunCmd)
@@ -76,6 +77,7 @@ func init() {
 			panic(err)
 		}
 		createRunCmd.Flags().StringVarP(&createRunParams.RunKey, "key", "k", random.String(), "Run unique key. If omitted a random uuid will be used")
+		createRunCmd.Flags().StringVarP(&createRunParams.FileType, "type", "t", random.String(), "File type. Supports: JSON, YAML.")
 		createRunCmd.Flags().StringVarP(&createRunParams.CreateFileName, "file", "f", "", "Template file (yaml) to create run")
 		err = createRunCmd.MarkFlagRequired("file")
 		return err

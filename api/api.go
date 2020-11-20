@@ -100,8 +100,9 @@ type UpdateRunResult struct{}
 
 type CreateRunsResult RunRecord
 type CreateRunParams struct {
-	Key      string      `json:"key,omitempty"`
-	Template interface{} `json:"template,omitempty"`
+	Key          string      `json:"key,omitempty"`
+	Template     interface{} `json:"template,omitempty"`
+	TemplateType string      `json:"template-type,omitempty"`
 }
 
 type ListStepsResult struct {

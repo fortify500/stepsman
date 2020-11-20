@@ -17,6 +17,7 @@
 package test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -44,18 +45,30 @@ func setup() {
 func teardown() {
 }
 func TestParsing(t *testing.T) {
-	s := "hello {{input.context[\"status\"]}}"
-	tokens := bl.DoubleCurlyBracesTokenize(s)
-	if len(tokens) != 1 {
+	s := "hello {%input.context[\"status\"]%} d\\%\\}d {{%input.context[\"status\"]%}}"
+	var tokens []bl.DoubleCurlyToken
+	tokens, s = bl.TokenizeCurlyPercent(s)
+	if len(tokens) != 2 {
 		t.Error("failed to parse double curly braces - len")
 	}
+
+	if len(tokens) > 0 {
+		var buffer bytes.Buffer
+		tokenEnd := 0
+		for i, token := range tokens {
+			buffer.WriteString(s[tokenEnd : token.Start-2])
+			tokenEnd = token.End + 2
+			buffer.WriteString(fmt.Sprintf("%d", i))
+			fmt.Println(fmt.Sprintf("token[%d:%d]:%s", token.Start, token.End, s[token.Start:token.End]))
+		}
+		buffer.WriteString(s[tokens[len(tokens)-1].End+2:])
+		fmt.Println(buffer.String())
+	}
 	token := tokens[0]
-	fmt.Println(fmt.Sprintf("token[%d:%d]:%s", token.Start, token.End, s[token.Start:token.End]))
 	if token.Start != 8 || token.End != 31 {
 		t.Error("failed to parse double curly braces")
 		return
 	}
-
 	input := map[string]interface{}{
 		"context": map[string]interface{}{
 			"status": "in-progress",

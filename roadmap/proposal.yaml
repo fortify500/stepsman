@@ -28,14 +28,14 @@ steps:
         timeout: 60 #seconds
         method: GET
         url: >
-          {{ input.env.flow}}/send-emails/path_1_step_1
+          {% input.env.flow%}/send-emails/path_1_step_1
         headers:
           authorization:
             - >
-              {{ base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) }}
+              {% base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) %}
           tenant:
             - >
-              {{ input.context["tenant"] }}
+              {% input.context["tenant"] %}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
   - name: "Path 1 Step 1: role A"
@@ -54,7 +54,7 @@ steps:
       options:
         - then:
             set-result: >
-              {"status":{{ input.context["status"]}}}
+              {"status":{% input.context["status"]%}}
     on:
       pre-do: #important to note that pre-do is decided before locking the step into one execution of DO (i.e. in-progress status)
         decisions:
@@ -70,7 +70,7 @@ steps:
                 code: 403
                 message: "access denied"
                 data: >
-                  {{ input.decision["check_access"]["result"]}}
+                  {% input.decision["check_access"]["result"]%}
           - if: >
               result{input.decision["check_valid_input"]["result"]!="valid"}
             then:
@@ -78,7 +78,7 @@ steps:
                 code: 400
                 message: "invalid input"
                 data: >
-                  {{ input.decision["check_valid_input"]["result"]}}
+                  {% input.decision["check_valid_input"]["result"]%}
       pre-done:
         decisions:
           - label: decision_step
@@ -91,7 +91,7 @@ steps:
               do:
                 - label: path_1_step_2_email
                   context: >
-                    {{ object.union(input.context,{"step":"path_1_step_2"}) }}
+                    {% object.union(input.context,{"step":"path_1_step_2"}) %}
           - then:
               do:
                 - label: report_run_result
@@ -108,14 +108,14 @@ steps:
         timeout: 60
         method: GET
         url: >
-          {{ input.env.flow}}/send-emails/path_1_step_2
+          {% input.env.flow %}/send-emails/path_1_step_2
         headers:
           authorization:
             - >
-              {{ base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) }}
+              {% base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) %}
           tenant:
             - >
-              {{ input.context["tenant"] }}
+              {% input.context["tenant"] %}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
   - name: "Path 1 Step 2: role B"
@@ -134,7 +134,7 @@ steps:
       options:
         - then:
             set-result: >
-              {"status":{{ input.context["status"]}}}
+              {"status":{% input.context["status"]%}}
     on:
       pre-do:
         decisions:
@@ -150,7 +150,7 @@ steps:
                 code: 403
                 message: "access denied"
                 data: >
-                  {{ input.decision["check_access"]["result"]}}
+                  {% input.decision["check_access"]["result"]%}
           - if: >
               result{input.decision["check_valid_input"]["result"]!="valid"}
             then:
@@ -158,7 +158,7 @@ steps:
                 code: 400
                 message: "invalid input"
                 data: >
-                  {{ input.decision["check_valid_input"]["result"]}}
+                  {% input.decision["check_valid_input"]["result"] %}
       pre-done:
         decisions:
           - label: decision_step
@@ -199,7 +199,7 @@ steps:
               do:
                 - label: report_run_result
                   context: >
-                    { "result": {{ input.decision["decision_resolution"]["result"] }} }
+                    { "result": {% input.decision["decision_resolution"]["result"] %} }
           - then:
               abort: true #don't continue to "do"
   - name: Report Run Result
@@ -209,16 +209,16 @@ steps:
       options:
         method: POST
         url: >
-          {{ input.env.rulengine}}/re_notification
+          {% input.env.rulengine%}/re_notification
         body: >
-          { "result": {{ input.context["result"] }} }
+          { "result": {% input.context["result"] %} }
         headers:
           authorization:
             - >
-              {{ base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) }}
+              {% base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) %}
           tenant:
             - >
-              {{ input.context["tenant"] }}
+              {% input.context["tenant"] %}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
     on:
@@ -232,12 +232,12 @@ steps:
                 code: 500
                 message: "failed"
                 data: >
-                  {{ input.label["report_run_result"]["status"] }}
+                  {% input.label["report_run_result"]["status"] %}
           - then:
               set: # record this status in the step. label["report_run_result"]["kv"]["result"]
                 - key: result
                   value: >
-                    {{ input.context["result"] }}
+                    {% input.context["result"] %}
               set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are descarded.
 
 #---------------------------------------------------------

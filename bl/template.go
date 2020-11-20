@@ -127,12 +127,16 @@ func (t *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	return nil
 }
 
-func (t *Template) Start(key string, fileName string) (string, error) {
+func (t *Template) Start(key string, fileName string, fileType string) (string, error) {
 	yamlDocument, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
-	err = t.LoadFromBytes(true, yamlDocument)
+	isYaml := true
+	if strings.EqualFold(fileType, "json") {
+		isYaml = false
+	}
+	err = t.LoadFromBytes(isYaml, yamlDocument)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
 	}

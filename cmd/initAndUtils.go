@@ -70,6 +70,7 @@ type AllParameters struct {
 	DatabasePassword    string
 	DatabaseSchema      string
 	CreateFileName      string
+	FileType            string
 	RunKey              string
 	ServerPort          int64
 	ServerHealthPort    int64
