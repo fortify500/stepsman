@@ -42,7 +42,7 @@ func RecoveryScheduler() {
 		var interval time.Duration
 		if first {
 			first = false
-			if !dao.IsSqlite() {
+			if !IsSqlite() {
 				interval = time.Duration(60)*time.Second + time.Duration(rand.Intn(2*60))*time.Second
 			} else {
 				interval = time.Duration(5) * time.Second
@@ -65,7 +65,7 @@ func RecoveryScheduler() {
 				if err != nil {
 					panic(err)
 				}
-				if dao.IsPostgreSQL() {
+				if IsPostgreSQL() {
 					dao.DB.Notify(tx, RecoveryChannelName, string(msg))
 				}
 				stepsUUIDs = dao.DB.RecoverSteps(tx)

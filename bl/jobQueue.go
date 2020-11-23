@@ -19,7 +19,6 @@ package bl
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
 	"runtime/debug"
@@ -114,7 +113,7 @@ func startWorkers() {
 }
 func startWorkLoop() {
 	startWorkers()
-	if dao.IsPostgreSQL() {
+	if IsPostgreSQL() {
 		go StartRecoveryListening()
 	}
 	go RecoveryScheduler()

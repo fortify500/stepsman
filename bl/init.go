@@ -27,6 +27,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
+	"strings"
+	"sync"
 )
 
 var (
@@ -37,12 +39,36 @@ var (
 	JobQueueNumberOfWorkers  = 5000
 	JobQueueMemoryQueueLimit = 1 * 1000 * 1000
 )
+var Parameters dao.ParametersType
+var parametersMu sync.RWMutex
 
+func IsPostgreSQL() bool {
+	parametersMu.RLock()
+	defer parametersMu.RUnlock()
+	switch strings.TrimSpace(Parameters.DatabaseVendor) {
+	case "postgresql":
+		return true
+	}
+	return false
+}
+func IsSqlite() bool {
+	parametersMu.RLock()
+	defer parametersMu.RUnlock()
+	switch strings.TrimSpace(Parameters.DatabaseVendor) {
+	case "sqlite":
+		return true
+	}
+	return false
+}
 func InitBL(daoParameters *dao.ParametersType) error {
 	err := dao.InitDAO(daoParameters)
 	if err != nil {
 		return err
 	}
+	parametersMu.Lock()
+	Parameters = *daoParameters
+	parametersMu.Unlock()
+
 	if !dao.IsRemote {
 		err = MigrateDB(daoParameters.DatabaseAutoMigrate)
 		if err != nil {

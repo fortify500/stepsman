@@ -67,20 +67,6 @@ type DBI interface {
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
 
-func IsPostgreSQL() bool {
-	switch DB.(type) {
-	case *PostgreSQLSqlxDB:
-		return true
-	}
-	return false
-}
-func IsSqlite() bool {
-	switch DB.(type) {
-	case *Sqlite3SqlxDB:
-		return true
-	}
-	return false
-}
 func OpenDatabase(databaseVendor string, dataSourceName string) error {
 	var err error
 	var internalDriverName string
