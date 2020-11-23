@@ -17,10 +17,8 @@
 package dao
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -75,6 +73,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	                                 heartbeat TIMESTAMP NOT NULL,
 									 complete_by TIMESTAMP NULL,
 									 retries_left INTEGER NOT NULL,
+									 context TEXT NOT NULL, 
 	                                 state text,
 	                                 PRIMARY KEY (run_id, "index")
                                      )`)
@@ -92,121 +91,12 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:state)"
+	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state)"
 	if _, err := tx.NamedExec(query, stepRecord); err != nil {
 		panic(err)
 	}
 }
 
-func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, _ *int64) []UUIDAndStatusOwner {
-	var result []UUIDAndStatusOwner
-	for _, stepUUID := range uuids {
-		var err error
-		statusOwner := newStatusOwner
-		if statusOwner == "" {
-			var uuid4 uuid.UUID
-			uuid4, err = uuid.NewRandom()
-			if err != nil {
-				panic(fmt.Errorf("failed to generate uuid: %w", err))
-			}
-			statusOwner = uuid4.String()
-		}
-		var res sql.Result
-		if len(prevStatus) == 1 {
-			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_owner=$2 where uuid=$3 and status=$4", newStatus, statusOwner, stepUUID, prevStatus[0])
-		} else {
-			res, err = tx.Exec("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_owner=$2 where uuid=$3", newStatus, statusOwner, stepUUID)
-		}
-		if err != nil {
-			panic(err)
-		}
-		var affected int64
-		affected, err = res.RowsAffected()
-		if err != nil {
-			panic(err)
-		}
-		if affected == 1 {
-			result = append(result, UUIDAndStatusOwner{
-				UUID:        stepUUID,
-				StatusOwner: statusOwner,
-			})
-		}
-	}
-	return result
-}
-
-func (db *Sqlite3SqlxDB) UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, _ *int64, retriesLeft *int) []UUIDAndStatusOwner {
-	var result []UUIDAndStatusOwner
-	for _, index := range indices {
-		var err error
-		statusOwner := newStatusOwner
-		if statusOwner == "" {
-			var uuid4 uuid.UUID
-			uuid4, err = uuid.NewRandom()
-			if err != nil {
-				panic(fmt.Errorf("failed to generate uuid: %w", err))
-			}
-			statusOwner = uuid4.String()
-		}
-		var res sql.Result
-		var setRetriesLeftStr string
-		if retriesLeft != nil {
-			setRetriesLeftStr = fmt.Sprintf(", retries_left=%d", *retriesLeft)
-		}
-		if len(prevStatus) == 1 {
-			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_owner=$2%s where run_id=$3 and \"index\"=$4 and status=$5", setRetriesLeftStr), newStatus, statusOwner, runId, index, prevStatus[0])
-		} else {
-			res, err = tx.Exec(fmt.Sprintf("update steps set status=$1, heartbeat=CURRENT_TIMESTAMP, status_owner=$2%s where run_id=$3 and \"index\"=$4", setRetriesLeftStr), newStatus, statusOwner, runId, index)
-		}
-		if err != nil {
-			panic(err)
-		}
-		var affected int64
-		affected, err = res.RowsAffected()
-		if err != nil {
-			panic(err)
-		}
-		if affected == 1 {
-			var partialStep *api.StepRecord
-			partialStep, err = GetStepTx(tx, runId, index, []string{UUID})
-			if err != nil {
-				panic(err)
-			}
-			result = append(result, UUIDAndStatusOwner{
-				UUID:        partialStep.UUID,
-				StatusOwner: statusOwner,
-			})
-		}
-	}
-	return result
-}
-
-func (db *Sqlite3SqlxDB) UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, newState string, _ *int64, retriesLeft *int) string {
-	var err error
-	statusOwner := newStatusOwner
-	if statusOwner == "" {
-		var uuid4 uuid.UUID
-		uuid4, err = uuid.NewRandom()
-		if err != nil {
-			panic(fmt.Errorf("failed to generate uuid: %w", err))
-		}
-		statusOwner = uuid4.String()
-	}
-	var setRetriesLeftStr string
-	if retriesLeft != nil {
-		setRetriesLeftStr = fmt.Sprintf(", retries_left=%d", *retriesLeft)
-	}
-	res, err := tx.Exec(fmt.Sprintf("update steps set status=$1, state=$2, heartbeat=CURRENT_TIMESTAMP, status_owner=$3%s where run_id=$4 and \"index\"=$5", setRetriesLeftStr), newStatus, newState, statusOwner, runId, index)
-	if err != nil {
-		panic(err)
-	}
-	var affected int64
-	affected, err = res.RowsAffected()
-	if err != nil {
-		panic(err)
-	}
-	if affected != 1 {
-		panic(fmt.Errorf("illegal state, cannot retrieve more than 1 step row for update"))
-	}
-	return statusOwner
+func (db *Sqlite3SqlxDB) completeByUpdateStatement(completeBy *int64) string {
+	return fmt.Sprintf(",complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')", *completeBy)
 }

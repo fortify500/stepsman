@@ -18,6 +18,7 @@ package api
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"github.com/osamingo/jsonrpc"
@@ -121,8 +122,9 @@ type UpdateStepParams UpdateQuery
 type UpdateStepResult struct{}
 
 type DoStepParams struct {
-	UUID        string `json:"uuid,omitempty"`
-	StatusOwner string `json:"status-owner,omitempty"`
+	UUID        string  `json:"uuid,omitempty"`
+	Context     Context `json:"context,omitempty"`
+	StatusOwner string  `json:"status-owner,omitempty"`
 }
 type DoStepResult struct {
 	StatusOwner string `json:"status-owner,omitempty"`
@@ -258,6 +260,19 @@ func (a *AnyTime) UnmarshalJSON(data []byte) error {
 	*a = AnyTime(parsedTime)
 	return nil
 }
+func (c Context) Value() (driver.Value, error) {
+	if marshal, err := json.Marshal(c); err != nil {
+		return nil, err
+	} else {
+		return marshal, nil
+	}
+}
+func (c *Context) Scan(src interface{}) error {
+	if err := json.Unmarshal(src.([]byte), c); err != nil {
+		return err
+	}
+	return nil
+}
 
 func (a *AnyTime) Scan(src interface{}) error {
 	var err error
@@ -288,6 +303,7 @@ const (
 )
 
 type AnyTime time.Time
+type Context map[string]interface{}
 type StepRecord struct {
 	RunId       string         `db:"run_id" json:"run-id,omitempty"`
 	Index       int64          `db:"index" json:"index,omitempty"`
@@ -299,6 +315,7 @@ type StepRecord struct {
 	Now         AnyTime        `db:"now" json:"now,omitempty"`
 	Heartbeat   AnyTime        `json:"heartbeat,omitempty"`
 	CompleteBy  *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`
+	Context     Context        `db:"context" json:"context,omitempty"`
 	RetriesLeft int            `db:"retries_left" json:"retries-left,omitempty"`
 	State       string         `json:"state,omitempty"`
 }
@@ -415,10 +432,13 @@ var ErrJobQueueUnavailable = &ErrorCode{
 	Code:    1008,
 	Message: "job queue may be full or unresponsive",
 }
-
 var ErrStepNoRetriesLeft = &ErrorCode{
 	Code:    1009,
 	Message: "step status cannot be changed to in progress because no retries are left",
+}
+var ErrTemplateEvaluationFailed = &ErrorCode{
+	Code:    1010,
+	Message: "failed to evaluate a template expression",
 }
 
 type ErrorCaller struct {

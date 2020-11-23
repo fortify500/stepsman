@@ -80,6 +80,7 @@ type AllParameters struct {
 	Status              string
 	Force               bool
 	StatusOwner         string
+	Context             string
 	//ListQuery
 	RangeStart       int64
 	RangeEnd         int64

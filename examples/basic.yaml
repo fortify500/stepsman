@@ -22,7 +22,7 @@ steps:
               do:
                 - label: finishing
                   context: >
-                    { "result": "finish"}
+                    { "result": "finish", "title": "{% input.template.title %}"}
   - name: "Finishing" # mandatory
     description: > # optional
       example for a rest call 2

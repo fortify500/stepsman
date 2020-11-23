@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
@@ -42,9 +43,16 @@ Use do step <step uuid>.`,
 		if Parameters.StatusOwner != "" {
 			statusOwner = Parameters.StatusOwner
 		}
+		var stepContext api.Context
+		err = json.Unmarshal([]byte(Parameters.Context), &stepContext)
+		if err != nil {
+			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
+			return
+		}
 		var doStepResult *api.DoStepResult
 		doStepResult, err = bl.DoStep(&api.DoStepParams{
 			UUID:        stepUUID,
+			Context:     stepContext,
 			StatusOwner: statusOwner,
 		}, true)
 		if err != nil {
@@ -81,12 +89,14 @@ var doStepParams AllParameters
 
 func syncDoStepParams() {
 	Parameters.StatusOwner = doStepParams.Step
+	Parameters.Context = doStepParams.Context
 }
 func init() {
 	doCmd.AddCommand(doRunCmd)
 	initFlags := func() error {
 		doRunCmd.ResetFlags()
 		doRunCmd.Flags().StringVarP(&doStepParams.StatusOwner, "step-owner", "s", "", "Step Owner - to prevent do step contentions and duplicate calls, a step owner will allow duplicate calls and behave as the first call")
+		doRunCmd.Flags().StringVarP(&doStepParams.Context, "context", "e", "{}", "step do context which will be available in {% %} or rego code")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

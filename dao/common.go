@@ -17,6 +17,8 @@
 package dao
 
 import (
+	"bytes"
+	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
@@ -60,9 +62,7 @@ type DBI interface {
 	VerifyDBCreation(tx *sqlx.Tx) error
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
-	UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64) []UUIDAndStatusOwner
-	UpdateManyStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int) []UUIDAndStatusOwner
-	UpdateStepStateAndStatusAndHeartBeatTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, newState string, completeBy *int64, retriesLeft *int) string
+	completeByUpdateStatement(completeBy *int64) string
 	RecoverSteps(tx *sqlx.Tx) []string
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
@@ -222,4 +222,117 @@ func VetIds(ids []string) error {
 		}
 	}
 	return nil
+}
+
+type indicesUUIDs struct {
+	runId string
+	index int64
+	uuid  string
+}
+
+func updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
+	var result []UUIDAndStatusOwner
+	for _, indexOrUUID := range indicesUuids {
+		var err error
+		var toSet []string
+		var where []string
+		var res sql.Result
+		var params []interface{}
+		statusOwner := newStatusOwner
+		if statusOwner == "" {
+			var uuid4 uuid.UUID
+			uuid4, err = uuid.NewRandom()
+			if err != nil {
+				panic(fmt.Errorf("failed to generate uuid: %w", err))
+			}
+			statusOwner = uuid4.String()
+		}
+		toSet = append(toSet, "status")
+		params = append(params, newStatus)
+		toSet = append(toSet, "status_owner")
+		params = append(params, statusOwner)
+
+		if state != nil {
+			toSet = append(toSet, "state")
+			params = append(params, *state)
+		}
+		if context != nil {
+			toSet = append(toSet, "context")
+			params = append(params, context)
+		}
+		if retriesLeft != nil {
+			toSet = append(toSet, "retries_left")
+			params = append(params, *retriesLeft)
+		}
+
+		if indexOrUUID.runId != "" {
+			where = append(where, "run_id")
+			params = append(params, indexOrUUID.runId)
+		}
+		if indexOrUUID.index > 0 {
+			where = append(where, "\"index\"")
+			params = append(params, indexOrUUID.index)
+		}
+		if indexOrUUID.uuid != "" {
+			where = append(where, "uuid")
+			params = append(params, indexOrUUID.uuid)
+		}
+
+		if len(prevStatus) == 1 {
+			where = append(where, "status")
+			params = append(params, prevStatus[0])
+		}
+		var buf bytes.Buffer
+		buf.WriteString("update steps set heartbeat=CURRENT_TIMESTAMP")
+		i := 0
+		for _, s := range toSet {
+			i++
+			buf.WriteString(",")
+			buf.WriteString(s)
+			buf.WriteString(fmt.Sprintf("=$%d", i))
+		}
+		if completeBy != nil {
+			buf.WriteString(DB.completeByUpdateStatement(completeBy))
+		} else {
+			buf.WriteString(",complete_by=null")
+		}
+		buf.WriteString(" where")
+		for j, s := range where {
+			if j > 0 {
+				buf.WriteString(" AND")
+			}
+			i++
+			buf.WriteString(" ")
+			buf.WriteString(s)
+			buf.WriteString(fmt.Sprintf("=$%d", i))
+		}
+		res, err = tx.Exec(buf.String(), params...)
+		if err != nil {
+			panic(err)
+		}
+		var affected int64
+		affected, err = res.RowsAffected()
+		if err != nil {
+			panic(err)
+		}
+		if affected == 1 {
+			var partialStep *api.StepRecord
+			if indexOrUUID.uuid == "" {
+				partialStep, err = GetStepTx(tx, indexOrUUID.runId, indexOrUUID.index, []string{UUID})
+				if err != nil {
+					panic(err)
+				}
+				result = append(result, UUIDAndStatusOwner{
+					UUID:        partialStep.UUID,
+					StatusOwner: statusOwner,
+				})
+			} else {
+				result = append(result, UUIDAndStatusOwner{
+					UUID:        indexOrUUID.uuid,
+					StatusOwner: statusOwner,
+				})
+			}
+		}
+	}
+	return result
 }

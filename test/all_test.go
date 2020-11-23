@@ -29,6 +29,7 @@ import (
 	"github.com/fortify500/stepsman/serve"
 	"github.com/gobs/args"
 	"github.com/google/uuid"
+	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
 	"io/ioutil"
 	"os"
@@ -70,14 +71,22 @@ func TestParsing(t *testing.T) {
 		return
 	}
 	input := map[string]interface{}{
-		"context": map[string]interface{}{
+		"context": api.Context{
 			"status": "in-progress",
 		},
 	}
+	compiler, err := ast.CompileModules(map[string]string{
+		fmt.Sprintf("s%d", 1): fmt.Sprintf("package s%d\n%s", 1, "result{input.context[\"status\"]=\"in-progress\"}"),
+	})
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	query, err := rego.New(
 		rego.Query(fmt.Sprintf("data.s%d.result", 1)),
-		rego.Module(fmt.Sprintf("s%d", 1), fmt.Sprintf("package s%d\n%s", 1, "result{input.context[\"status\"]=\"in-progress\"}")),
+		rego.Compiler(compiler),
 	).PrepareForEval(context.Background())
+
 	if err != nil {
 		t.Error(err)
 		return

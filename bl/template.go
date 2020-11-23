@@ -25,6 +25,8 @@ import (
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
+	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/rego"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net/http"
@@ -37,11 +39,17 @@ const (
 	DoTypeREST DoType = "REST"
 )
 
+type Rego struct {
+	compiler *ast.Compiler
+	input    rego.EvalOption
+}
+
 type Template struct {
 	Title           string `json:"title"`
 	Version         int64  `json:"version"`
 	Steps           []Step `json:"steps"`
 	labelsToIndices map[string]int64
+	rego            Rego
 }
 
 type ThenDo struct {
@@ -127,7 +135,40 @@ func (t *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	return nil
 }
 
-func (t *Template) Start(key string, fileName string, fileType string) (string, error) {
+func (t *Template) RefreshInput() {
+	var err error
+	if t.rego.compiler == nil {
+		t.rego.compiler, err = ast.CompileModules(map[string]string{})
+		if err != nil {
+			panic(err)
+		}
+	}
+	if t.rego.input == nil {
+		input := map[string]interface{}{
+			"template": map[string]interface{}{
+				"title":   t.Title,
+				"version": t.Version,
+			},
+		}
+		for _, step := range t.Steps {
+			input["labels"] = map[string]interface{}{
+				step.Label: map[string]interface{}{},
+			}
+			input["steps"] = map[string]interface{}{
+				step.Label: map[string]interface{}{
+					"name":    step.Name,
+					"retries": step.Retries,
+					"do": map[string]interface{}{
+						"type": step.doType,
+					},
+				},
+			}
+		}
+		t.rego.input = rego.EvalInput(input)
+	}
+}
+
+func (t *Template) LoadAndCreateRun(key string, fileName string, fileType string) (string, error) {
 	yamlDocument, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
@@ -226,4 +267,46 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 		s.doType = doType
 	}
 	return nil
+}
+func (t *Template) ResolveCurlyPercent(str string) (string, error) {
+	var buffer bytes.Buffer
+	tokens, escapedStr := TokenizeCurlyPercent(str)
+	if len(tokens) == 0 {
+		return str, nil
+	}
+	tokenEnd := 0
+	for _, token := range tokens {
+		buffer.WriteString(escapedStr[tokenEnd : token.Start-2])
+		tokenEnd = token.End + 2
+		queryStr := escapedStr[token.Start:token.End]
+		query, err := rego.New(
+			rego.Query(queryStr),
+		).PrepareForEval(ValveCtx)
+		if err != nil {
+			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+		}
+		eval, err := query.Eval(ValveCtx, t.rego.input)
+		if err != nil {
+			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+		}
+		if len(eval) > 0 &&
+			len(eval[0].Expressions) > 0 &&
+			eval[0].Expressions[0].Value != nil {
+			buffer.WriteString(fmt.Sprintf("%v", eval[0].Expressions[0].Value))
+		}
+	}
+	buffer.WriteString(escapedStr[tokenEnd:])
+	return buffer.String(), nil
+}
+func (t *Template) ResolveContext(context string) (api.Context, error) {
+	var result api.Context
+	resolvedContextStr, err := t.ResolveCurlyPercent(context)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal([]byte(resolvedContextStr), &result)
+	if err != nil {
+		panic(err)
+	}
+	return result, nil
 }

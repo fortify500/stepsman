@@ -111,6 +111,8 @@ func UpdateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
 	return tErr
 }
 
+var emptyContext = make(api.Context)
+
 func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 	title := t.Title
 	var runRecord *api.RunRecord
@@ -164,6 +166,7 @@ func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 				Label:       step.Label,
 				Name:        step.Name,
 				State:       "{}",
+				Context:     emptyContext,
 				RetriesLeft: retriesLeft,
 			}
 			dao.DB.CreateStepTx(tx, stepRecord)

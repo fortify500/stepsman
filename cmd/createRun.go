@@ -46,7 +46,7 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		runId, err := t.Start(Parameters.RunKey, Parameters.CreateFileName, Parameters.FileType)
+		runId, err := t.LoadAndCreateRun(Parameters.RunKey, Parameters.CreateFileName, Parameters.FileType)
 		if err != nil {
 			msg := "failed to create run"
 			Parameters.Err = &Error{
