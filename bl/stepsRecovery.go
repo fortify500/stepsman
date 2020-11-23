@@ -37,12 +37,16 @@ type RecoveryMessage struct {
 var reschedule = make(chan struct{})
 var first = true
 
-func recoveryScheduler() {
+func RecoveryScheduler() {
 	for {
 		var interval time.Duration
 		if first {
 			first = false
-			interval = time.Duration(60)*time.Second + time.Duration(rand.Intn(2*60))*time.Second
+			if !dao.IsSqlite() {
+				interval = time.Duration(60)*time.Second + time.Duration(rand.Intn(2*60))*time.Second
+			} else {
+				interval = time.Duration(5) * time.Second
+			}
 		} else {
 			interval = time.Duration(10*60)*time.Second + time.Duration(rand.Intn(10*60))*time.Second
 		}
@@ -61,7 +65,9 @@ func recoveryScheduler() {
 				if err != nil {
 					panic(err)
 				}
-				dao.DB.Notify(tx, RecoveryChannelName, string(msg))
+				if dao.IsPostgreSQL() {
+					dao.DB.Notify(tx, RecoveryChannelName, string(msg))
+				}
 				stepsUUIDs = dao.DB.RecoverSteps(tx)
 				return nil
 			})
@@ -134,7 +140,6 @@ func StartRecoveryListening() {
 			return err
 		})
 	}
-	go recoveryScheduler()
 	for {
 		select {
 		case <-ValveCtx.Done():

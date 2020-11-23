@@ -29,8 +29,28 @@ func (db *Sqlite3SqlxDB) Notify(_ *sqlx.Tx, _ string, _ string) {
 	panic("unsupported operation")
 }
 
-func (db *Sqlite3SqlxDB) RecoverSteps(_ *sqlx.Tx) []string {
-	panic("unsupported operation")
+func (db *Sqlite3SqlxDB) RecoverSteps(tx *sqlx.Tx) []string {
+	result := make([]string, 0)
+	rows, err := tx.Queryx(`select uuid from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds')`)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var step api.StepRecord
+		err = rows.StructScan(&step)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
+		}
+		result = append(result, step.UUID)
+	}
+	_, err = tx.Exec(fmt.Sprintf(`update steps
+		set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')
+		where (run_id,"index") in (select run_id, "index" from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, CompleteByPendingInterval), api.StepPending)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 func (db *Sqlite3SqlxDB) VerifyDBCreation(tx *sqlx.Tx) error {

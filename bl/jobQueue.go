@@ -19,6 +19,7 @@ package bl
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
 	"runtime/debug"
@@ -69,19 +70,6 @@ func QueuesIdle() bool {
 	return false
 }
 
-//func Dequeue() (*DoWork, *api.Error) {
-//	select {
-//	case <-stop:
-//		return nil, api.NewError(api.ErrShuttingDown, "cannot serve from queue, server is shutting down")
-//
-//	case <-valveContext.Done():
-//		return nil, api.NewError(api.ErrShuttingDown, "cannot serve from queue, server is shutting down")
-//	case msg := <-queue:
-//		return msg, nil
-//	}
-//	return nil, api.NewError(api.ErrShuttingDown, "cannot serve from queue, server is shutting down")
-//}
-
 func recoverable(recoverableFunction func() error) {
 	var err error
 	defer func() {
@@ -126,7 +114,10 @@ func startWorkers() {
 }
 func startWorkLoop() {
 	startWorkers()
-	go StartRecoveryListening()
+	if dao.IsPostgreSQL() {
+		go StartRecoveryListening()
+	}
+	go RecoveryScheduler()
 	go func() {
 		defer close(queue)
 		for {
