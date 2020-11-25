@@ -69,7 +69,7 @@ type Range struct {
 type Expression struct {
 	AttributeName string `json:"attribute-name"`
 	Operator      string // =,>=,>,<=,<,starts-with,ends-with,contains
-	Value         string
+	Value         interface{}
 }
 
 type ListQuery struct {
@@ -439,6 +439,10 @@ var ErrStepNoRetriesLeft = &ErrorCode{
 var ErrTemplateEvaluationFailed = &ErrorCode{
 	Code:    1010,
 	Message: "failed to evaluate a template expression",
+}
+var ErrStepDoneCannotBeChanged = &ErrorCode{
+	Code:    1010,
+	Message: "step is already done and we rely on it to not be changed",
 }
 
 type ErrorCaller struct {

@@ -134,10 +134,11 @@ func TestLocal(t *testing.T) {
 		{"get -V %[1]s run %[2]s", false, false},
 		{"get -V %[1]s run %[2]s --only-template-type json", false, false},
 		{"get -V %[1]s step %[3]s", false, false},
-		{`update -V %[1]s step %[3]s -s "Done"`, false, false},
+		{`update -V %[1]s step %[3]s -s "Failed"`, false, false},
 		{`update -V %[1]s step %[3]s -s "Idle"`, false, false},
 		{"do -V %[1]s step %[3]s", false, false},
 		{"get -V %[1]s step %[3]s", false, false},
+		{"describe -V %[1]s run %[2]s", false, false},
 	}
 	breakOut := false
 BreakOut:
@@ -237,7 +238,7 @@ BreakOut:
 				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
 				break BreakOut
 			}
-			err = template.LoadFromBytes(true, yamlDocument)
+			err = template.LoadFromBytes("", true, yamlDocument)
 			if err != nil {
 				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
 				break BreakOut
@@ -377,7 +378,7 @@ BreakOut:
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
 			err := client.RemoteUpdateStep(&api.UpdateQuery{
 				Id:      stepUUIDs[0],
-				Changes: map[string]interface{}{"status": api.StepDone.TranslateStepStatus()},
+				Changes: map[string]interface{}{"status": api.StepFailed.TranslateStepStatus()},
 			})
 			if err != nil {
 				t.Error(err)
@@ -398,8 +399,8 @@ BreakOut:
 			}
 			for _, step := range steps {
 				fmt.Println(fmt.Sprintf("%+v", step))
-				if step.Status != api.StepDone {
-					t.Errorf("step status must be done")
+				if step.Status != api.StepFailed {
+					t.Errorf("step status must be failed")
 				}
 			}
 		})

@@ -24,13 +24,17 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru"
 	"github.com/mitchellh/mapstructure"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 type DoType string
@@ -39,9 +43,14 @@ const (
 	DoTypeREST DoType = "REST"
 )
 
+var DefaultTemplateCacheSize = 1000
+
 type Rego struct {
-	compiler *ast.Compiler
-	input    rego.EvalOption
+	compiler                  *ast.Compiler
+	input                     map[string]interface{}
+	lastStateHeartBeat        time.Time
+	lastStateHeartBeatIndices []int64
+	inputMutex                sync.RWMutex
 }
 
 type Template struct {
@@ -49,7 +58,8 @@ type Template struct {
 	Version         int64  `json:"version"`
 	Steps           []Step `json:"steps"`
 	labelsToIndices map[string]int64
-	rego            Rego
+	indicesToLabels map[int64]string
+	rego            *Rego
 }
 
 type ThenDo struct {
@@ -77,7 +87,6 @@ type Step struct {
 	Retries     int         `json:"retries,omitempty"`
 	stepDo      StepDo
 	doType      DoType
-	template    *Template
 }
 
 type StepDo struct {
@@ -103,6 +112,16 @@ type StepDoRESTOptions struct {
 	Body                 string      `json:"body,omitempty"`
 }
 
+var templateCache *lru.Cache
+
+func init() {
+	cache, err := lru.New(DefaultTemplateCacheSize)
+	if err != nil {
+		log.Fatal(err)
+	}
+	templateCache = cache
+}
+
 func (do StepDoREST) Describe() string {
 	doStr, err := yaml.Marshal(do)
 	if err != nil {
@@ -111,8 +130,15 @@ func (do StepDoREST) Describe() string {
 	return string(doStr)
 }
 
-func (t *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
+func (t *Template) LoadFromBytes(runId string, isYaml bool, yamlDocument []byte) error {
 	var err error
+	if runId != "" {
+		entry, ok := templateCache.Get(runId)
+		if ok {
+			*t = *entry.(*Template)
+			return nil
+		}
+	}
 	if isYaml {
 		decoder := yaml.NewDecoder(bytes.NewBuffer(yamlDocument))
 		decoder.SetStrict(true)
@@ -126,6 +152,8 @@ func (t *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 		return api.NewWrapError(api.ErrInvalidParams, err, "failed to load from bytes: %w", err)
 	}
 	t.labelsToIndices = make(map[string]int64)
+	t.indicesToLabels = make(map[int64]string)
+	t.rego = &Rego{}
 	for i := range t.Steps {
 		err = (&t.Steps[i]).AdjustUnmarshalStep(t, int64(i)+1)
 		if err != nil {
@@ -135,26 +163,97 @@ func (t *Template) LoadFromBytes(isYaml bool, yamlDocument []byte) error {
 	return nil
 }
 
-func (t *Template) RefreshInput() {
+func (t *Template) RefreshInput(runId string) {
 	var err error
-	if t.rego.compiler == nil {
+	t.rego.inputMutex.RLock()
+	if t.rego.input == nil {
+		t.rego.inputMutex.RUnlock()
+		if wasInit := t.initInput(); wasInit {
+			templateCache.Add(runId, t)
+		}
+		t.rego.inputMutex.RLock()
+	}
+	lastStateHeartBeat := t.rego.lastStateHeartBeat
+	lastStateHeartBeatIndices := t.rego.lastStateHeartBeatIndices
+	t.rego.inputMutex.RUnlock()
+	query := &api.ListQuery{
+		Filters: []api.Expression{{
+			AttributeName: dao.RunId,
+			Operator:      "=",
+			Value:         runId,
+		}, {
+			AttributeName: dao.Status,
+			Operator:      "=",
+			Value:         api.StepDone,
+		}, {
+			AttributeName: dao.HeartBeat,
+			Operator:      ">=",
+			Value:         lastStateHeartBeat,
+		},
+		},
+		ReturnAttributes: []string{dao.Index, dao.HeartBeat, dao.State},
+	}
+	for _, index := range lastStateHeartBeatIndices {
+		query.Filters = append(query.Filters, api.Expression{
+			AttributeName: dao.Index,
+			Operator:      "<>",
+			Value:         index,
+		})
+	}
+	stepRecords, _, err := listStepsByQuery(query)
+	if err != nil {
+		panic(err)
+	}
+	if len(stepRecords) > 0 {
+		var maxHeartBeat time.Time
+		var maxHeartBeatIndices []int64
+		t.rego.inputMutex.Lock()
+		input := t.rego.input
+		for _, record := range stepRecords {
+			if time.Time(record.Heartbeat).After(maxHeartBeat) {
+				maxHeartBeat = time.Time(record.Heartbeat)
+				maxHeartBeatIndices = []int64{}
+			}
+			if time.Time(record.Heartbeat).Equal(maxHeartBeat) {
+				maxHeartBeatIndices = append(maxHeartBeatIndices, record.Index)
+			}
+			var state map[string]interface{}
+			err = json.Unmarshal([]byte(record.State), &state)
+			if err != nil {
+				t.rego.inputMutex.Unlock()
+				panic(err)
+			}
+			input["labels"].(map[string]interface{})[t.indicesToLabels[record.Index]] = state
+		}
+		t.rego.input = input
+		t.rego.lastStateHeartBeat = maxHeartBeat
+		t.rego.lastStateHeartBeatIndices = maxHeartBeatIndices
+		t.rego.inputMutex.Unlock()
+	}
+}
+
+func (t *Template) initInput() bool {
+	wasInit := false
+	t.rego.inputMutex.Lock()
+	defer t.rego.inputMutex.Unlock()
+	if t.rego.input == nil {
+		var err error
+		wasInit = true
 		t.rego.compiler, err = ast.CompileModules(map[string]string{})
 		if err != nil {
 			panic(err)
 		}
-	}
-	if t.rego.input == nil {
-		input := map[string]interface{}{
+		t.rego.input = map[string]interface{}{
 			"template": map[string]interface{}{
 				"title":   t.Title,
 				"version": t.Version,
 			},
 		}
 		for _, step := range t.Steps {
-			input["labels"] = map[string]interface{}{
+			t.rego.input["labels"] = map[string]interface{}{
 				step.Label: map[string]interface{}{},
 			}
-			input["steps"] = map[string]interface{}{
+			t.rego.input["steps"] = map[string]interface{}{
 				step.Label: map[string]interface{}{
 					"name":    step.Name,
 					"retries": step.Retries,
@@ -164,8 +263,8 @@ func (t *Template) RefreshInput() {
 				},
 			}
 		}
-		t.rego.input = rego.EvalInput(input)
 	}
+	return wasInit
 }
 
 func (t *Template) LoadAndCreateRun(key string, fileName string, fileType string) (string, error) {
@@ -177,7 +276,7 @@ func (t *Template) LoadAndCreateRun(key string, fileName string, fileType string
 	if strings.EqualFold(fileType, "json") {
 		isYaml = false
 	}
-	err = t.LoadFromBytes(isYaml, yamlDocument)
+	err = t.LoadFromBytes("", isYaml, yamlDocument)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
 	}
@@ -210,8 +309,8 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 		}
 		s.Label = random.String()
 	}
-	s.template = t
-	s.template.labelsToIndices[s.Label] = index
+	t.labelsToIndices[s.Label] = index
+	t.indicesToLabels[index] = s.Label
 	if s.Do == nil {
 		return nil
 	} else {
@@ -285,7 +384,8 @@ func (t *Template) ResolveCurlyPercent(str string) (string, error) {
 		if err != nil {
 			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}
-		eval, err := query.Eval(ValveCtx, t.rego.input)
+		var eval rego.ResultSet
+		eval, err = t.evaluateCurlyPercent(query)
 		if err != nil {
 			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}
@@ -293,10 +393,18 @@ func (t *Template) ResolveCurlyPercent(str string) (string, error) {
 			len(eval[0].Expressions) > 0 &&
 			eval[0].Expressions[0].Value != nil {
 			buffer.WriteString(fmt.Sprintf("%v", eval[0].Expressions[0].Value))
+		} else {
+			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}
 	}
 	buffer.WriteString(escapedStr[tokenEnd:])
 	return buffer.String(), nil
+}
+
+func (t *Template) evaluateCurlyPercent(query rego.PreparedEvalQuery) (rego.ResultSet, error) {
+	t.rego.inputMutex.RLock()
+	defer t.rego.inputMutex.RUnlock()
+	return query.Eval(ValveCtx, rego.EvalInput(t.rego.input))
 }
 func (t *Template) ResolveContext(context string) (api.Context, error) {
 	var result api.Context

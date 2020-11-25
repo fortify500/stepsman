@@ -4,11 +4,10 @@ steps:
     description: > # optional
       example for a rest call
     label: starting
-    retries: 3
+    retries: 3  # by default, this means it won't be retried. Technically will become 1 in the database if never executed, once it is in progress it will be 0. e.g. a 2 will become 3 in the database initially.
     do: # optional
       type: REST # heartbeats of set InProgress and finally set Done. However, this doesn't mean events cannot already start for path_1_step_?
       complete-by: 200 # default 3600. This is a hard limit whereby even an async or any error will cause a fail and move to pending.
-      retries: 0 # by default, this means it won't be retried. Technically will become 1 in the database if never executed, once it is in progress it will be 0. e.g. a 2 will become 3 in the database initially.
       heartbeat-timeout: 50 # seconds. the do will send heartbeats when calling the url in asynchronous cases. Currently only synchronous calls are supported so heart-beat timeout is essentially a timeout.
       options:
         timeout: 40 #overall timeout make sense timeout would be less than the heartbeat-timeout
@@ -20,12 +19,34 @@ steps:
         rules:
           - then:
               do:
+                - label: next
+                  context: >
+                    { "result": "next", "title": "{% input.template.title %}"}  
+  - name: "next"
+    description: >
+      example for a rest call 2
+    label: next
+    retries: 3
+    do:
+      type: REST
+      complete-by: 200
+      heartbeat-timeout: 50
+      options:
+        timeout: 40
+        max-response-body-bytes: 524288
+        method: GET
+        url: https://jsonplaceholder.typicode.com/todos/2
+    on:
+      pre-done:
+        rules:
+          - then:
+              do:
                 - label: finishing
                   context: >
-                    { "result": "finish", "title": "{% input.template.title %}"}
+                    { "result": "finish", "status-phrase": "{% input.labels["starting"]["result"]["status-phrase"] %}"}
   - name: "Finishing" # mandatory
     description: > # optional
-      example for a rest call 2
+      example for a rest call 3
     label: finishing
     do:
       type: REST
@@ -34,4 +55,4 @@ steps:
         timeout: 40
         max-response-body-bytes: 524288
         method: GET
-        url: https://jsonplaceholder.typicode.com/todos/2
+        url: https://jsonplaceholder.typicode.com/todos/3

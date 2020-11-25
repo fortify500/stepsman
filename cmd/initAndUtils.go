@@ -248,6 +248,10 @@ func InitConfig() {
 		bl.CompleteByInProgressInterval = viper.GetInt64("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS")
 	}
 
+	if viper.IsSet("TEMPLATE_CACHE_SIZE") {
+		bl.DefaultTemplateCacheSize = viper.GetInt("TEMPLATE_CACHE_SIZE")
+	}
+
 	if viper.IsSet("DB_VENDOR") {
 		Parameters.DatabaseVendor = viper.GetString("DB_VENDOR")
 	}

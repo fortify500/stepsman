@@ -222,6 +222,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				attributeName = "status_owner"
 			case Label:
 			case Name:
+			case HeartBeat:
 			default:
 				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in filter: %s", expression.AttributeName)
 			}
@@ -236,6 +237,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 			case ">=":
 				switch expression.AttributeName {
 				case Index:
+				case HeartBeat:
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
@@ -314,8 +316,6 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid sort order: %s", query.Sort.Order)
 			}
 			sqlQuery += sort + " " + query.Sort.Order
-		} else {
-			sqlQuery += " ORDER BY run_id,\"index\" asc"
 		}
 	}
 	sqlNoRange = sqlQuery

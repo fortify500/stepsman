@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/fortify500/stepsman/cmd"
+	_ "go.uber.org/automaxprocs"
 )
 
 func main() {

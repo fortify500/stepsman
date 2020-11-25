@@ -55,7 +55,7 @@ var getStepCmd = &cobra.Command{
 			return
 		}
 		script := bl.Template{}
-		err = script.LoadFromBytes(false, []byte(run.Template))
+		err = script.LoadFromBytes(run.Id, false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to load template while getting a step"
 			Parameters.Err = &Error{

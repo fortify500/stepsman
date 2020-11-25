@@ -161,7 +161,7 @@ func (h CreateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 			isString = true
 		}
 		if isString {
-			err := template.LoadFromBytes(isYaml, []byte(p.Template.(string)))
+			err := template.LoadFromBytes("", isYaml, []byte(p.Template.(string)))
 			if err != nil {
 				return resolveError(err)
 			}

@@ -14,6 +14,7 @@ require (
 	github.com/gobs/args v0.0.0-20180315064131-86002b4df18c
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/google/uuid v1.1.2
+	github.com/hashicorp/golang-lru v0.5.1
 	github.com/iancoleman/orderedmap v0.1.0 // indirect
 	github.com/intel-go/fastjson v0.0.0-20170329170629-f846ae58a1ab
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
@@ -37,6 +38,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
+	go.uber.org/automaxprocs v1.3.0
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897 // indirect
 	golang.org/x/sys v0.0.0-20201107080550-4d91cf3a1aaf // indirect
 	golang.org/x/text v0.3.4 // indirect

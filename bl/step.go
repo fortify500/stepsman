@@ -90,7 +90,7 @@ func updateStep(query *api.UpdateQuery) error {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
 			template := Template{}
-			err = template.LoadFromBytes(false, []byte(run.Template))
+			err = template.LoadFromBytes(stepRecord.RunId, false, []byte(run.Template))
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
@@ -155,7 +155,7 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			case api.StepInProgress:
 				stepContext = context
 				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, stepContext)
+				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, stepContext, newState)
 				if toReturn {
 					return nil
 				}
@@ -168,14 +168,14 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			case api.StepInProgress:
 				statusOwner = partialStepRecord.StatusOwner
 				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
+				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
 				if toReturn {
 					return nil
 				}
 			case api.StepFailed:
 				statusOwner = partialStepRecord.StatusOwner
 				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
+				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
 				if toReturn {
 					return nil
 				}
@@ -203,7 +203,7 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			case api.StepFailed:
 				statusOwner = partialStepRecord.StatusOwner
 				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
+				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
 				if toReturn {
 					return nil
 				}
@@ -216,7 +216,7 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			case api.StepPending:
 				statusOwner = partialStepRecord.StatusOwner
 				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
+				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
 				if toReturn {
 					return nil
 				}
@@ -224,29 +224,33 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 			case api.StepInProgress:
 				statusOwner = partialStepRecord.StatusOwner
 				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
+				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
 				if toReturn {
 					return nil
 				}
 			case api.StepDone:
 			}
 		case api.StepDone:
-			switch newStatus {
-			case api.StepIdle:
-			case api.StepPending:
-				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
-				if toReturn {
-					return nil
+			if force {
+				switch newStatus {
+				case api.StepIdle:
+				case api.StepPending:
+					var toReturn bool
+					toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
+					if toReturn {
+						return nil
+					}
+					toEnqueue = true
+				case api.StepInProgress:
+					var toReturn bool
+					toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
+					if toReturn {
+						return nil
+					}
+				case api.StepFailed:
 				}
-				toEnqueue = true
-			case api.StepInProgress:
-				var toReturn bool
-				toReturn, softError = failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil)
-				if toReturn {
-					return nil
-				}
-			case api.StepFailed:
+			} else {
+				return api.NewError(api.ErrStepDoneCannotBeChanged, "failed to update database stepRecord row, step is already done, but can be forced (however unrecommended since caches will not be updated)")
 			}
 		}
 
@@ -309,10 +313,16 @@ func (t *Template) TransitionStateAndStatus(runId string, stepUUID string, prevS
 	return &updatedStepRecord, tErr
 }
 
-func failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context) (bool, *api.Error) {
+func failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *dao.StepState) (bool, *api.Error) {
 	if partialStepRecord.RetriesLeft < 1 {
 		if partialStepRecord.Status != api.StepFailed {
-			_ = dao.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, newStatusOwner, nil, nil, context, nil)
+			var newStateBytes []byte
+			newStateBytes, err := json.Marshal(newState)
+			if err != nil {
+				panic(err)
+			}
+			newStateStr := string(newStateBytes)
+			_ = dao.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, newStatusOwner, nil, nil, context, &newStateStr)
 		}
 		return true, api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status")
 	}
@@ -343,7 +353,7 @@ func (t *Template) StartDo(runId string, stepUUID string, newStatusOwner string,
 	if err != nil {
 		panic(err)
 	}
-	var newState *dao.StepState
+	var newState dao.StepState
 	var doErr error
 	step := t.Steps[updatedPartialStepRecord.Index-1]
 	newState, doErr = do(step.doType, step.Do, &prevState)
@@ -363,7 +373,7 @@ func (t *Template) StartDo(runId string, stepUUID string, newStatusOwner string,
 							resolvedContext api.Context
 						}
 						for _, thenDo := range rule.Then.Do {
-							index, ok := step.template.labelsToIndices[thenDo.Label]
+							index, ok := t.labelsToIndices[thenDo.Label]
 							if !ok {
 								panic(fmt.Errorf("label should have an index"))
 							}
@@ -376,7 +386,7 @@ func (t *Template) StartDo(runId string, stepUUID string, newStatusOwner string,
 						if len(indicesAndContext) > 0 {
 							var uuidsToEnqueue []dao.UUIDAndStatusOwner
 							for i := range indicesAndContext {
-								indicesAndContext[i].resolvedContext, err = step.template.ResolveContext(indicesAndContext[i].context)
+								indicesAndContext[i].resolvedContext, err = t.ResolveContext(indicesAndContext[i].context)
 								if err != nil {
 									break BREAKOUT
 								}
@@ -407,9 +417,14 @@ func (t *Template) StartDo(runId string, stepUUID string, newStatusOwner string,
 	}
 	if err != nil {
 		newStepStatus = api.StepFailed
+		//newState may contain err even if doErr is not nil
+		//goland:noinspection GoNilness
+		if newState.Error == "" {
+			newState.Error = err.Error()
+		}
 	}
 	var tErr error
-	updatedPartialStepRecord, tErr = t.TransitionStateAndStatus(runId, stepUUID, updatedPartialStepRecord.StatusOwner, newStepStatus, newStatusOwner, nil, newState, false)
+	updatedPartialStepRecord, tErr = t.TransitionStateAndStatus(runId, stepUUID, updatedPartialStepRecord.StatusOwner, newStepStatus, newStatusOwner, nil, &newState, false)
 	if tErr != nil {
 		defer log.Error(tErr)
 		err = fmt.Errorf("many errors, first: %s, next: failed to update step status: %w", tErr, err)
@@ -494,11 +509,11 @@ func doStepSynchronous(params *api.DoStepParams) (*api.DoStepResult, error) {
 	}
 
 	template := Template{}
-	err := template.LoadFromBytes(false, []byte(run.Template))
+	err := template.LoadFromBytes(run.Id, false, []byte(run.Template))
 	if err != nil {
 		return nil, fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
 	}
-	template.RefreshInput()
+	template.RefreshInput(run.Id)
 	var updatedStepRecord *api.StepRecord
 	updatedStepRecord, err = template.StartDo(run.Id, params.UUID, params.StatusOwner, params.Context)
 	if err != nil {

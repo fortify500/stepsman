@@ -108,6 +108,10 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_run_id_label: %w", err)
 	}
+	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (run_id, status, heartbeat)`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
+	}
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {

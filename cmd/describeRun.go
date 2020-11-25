@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
@@ -85,7 +86,7 @@ You can also describe a single step by adding --step <Index>.`,
 			return
 		}
 		script := bl.Template{}
-		err = script.LoadFromBytes(false, []byte(run.Template))
+		err = script.LoadFromBytes(run.Id, false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to describe steps"
 			Parameters.Err = &Error{
@@ -184,8 +185,13 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		}
 	}
 
-	yamlState := stepRecord.PrettyJSONState()
-	t.AppendRow(table.Row{"State:", strings.TrimSpace(text.WrapText(yamlState, 120))})
+	jsonState := stepRecord.PrettyJSONState()
+	t.AppendRow(table.Row{"State:", strings.TrimSpace(text.WrapText(jsonState, 120))})
+	jsonContext, err := json.Marshal(stepRecord.Context)
+	if err != nil {
+		panic(err)
+	}
+	t.AppendRow(table.Row{"Context:", strings.TrimSpace(text.WrapText(string(jsonContext), 120))})
 	t.AppendRow(table.Row{"", ""})
 	return t, nil
 }

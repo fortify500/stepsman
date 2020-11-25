@@ -61,7 +61,7 @@ func initDO(maxResponseHeaderByte int64) {
 		netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
 	}
 }
-func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.StepState, error) {
+func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.StepState, error) {
 	var newState dao.StepState
 	newState = *prevState
 	newState.Error = ""
@@ -96,7 +96,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				request, err := http.NewRequestWithContext(ctx, doRest.Options.Method, doRest.Options.Url, body)
 				if err != nil {
 					newState.Error = err.Error()
-					return &newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
+					return newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
 				}
 				for k, v := range doRest.Options.Headers {
 					request.Header[k] = v
@@ -104,7 +104,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				response, err = netClient.Do(request)
 				if err != nil {
 					newState.Error = err.Error()
-					return &newState, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
+					return newState, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
 				}
 			}
 			result := StepStateRest{}
@@ -112,7 +112,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 			bodyBytes, err := ioutil.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes))
 			if err != nil {
 				newState.Error = err.Error()
-				return &newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
+				return newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
 			}
 			result.ContentType = "text/plain"
 			result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
@@ -121,7 +121,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 				err = json.Unmarshal(bodyBytes, &result.Body)
 				if err != nil {
 					newState.Error = err.Error()
-					return &newState, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
+					return newState, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
 				}
 			default:
 				result.Body = string(bodyBytes)
@@ -134,11 +134,11 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (*dao.
 		default:
 			err := api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 			newState.Error = err.Error()
-			return &newState, err
+			return newState, err
 		}
 	}
 
-	return &newState, nil
+	return newState, nil
 }
 
 func TokenizeCurlyPercent(originalString string) (result []DoubleCurlyToken, sanitizedString string) {
