@@ -36,8 +36,9 @@ type (
 	UpdateRunHandler struct{}
 )
 
-func (h ListRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h ListRunsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.ListParams
 		if params != nil {
@@ -46,7 +47,7 @@ func (h ListRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMes
 			}
 		}
 		query := api.ListQuery(p)
-		runs, runsRange, err := bl.ListRuns(&query)
+		runs, runsRange, err := BL.ListRuns(&query)
 		if err != nil {
 			return resolveError(err)
 		}
@@ -59,8 +60,9 @@ func (h ListRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMes
 	return result, jsonRPCErr
 }
 
-func (h GetRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h GetRunsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.GetRunsParams
 		if params != nil {
@@ -72,7 +74,7 @@ func (h GetRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMess
 			return resolveError(err)
 		}
 		query := api.GetRunsQuery(p)
-		runs, err := bl.GetRuns(&query)
+		runs, err := BL.GetRuns(&query)
 		if err != nil {
 			return resolveError(err)
 		}
@@ -82,8 +84,9 @@ func (h GetRunsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMess
 	return result, jsonRPCErr
 }
 
-func (h UpdateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h UpdateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.UpdateRunParams
 		if params != nil {
@@ -113,7 +116,7 @@ func (h UpdateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 					Message: err.Error(),
 				}
 			}
-			err = bl.UpdateRunStatus(p.Id, newStatus)
+			err = BL.UpdateRunStatus(p.Id, newStatus)
 			if err != nil {
 				return resolveError(err)
 			}
@@ -125,9 +128,10 @@ func (h UpdateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 	return result, jsonRPCErr
 }
 
-func (h CreateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h CreateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var p api.CreateRunParams
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		if params != nil {
 			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
@@ -161,7 +165,7 @@ func (h CreateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 			isString = true
 		}
 		if isString {
-			err := template.LoadFromBytes("", isYaml, []byte(p.Template.(string)))
+			err := template.LoadFromBytes(BL, "", isYaml, []byte(p.Template.(string)))
 			if err != nil {
 				return resolveError(err)
 			}
@@ -197,7 +201,7 @@ func (h CreateRunHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 				}
 			}
 		}
-		run, err := template.CreateRun(key)
+		run, err := template.CreateRun(BL, key)
 		if err != nil {
 			return resolveError(err)
 		}

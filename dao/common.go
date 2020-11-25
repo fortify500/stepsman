@@ -55,8 +55,6 @@ const (
 	Name            = "name"
 )
 
-var DB DBI
-
 type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation(tx *sqlx.Tx) error
@@ -67,7 +65,7 @@ type DBI interface {
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
 
-func OpenDatabase(databaseVendor string, dataSourceName string) error {
+func (d *DAO) openDatabase(databaseVendor string, dataSourceName string) error {
 	var err error
 	var internalDriverName string
 	switch strings.TrimSpace(databaseVendor) {
@@ -92,31 +90,27 @@ func OpenDatabase(databaseVendor string, dataSourceName string) error {
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
-		if DB != nil && DB.SQL() != nil {
-			defer DB.SQL().Close()
+		if d.DB != nil && d.DB.SQL() != nil {
+			defer d.DB.SQL().Close()
 		}
 		switch internalDriverName {
 		case "sqlite3":
-			DB = (*Sqlite3SqlxDB)(dbOpen)
-			_, err = DB.SQL().Exec("PRAGMA journal_mode = WAL")
+			d.DB = (*Sqlite3SqlxDB)(dbOpen)
+			_, err = d.DB.SQL().Exec("PRAGMA journal_mode = WAL")
 			if err != nil {
 				panic(fmt.Errorf("failed to set journal mode: %w", err))
 			}
 			if strings.Contains(strings.ToLower(dataSourceName), ":memory:") {
-				DB.SQL().SetMaxOpenConns(1)
+				d.DB.SQL().SetMaxOpenConns(1)
 			}
-			_, err = DB.SQL().Exec("PRAGMA synchronous = NORMAL")
+			_, err = d.DB.SQL().Exec("PRAGMA synchronous = NORMAL")
 			if err != nil {
 				panic(fmt.Errorf("failed to set synchronous mode: %w", err))
 			}
 		case "pgx":
-			DB = (*PostgreSQLSqlxDB)(dbOpen)
+			d.DB = (*PostgreSQLSqlxDB)(dbOpen)
 		default:
 			panic(fmt.Errorf("unsupported internal database driver name: %s", internalDriverName))
-		}
-		err = DB.SQL().Ping()
-		if err != nil {
-			return fmt.Errorf("failed to ping an open database connection: %w", err)
 		}
 	}
 	return err
@@ -137,50 +131,54 @@ type ParametersType struct {
 	DatabaseAutoMigrate bool
 }
 
-var Parameters ParametersType
+type DAO struct {
+	Parameters ParametersType
+	DB         DBI
+}
 
-//goland:noinspection SpellCheckingInspection
-func InitDAO(daoParameters *ParametersType) error {
-	switch strings.TrimSpace(daoParameters.DatabaseVendor) {
+func New(parameters *ParametersType) (*DAO, error) {
+	var newDAO DAO
+	newDAO.Parameters = *parameters
+	switch strings.TrimSpace(newDAO.Parameters.DatabaseVendor) {
+	//goland:noinspection SpellCheckingInspection
 	case "postgresql":
 		sslMode := "disable"
-		if daoParameters.DatabaseSSLMode {
+		if newDAO.Parameters.DatabaseSSLMode {
 			sslMode = "enable"
 		}
 
 		var connectionString string
-		if daoParameters.DatabaseSchema != "" {
+		if newDAO.Parameters.DatabaseSchema != "" {
 			connectionString = "host=%[1]s port=%[2]d user=%[3]s password=%[4]s dbname=%[5]s sslmode=%[6]s search_path=%[7]s"
 		} else {
 			connectionString = "host=%[1]s port=%[2]d user=%[3]s password=%[4]s dbname=%[5]s sslmode=%[6]s"
 		}
-		daoParameters.DataSourceName = fmt.Sprintf(connectionString,
-			daoParameters.DatabaseHost,
-			daoParameters.DatabasePort,
-			daoParameters.DatabaseUserName,
-			daoParameters.DatabasePassword,
-			daoParameters.DatabaseName,
+		newDAO.Parameters.DataSourceName = fmt.Sprintf(connectionString,
+			newDAO.Parameters.DatabaseHost,
+			newDAO.Parameters.DatabasePort,
+			newDAO.Parameters.DatabaseUserName,
+			newDAO.Parameters.DatabasePassword,
+			newDAO.Parameters.DatabaseName,
 			sslMode,
-			daoParameters.DatabaseSchema)
+			newDAO.Parameters.DatabaseSchema)
 		fallthrough
 	case "sqlite":
 		IsRemote = false
-		err := OpenDatabase(daoParameters.DatabaseVendor, daoParameters.DataSourceName)
+		err := newDAO.openDatabase(newDAO.Parameters.DatabaseVendor, newDAO.Parameters.DataSourceName)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	case "remote":
 		IsRemote = true
 	default:
-		return fmt.Errorf("database vendor: %s is not supported", daoParameters.DatabaseVendor)
+		return nil, fmt.Errorf("database vendor: %s is not supported", newDAO.Parameters.DatabaseVendor)
 	}
-	Parameters = *daoParameters
-	return nil
+	return &newDAO, nil
 }
 
-func Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err error) {
+func (d *DAO) Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err error) {
 	var tx *sqlx.Tx
-	tx, err = DB.SQL().Beginx()
+	tx, err = d.DB.SQL().Beginx()
 	if err != nil {
 		panic(err)
 	}
@@ -230,7 +228,7 @@ type indicesUUIDs struct {
 	uuid  string
 }
 
-func updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
+func (d *DAO) updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
 	var result []UUIDAndStatusOwner
 	for _, indexOrUUID := range indicesUuids {
 		var err error
@@ -292,7 +290,7 @@ func updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, ne
 			buf.WriteString(fmt.Sprintf("=$%d", i))
 		}
 		if completeBy != nil {
-			buf.WriteString(DB.completeByUpdateStatement(completeBy))
+			buf.WriteString(d.DB.completeByUpdateStatement(completeBy))
 		} else {
 			buf.WriteString(",complete_by=null")
 		}

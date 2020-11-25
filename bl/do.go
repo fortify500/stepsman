@@ -51,17 +51,17 @@ type StepStateRest struct {
 }
 
 var emptyMap = make(map[string]string)
-var netTransport = &http.Transport{
-	MaxResponseHeaderBytes: DefaultMaxResponseHeaderBytes,
-	IdleConnTimeout:        10 * time.Minute, //avoid overwhelming the infrastructure
-}
 
-func initDO(maxResponseHeaderByte int64) {
+func (b *BL) initDO(maxResponseHeaderByte int64) {
+	b.netTransport = &http.Transport{
+		MaxResponseHeaderBytes: DefaultMaxResponseHeaderBytes,
+		IdleConnTimeout:        10 * time.Minute, //avoid overwhelming the infrastructure
+	}
 	if maxResponseHeaderByte > 0 {
-		netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
+		b.netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
 	}
 }
-func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.StepState, error) {
+func (b *BL) do(doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.StepState, error) {
 	var newState dao.StepState
 	newState = *prevState
 	newState.Error = ""
@@ -88,7 +88,7 @@ func do(doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.S
 					body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
 				}
 				var netClient = &http.Client{
-					Transport: netTransport,
+					Transport: b.netTransport,
 					Timeout:   timeout,
 				}
 				ctx, cancel := context.WithTimeout(context.Background(), timeout)

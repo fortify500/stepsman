@@ -22,66 +22,94 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
+	lru "github.com/hashicorp/golang-lru"
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
-	"strings"
-	"sync"
+	"net/http"
 )
 
-var (
-	ShutdownValve                *valve.Valve
+type BL struct {
+	netTransport                 *http.Transport
 	ValveCtx                     context.Context
-	CompleteByInProgressInterval int64 = 3600
+	ShutdownValve                *valve.Valve
+	CancelValveCtx               context.CancelFunc
+	memoryQueue                  chan *doWork
+	queue                        chan *doWork
+	stop                         <-chan struct{}
+	workCounter                  workCounter
+	completeByInProgressInterval int64
+	jobQueueNumberOfWorkers      int
+	jobQueueMemoryQueueLimit     int
+	reschedule                   chan struct{}
+	templateCacheSize            int
+	templateCache                *lru.Cache
+	DAO                          *dao.DAO
+}
 
-	JobQueueNumberOfWorkers  = 5000
-	JobQueueMemoryQueueLimit = 1 * 1000 * 1000
-)
-var Parameters dao.ParametersType
-var parametersMu sync.RWMutex
-
-func IsPostgreSQL() bool {
-	parametersMu.RLock()
-	defer parametersMu.RUnlock()
-	switch strings.TrimSpace(Parameters.DatabaseVendor) {
-	case "postgresql":
+func (b *BL) IsPostgreSQL() bool {
+	switch b.DAO.DB.(type) {
+	case *dao.PostgreSQLSqlxDB:
 		return true
 	}
 	return false
 }
-func IsSqlite() bool {
-	parametersMu.RLock()
-	defer parametersMu.RUnlock()
-	switch strings.TrimSpace(Parameters.DatabaseVendor) {
-	case "sqlite":
+func (b *BL) IsSqlite() bool {
+	switch b.DAO.DB.(type) {
+	case *dao.Sqlite3SqlxDB:
 		return true
 	}
 	return false
 }
-func InitBL(daoParameters *dao.ParametersType) error {
-	err := dao.InitDAO(daoParameters)
+func New(daoParameters *dao.ParametersType) (*BL, error) {
+	var newBL BL
+	newBL.completeByInProgressInterval = 3600
+	newBL.jobQueueNumberOfWorkers = 5000
+	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
+	newBL.templateCacheSize = 1000
+	newBL.reschedule = make(chan struct{})
+	if viper.IsSet("JOB_QUEUE_NUMBER_OF_WORKERS") {
+		newBL.jobQueueNumberOfWorkers = viper.GetInt("JOB_QUEUE_NUMBER_OF_WORKERS")
+	}
+	if viper.IsSet("JOB_QUEUE_MEMORY_QUEUE_LIMIT") {
+		newBL.jobQueueMemoryQueueLimit = viper.GetInt("JOB_QUEUE_MEMORY_QUEUE_LIMIT")
+	}
+	if viper.IsSet("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS") {
+		newBL.completeByInProgressInterval = viper.GetInt64("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS")
+	}
+	if viper.IsSet("TEMPLATE_CACHE_SIZE") {
+		newBL.templateCacheSize = viper.GetInt("TEMPLATE_CACHE_SIZE")
+	}
+
+	cache, err := lru.New(newBL.templateCacheSize)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	parametersMu.Lock()
-	Parameters = *daoParameters
-	parametersMu.Unlock()
+	newBL.templateCache = cache
+	newBL.DAO, err = dao.New(daoParameters)
+	if err != nil {
+		return nil, err
+	}
+
+	maxResponseHeaderByte := int64(0)
+	if viper.IsSet("MAX_RESPONSE_HEADER_BYTES") {
+		maxResponseHeaderByte = viper.GetInt64("MAX_RESPONSE_HEADER_BYTES")
+	}
+	newBL.initDO(maxResponseHeaderByte)
 
 	if !dao.IsRemote {
-		err = MigrateDB(daoParameters.DatabaseAutoMigrate)
+		err = newBL.MigrateDB(daoParameters.DatabaseAutoMigrate)
 		if err != nil {
-			return fmt.Errorf("failed to init: %w", err)
+			return nil, fmt.Errorf("failed to init: %w", err)
 		}
+		newBL.initQueue()
 	} else {
-		if viper.IsSet("MAX_RESPONSE_HEADER_BYTES") {
-			initDO(viper.GetInt64("MAX_RESPONSE_HEADER_BYTES"))
-		}
-		client.InitClient(dao.Parameters.DatabaseSSLMode, dao.Parameters.DatabaseHost, dao.Parameters.DatabasePort)
+		client.InitClient(newBL.DAO.Parameters.DatabaseSSLMode, newBL.DAO.Parameters.DatabaseHost, newBL.DAO.Parameters.DatabasePort)
 	}
-	InitQueue()
-	return nil
+
+	return &newBL, nil
 }
 
 func InitLogrus(out io.Writer, level log.Level) {

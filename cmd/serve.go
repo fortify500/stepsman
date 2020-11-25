@@ -37,7 +37,7 @@ var ServeCmd = &cobra.Command{
 			}
 			return
 		}
-		serveServe.Serve(Parameters.ServerPort, Parameters.ServerHealthPort)
+		serveServe.Serve(BL, Parameters.ServerPort, Parameters.ServerHealthPort)
 	},
 }
 

@@ -29,8 +29,8 @@ type StepState struct {
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
 
-func UpdateStepHeartBeat(stepUUID string, statusOwner string) error {
-	res, err := DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_owner=$2", stepUUID, statusOwner)
+func (d *DAO) UpdateStepHeartBeat(stepUUID string, statusOwner string) error {
+	res, err := d.DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_owner=$2", stepUUID, statusOwner)
 	if err == nil {
 		var affected int64
 		affected, err = res.RowsAffected()
@@ -43,8 +43,8 @@ func UpdateStepHeartBeat(stepUUID string, statusOwner string) error {
 	}
 	return nil
 }
-func UpdateStepPartsTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int, context api.Context, state *string) UUIDAndStatusOwner {
-	updated := UpdateManyStepsPartsBeatTx(tx, runId, []int64{index}, newStatus, newStatusOwner, nil, completeBy, retriesLeft, context, state)
+func (d *DAO) UpdateStepPartsTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int, context api.Context, state *string) UUIDAndStatusOwner {
+	updated := d.UpdateManyStepsPartsBeatTx(tx, runId, []int64{index}, newStatus, newStatusOwner, nil, completeBy, retriesLeft, context, state)
 	if len(updated) != 1 {
 		panic(fmt.Errorf("illegal state, 1 updated record expected for runId:%s and index:%d", runId, index))
 	}
@@ -170,16 +170,16 @@ func buildStepsReturnAttributesStrAndVet(attributes []string) (string, error) {
 	}
 	return sb.String(), nil
 }
-func UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, context api.Context, completeBy *int64) []UUIDAndStatusOwner {
+func (d *DAO) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, context api.Context, completeBy *int64) []UUIDAndStatusOwner {
 	var indicesUuids []indicesUUIDs
 	for _, stepUUID := range uuids {
 		indicesUuids = append(indicesUuids, indicesUUIDs{
 			uuid: stepUUID,
 		})
 	}
-	return updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, nil, context, nil)
+	return d.updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, nil, context, nil)
 }
-func UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
+func (d *DAO) UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
 	var indicesUuids []indicesUUIDs
 	for _, index := range indices {
 		indicesUuids = append(indicesUuids, indicesUUIDs{
@@ -187,7 +187,7 @@ func UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, runId string, indices []int64, newS
 			index: index,
 		})
 	}
-	return updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, retriesLeft, context, state)
+	return d.updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, retriesLeft, context, state)
 }
 func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
 	var result []api.StepRecord

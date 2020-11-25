@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +49,7 @@ Use do step <step uuid>.`,
 			return
 		}
 		var doStepResult *api.DoStepResult
-		doStepResult, err = bl.DoStep(&api.DoStepParams{
+		doStepResult, err = BL.DoStep(&api.DoStepParams{
 			UUID:        stepUUID,
 			Context:     stepContext,
 			StatusOwner: statusOwner,
@@ -64,7 +63,7 @@ Use do step <step uuid>.`,
 			return
 		}
 		fmt.Printf("returned status owner: %s\n", doStepResult.StatusOwner)
-		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
 			UUIDs: []string{stepUUID},
 		})
 		if err != nil {

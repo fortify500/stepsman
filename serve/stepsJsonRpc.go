@@ -32,8 +32,9 @@ type (
 	DoStepHandler     struct{}
 )
 
-func (h ListStepsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h ListStepsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.ListParams
 		if params != nil {
@@ -42,7 +43,7 @@ func (h ListStepsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 			}
 		}
 		query := api.ListQuery(p)
-		steps, stepsRange, err := bl.ListSteps(&query)
+		steps, stepsRange, err := BL.ListSteps(&query)
 		if err != nil {
 			return resolveError(err)
 		}
@@ -56,8 +57,9 @@ func (h ListStepsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMe
 	return result, jsonRPCErr
 }
 
-func (h GetStepsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h GetStepsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.GetStepsParams
 		if params != nil {
@@ -69,7 +71,7 @@ func (h GetStepsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMes
 			return resolveError(err)
 		}
 		query := api.GetStepsQuery(p)
-		steps, err := bl.GetSteps(&query)
+		steps, err := BL.GetSteps(&query)
 		if err != nil {
 			return resolveError(err)
 		}
@@ -80,8 +82,9 @@ func (h GetStepsHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMes
 	return result, jsonRPCErr
 }
 
-func (h UpdateStepHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h UpdateStepHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.UpdateStepParams
 		if params != nil {
@@ -90,7 +93,7 @@ func (h UpdateStepHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawM
 			}
 		}
 		query := api.UpdateQuery(p)
-		err := bl.UpdateStep(&query)
+		err := BL.UpdateStep(&query)
 		if err != nil {
 			return resolveError(err)
 		}
@@ -100,8 +103,9 @@ func (h UpdateStepHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawM
 	return result, jsonRPCErr
 }
 
-func (h DoStepHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h DoStepHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
 		var p api.DoStepParams
 		if params != nil {
@@ -112,7 +116,7 @@ func (h DoStepHandler) ServeJSONRPC(_ context.Context, params *fastjson.RawMessa
 		if err := dao.VetIds([]string{p.UUID}); err != nil {
 			return resolveError(err)
 		}
-		doResult, err := bl.DoStep(&p, false)
+		doResult, err := BL.DoStep(&p, false)
 		if err != nil {
 			return resolveError(err)
 		}

@@ -20,7 +20,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -119,7 +118,7 @@ func listStepsInternal() {
 			})
 		}
 	}
-	steps, stepsRange, err := bl.ListSteps(&query)
+	steps, stepsRange, err := BL.ListSteps(&query)
 	if err != nil {
 		msg := "failed to list steps"
 		Parameters.Err = &Error{

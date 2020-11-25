@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
@@ -34,15 +33,13 @@ type RecoveryMessage struct {
 	InstanceUUID string `json:"instance-uuid"`
 }
 
-var reschedule = make(chan struct{})
-var first = true
-
-func RecoveryScheduler() {
+func (b *BL) recoveryScheduler() {
+	var first = true
 	for {
 		var interval time.Duration
 		if first {
 			first = false
-			if !IsSqlite() {
+			if !b.IsSqlite() {
 				interval = time.Duration(60)*time.Second + time.Duration(rand.Intn(2*60))*time.Second
 			} else {
 				interval = time.Duration(5) * time.Second
@@ -51,32 +48,35 @@ func RecoveryScheduler() {
 			interval = time.Duration(10*60)*time.Second + time.Duration(rand.Intn(10*60))*time.Second
 		}
 		select {
-		case <-ValveCtx.Done():
+		case <-b.stop:
 			log.Info("leaving postgresql listener, server is shutting down")
 			return
-		case <-reschedule:
+		case <-b.ValveCtx.Done():
+			log.Info("leaving postgresql listener, server is shutting down")
+			return
+		case <-b.reschedule:
 			log.Debug("rescheduling postgresql listener")
 		case <-time.After(interval):
 			var stepsUUIDs []string
-			tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+			tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 				msg, err := json.Marshal(RecoveryMessage{
 					InstanceUUID: api.InstanceId,
 				})
 				if err != nil {
 					panic(err)
 				}
-				if IsPostgreSQL() {
-					dao.DB.Notify(tx, RecoveryChannelName, string(msg))
+				if b.IsPostgreSQL() {
+					b.DAO.DB.Notify(tx, RecoveryChannelName, string(msg))
 				}
-				stepsUUIDs = dao.DB.RecoverSteps(tx)
+				stepsUUIDs = b.DAO.DB.RecoverSteps(tx)
 				return nil
 			})
 			if tErr != nil {
 				log.Errorf("failed to recover steps: %w", tErr)
 			}
 			for _, item := range stepsUUIDs {
-				work := DoWork(item)
-				if err := Enqueue(&work); err != nil {
+				work := doWork(item)
+				if err := b.Enqueue(&work); err != nil {
 					log.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr)
 				}
 			}
@@ -84,12 +84,12 @@ func RecoveryScheduler() {
 		log.Debug("rescheduling postgresql listener, restarting loop")
 	}
 }
-func StartRecoveryListening() {
+func (b *BL) startRecoveryListening() {
 	reportErrFunc := func(ev pq.ListenerEventType, err error) {
 		if err != nil {
 			log.Errorf("failed to start listener: %w", err)
 			select {
-			case <-ValveCtx.Done():
+			case <-b.ValveCtx.Done():
 				panic(api.NewError(api.ErrShuttingDown, "leaving postgresql listener, server is shutting down"))
 			default:
 			}
@@ -100,7 +100,9 @@ func StartRecoveryListening() {
 		for {
 			msg = nil
 			select {
-			case <-ValveCtx.Done():
+			case <-b.stop:
+				return api.NewError(api.ErrShuttingDown, "leaving postgresql listener, server is shutting down")
+			case <-b.ValveCtx.Done():
 				return api.NewError(api.ErrShuttingDown, "leaving postgresql listener, server is shutting down")
 			case msg = <-l.Notify:
 			}
@@ -120,14 +122,14 @@ func StartRecoveryListening() {
 			}
 			log.Debugf("received skip recovery message: %v", recoveryMessage)
 			if recoveryMessage.InstanceUUID != api.InstanceId {
-				reschedule <- struct{}{}
+				b.reschedule <- struct{}{}
 			}
 		}
 	}
 	waitIt := func() {
 		recoverable(func() error {
 			log.Info("starting to listen for postgresql notifications...")
-			listener := pq.NewListener(dao.Parameters.DataSourceName, time.Duration(2)*time.Second, time.Duration(64)*time.Second, reportErrFunc)
+			listener := pq.NewListener(b.DAO.Parameters.DataSourceName, time.Duration(2)*time.Second, time.Duration(64)*time.Second, reportErrFunc)
 			defer func() {
 				err := listener.Close()
 				log.Errorf("failed to close listener: %w", err)
@@ -142,7 +144,10 @@ func StartRecoveryListening() {
 	}
 	for {
 		select {
-		case <-ValveCtx.Done():
+		case <-b.stop:
+			log.Info("leaving postgresql listener, shutting down")
+			return
+		case <-b.ValveCtx.Done():
 			log.Info("leaving postgresql listener, shutting down")
 			return
 		default:

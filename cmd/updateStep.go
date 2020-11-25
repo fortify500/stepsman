@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
 )
 
@@ -59,12 +58,12 @@ Use run <run id>.`,
 			Parameters.Err = fmt.Errorf("failed to update step no argument provided")
 			return
 		}
-		err = bl.UpdateStep(updateQuery)
+		err = BL.UpdateStep(updateQuery)
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
 			return
 		}
-		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
 			UUIDs: []string{stepUUID},
 		})
 		if err != nil {

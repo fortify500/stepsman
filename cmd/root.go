@@ -21,11 +21,9 @@ import (
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/spf13/cobra"
-	"strings"
 )
 
-var wasInit = false
-var AllowChangeVendor = false
+var BL *bl.BL
 var RootCmd = &cobra.Command{
 	Use:   "stepsman",
 	Short: "Step by step workflow manager",
@@ -43,11 +41,9 @@ func PersistentPreRunE() error {
 		return fmt.Errorf(msg)
 	}
 
-	if wasInit && !AllowChangeVendor && strings.TrimSpace(Parameters.DatabaseVendor) != strings.TrimSpace(dao.Parameters.DatabaseVendor) {
-		return fmt.Errorf("you cannot change database vendor after init")
-	} else if !wasInit || (AllowChangeVendor && strings.TrimSpace(Parameters.DatabaseVendor) != strings.TrimSpace(dao.Parameters.DatabaseVendor)) {
-		wasInit = true
-		err := bl.InitBL(&dao.ParametersType{
+	if BL == nil {
+		var newBL *bl.BL
+		newBL, err := bl.New(&dao.ParametersType{
 			DataSourceName:      Parameters.DataSourceName,
 			DatabaseVendor:      Parameters.DatabaseVendor,
 			DatabaseHost:        Parameters.DatabaseHost,
@@ -62,6 +58,7 @@ func PersistentPreRunE() error {
 		if err != nil {
 			return fmt.Errorf("failed to run pre run initializations: %w", err)
 		}
+		BL = newBL
 	}
 	return nil
 }

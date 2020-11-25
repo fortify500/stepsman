@@ -26,18 +26,18 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func ListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
+func (b *BL) ListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
 		return client.RemoteListRuns(query)
 	} else {
-		return listRuns(query)
+		return b.listRuns(query)
 	}
 }
 
-func listRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
+func (b *BL) listRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
 	var runRecords []api.RunRecord
 	var rangeResult *api.RangeResult
-	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		runRecords, rangeResult, err = dao.ListRunsTx(tx, query)
 		if err != nil {
@@ -48,7 +48,7 @@ func listRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
 	return runRecords, rangeResult, tErr
 }
 
-func GetRun(id string) (*api.RunRecord, error) {
+func (b *BL) GetRun(id string) (*api.RunRecord, error) {
 	if dao.IsRemote {
 		runs, err := client.RemoteGetRuns(&api.GetRunsQuery{
 			Ids:              []string{id},
@@ -59,21 +59,21 @@ func GetRun(id string) (*api.RunRecord, error) {
 		}
 		return &runs[0], nil
 	} else {
-		return getRunById(id)
+		return b.getRunById(id)
 	}
 }
 
-func GetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
+func (b *BL) GetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	if dao.IsRemote {
 		return client.RemoteGetRuns(query)
 	} else {
-		return getRuns(query)
+		return b.getRuns(query)
 	}
 }
 
-func getRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
+func (b *BL) getRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	var runRecords []api.RunRecord
-	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		runRecords, err = dao.GetRunsTx(tx, query)
 		if err != nil {
@@ -83,7 +83,7 @@ func getRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	})
 	return runRecords, tErr
 }
-func UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
+func (b *BL) UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
 	if dao.IsRemote {
 		return client.RemoteUpdateRun(&api.UpdateQuery{
 			Id: runId,
@@ -92,11 +92,11 @@ func UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
 			},
 		})
 	} else {
-		return UpdateRunStatusLocal(runId, newStatus)
+		return b.updateRunStatusLocal(runId, newStatus)
 	}
 }
-func UpdateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
-	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+func (b *BL) updateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
+	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		runRecord, err := GetRunByIdTx(tx, runId)
 		if err != nil {
@@ -113,10 +113,10 @@ func UpdateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
 
 var emptyContext = make(api.Context)
 
-func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
+func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 	title := t.Title
 	var runRecord *api.RunRecord
-	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+	tErr := BL.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		{
 			var uuid4 uuid.UUID
@@ -169,16 +169,16 @@ func (t *Template) CreateRun(key string) (*api.RunRecord, error) {
 				Context:     emptyContext,
 				RetriesLeft: retriesLeft,
 			}
-			dao.DB.CreateStepTx(tx, stepRecord)
+			BL.DAO.DB.CreateStepTx(tx, stepRecord)
 		}
 		return nil
 	})
 	return runRecord, tErr
 }
 
-func getRunById(id string) (*api.RunRecord, error) {
+func (b *BL) getRunById(id string) (*api.RunRecord, error) {
 	var result *api.RunRecord
-	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
 			Ids:              []string{id},
 			ReturnAttributes: nil,

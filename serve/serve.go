@@ -22,7 +22,6 @@ import (
 	"github.com/InVisionApp/go-health/v2"
 	"github.com/chi-middleware/logrus-logger"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	log "github.com/sirupsen/logrus"
@@ -38,12 +37,16 @@ import (
 
 var InterruptServe chan os.Signal
 
-type dbHealthCheck struct{}
+type dbHealthCheck struct {
+	BL *bl.BL
+}
 
 func (c *dbHealthCheck) Status() (interface{}, error) {
-	err := dao.DB.SQL().Ping()
+	err := c.BL.DAO.DB.SQL().Ping()
 	if err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		err = fmt.Errorf("health - failed to ping database: %w", err)
+		log.Error(err)
+		return nil, err
 	}
 
 	return nil, nil
@@ -57,7 +60,7 @@ func InitLogrus(out io.Writer, level log.Level) {
 	log.SetOutput(out)
 	output = out
 }
-func Serve(port int64, healthPort int64) {
+func Serve(BL *bl.BL, port int64, healthPort int64) {
 	newLog := log.New()
 	newLog.SetFormatter(&log.JSONFormatter{})
 	newLog.SetLevel(log.GetLevel())
@@ -74,10 +77,13 @@ func Serve(port int64, healthPort int64) {
 	rHealth.Use(middleware.Recoverer)
 	rHealth.Use(middleware.Timeout(60 * time.Second))
 	h := health.New()
+	h.DisableLogging()
 	if err := h.AddChecks([]*health.Config{
 		{
-			Name:     "db-health-check",
-			Checker:  &dbHealthCheck{},
+			Name: "db-health-check",
+			Checker: &dbHealthCheck{
+				BL: BL,
+			},
 			Interval: time.Duration(15) * time.Second,
 			Fatal:    true,
 		},
@@ -105,8 +111,8 @@ func Serve(port int64, healthPort int64) {
 
 	serverAddress := fmt.Sprintf(":%v", port)
 	log.Info(fmt.Sprintf("using server address: %s", serverAddress))
-	srv := http.Server{Addr: serverAddress, Handler: chi.ServerBaseContext(bl.ValveCtx, r)}
-
+	baseContext := context.WithValue(BL.ValveCtx, "BL", BL)
+	srv := http.Server{Addr: serverAddress, Handler: chi.ServerBaseContext(baseContext, r)}
 	exit := make(chan int, 1)
 	go func() {
 		viper.SetDefault("SHUTDOWN_INTERVAL", time.Duration(20)*time.Minute)
@@ -128,8 +134,9 @@ func Serve(port int64, healthPort int64) {
 		}()
 		go func() {
 			defer wg.Done()
+			defer BL.CancelValveCtx()
 			//  shutdownValve is for long running jobs if any.
-			if err := bl.ShutdownValve.Shutdown(shutdownInterval * time.Second); err != nil {
+			if err := BL.ShutdownValve.Shutdown(shutdownInterval * time.Second); err != nil {
 				log.Error(fmt.Errorf("failed to start shutting down valve: %w", err))
 			}
 		}()

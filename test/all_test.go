@@ -41,7 +41,6 @@ import (
 
 func setup() {
 	cmd.InitConfig()
-	cmd.AllowChangeVendor = true
 }
 func teardown() {
 }
@@ -143,6 +142,12 @@ func TestLocal(t *testing.T) {
 	breakOut := false
 BreakOut:
 	for _, vendor := range vendors {
+		if cmd.BL != nil {
+			waitForQueuesToFinish()
+			_ = cmd.BL.ShutdownValve.Shutdown(time.Duration(5) * time.Second)
+			cmd.BL.CancelValveCtx()
+		}
+		cmd.BL = nil
 		for _, tc := range testCases {
 			command := fmt.Sprintf(tc.command, vendor, createdRunId, createdRunIdStepUUID)
 			t.Run(command, func(t *testing.T) {
@@ -203,6 +208,11 @@ BreakOut:
 			}
 		}
 	}
+	if cmd.BL != nil {
+		waitForQueuesToFinish()
+		_ = cmd.BL.ShutdownValve.Shutdown(time.Duration(5) * time.Second)
+		cmd.BL.CancelValveCtx()
+	}
 }
 
 func TestRemotePostgreSQL(t *testing.T) {
@@ -215,6 +225,8 @@ func TestRemotePostgreSQL(t *testing.T) {
 	breakOut := false
 BreakOut:
 	for _, tc := range testCases {
+		waitForQueuesToFinish()
+		cmd.BL = nil
 		command := fmt.Sprintf(tc.command, tc.databaseVendor)
 		cmd.ResetCommandParameters()
 		cmd.RootCmd.SetArgs(args.GetArgs(command))
@@ -227,7 +239,7 @@ BreakOut:
 			}
 			wg.Done()
 		}()
-		time.Sleep(time.Duration(2) * time.Second)
+		time.Sleep(time.Duration(4) * time.Second)
 		client.InitClient(false, "localhost", 3333)
 		createdRunId := ""
 		{
@@ -238,7 +250,7 @@ BreakOut:
 				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
 				break BreakOut
 			}
-			err = template.LoadFromBytes("", true, yamlDocument)
+			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
 			if err != nil {
 				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
 				break BreakOut
@@ -502,6 +514,7 @@ BreakOut:
 				}
 			}
 		})
+		waitForQueuesToFinish()
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end")
@@ -510,7 +523,7 @@ BreakOut:
 
 func waitForQueuesToFinish() {
 	i := 0
-	for !bl.QueuesIdle() {
+	for !cmd.BL.QueuesIdle() {
 		i++
 		time.Sleep(1 * time.Second)
 		if i > 60 {

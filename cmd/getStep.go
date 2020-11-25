@@ -35,7 +35,7 @@ var getStepCmd = &cobra.Command{
 			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
 			return
 		}
-		stepRecords, err := bl.GetSteps(&api.GetStepsQuery{
+		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
 			UUIDs: []string{stepUUID},
 		})
 		if err != nil {
@@ -55,7 +55,7 @@ var getStepCmd = &cobra.Command{
 			return
 		}
 		script := bl.Template{}
-		err = script.LoadFromBytes(run.Id, false, []byte(run.Template))
+		err = script.LoadFromBytes(BL, run.Id, false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to load template while getting a step"
 			Parameters.Err = &Error{

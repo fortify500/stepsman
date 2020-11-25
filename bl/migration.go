@@ -20,16 +20,24 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 )
 
 const CodeDatabaseVersion = 1
 
-func MigrateDB(autoMigrate bool) error {
-	tErr := dao.Transactional(func(tx *sqlx.Tx) error {
+func (b *BL) MigrateDB(autoMigrate bool) error {
+	if !autoMigrate {
+		defer func() {
+			if p := recover(); p != nil {
+				log.Warn("skipping migration due to failure")
+			}
+		}()
+	}
+	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var version = -1
 		var err error
 		if autoMigrate {
-			err = dao.DB.VerifyDBCreation(tx)
+			err = b.DAO.DB.VerifyDBCreation(tx)
 			if err != nil {
 				return fmt.Errorf("failed to verify database table creation: %w", err)
 			}
@@ -55,7 +63,7 @@ func MigrateDB(autoMigrate bool) error {
 		if autoMigrate {
 			switch version {
 			case 0:
-				err = dao.DB.Migrate0(tx)
+				err = b.DAO.DB.Migrate0(tx)
 				if err != nil {
 					return fmt.Errorf("failed to migrate db: %w", err)
 				}

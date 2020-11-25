@@ -20,7 +20,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -86,7 +85,7 @@ func listRunsInternal(runId string) {
 				return
 			}
 		}
-		runs, runRange, err = bl.ListRuns(&query)
+		runs, runRange, err = BL.ListRuns(&query)
 	}
 
 	if err != nil {

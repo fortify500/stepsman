@@ -131,7 +131,6 @@ func Execute() bool {
 	var cmdError *Error
 	_ = RootCmd.Execute()
 	if Parameters.Err != nil {
-		fmt.Println(Parameters.Err)
 		if errors.As(Parameters.Err, &cmdError) {
 			log.Error(cmdError.TechnicalError())
 		} else {
@@ -175,7 +174,7 @@ func InitConfig() {
 	if viper.IsSet("STORE_DIR") {
 		StoreDir = viper.GetString("STORE_DIR")
 		if strings.Contains(StoreDir, "~") {
-			fmt.Println("WARNING: ~ are not supported and are treated as a file or directory part!")
+			fmt.Println(`{"level":"warn", "msg":"~ are not supported and are treated as a file or directory part"}`)
 		}
 	}
 	if viper.IsSet("LOG_LEVEL") {
@@ -203,12 +202,10 @@ func InitConfig() {
 			err = os.MkdirAll(StoreDir, 0700)
 			if err != nil {
 				err = fmt.Errorf("failed to create the .stepsman diretory: %w", err)
-				fmt.Println(err)
 				log.Fatal(err)
 			}
 		} else if err != nil {
 			err = fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
-			fmt.Println(err)
 			log.Fatal(err)
 		}
 		LumberJack = &lumberjack.Logger{
@@ -232,24 +229,8 @@ func InitConfig() {
 		log.WithField("build-info", bi).Info()
 	}
 
-	if viper.IsSet("JOB_QUEUE_NUMBER_OF_WORKERS") {
-		bl.JobQueueNumberOfWorkers = viper.GetInt("JOB_QUEUE_NUMBER_OF_WORKERS")
-	}
-
-	if viper.IsSet("JOB_QUEUE_MEMORY_QUEUE_LIMIT") {
-		bl.JobQueueMemoryQueueLimit = viper.GetInt("JOB_QUEUE_MEMORY_QUEUE_LIMIT")
-	}
-
 	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
 		dao.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
-	}
-
-	if viper.IsSet("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS") {
-		bl.CompleteByInProgressInterval = viper.GetInt64("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS")
-	}
-
-	if viper.IsSet("TEMPLATE_CACHE_SIZE") {
-		bl.DefaultTemplateCacheSize = viper.GetInt("TEMPLATE_CACHE_SIZE")
 	}
 
 	if viper.IsSet("DB_VENDOR") {
@@ -286,7 +267,7 @@ func InitConfig() {
 }
 
 func getRun(id string) (*api.RunRecord, error) {
-	run, err := bl.GetRun(id)
+	run, err := BL.GetRun(id)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %s", id)
 		return nil, &Error{

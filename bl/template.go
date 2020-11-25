@@ -24,13 +24,11 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
-	"github.com/hashicorp/golang-lru"
 	"github.com/mitchellh/mapstructure"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -42,8 +40,6 @@ type DoType string
 const (
 	DoTypeREST DoType = "REST"
 )
-
-var DefaultTemplateCacheSize = 1000
 
 type Rego struct {
 	compiler                  *ast.Compiler
@@ -112,16 +108,6 @@ type StepDoRESTOptions struct {
 	Body                 string      `json:"body,omitempty"`
 }
 
-var templateCache *lru.Cache
-
-func init() {
-	cache, err := lru.New(DefaultTemplateCacheSize)
-	if err != nil {
-		log.Fatal(err)
-	}
-	templateCache = cache
-}
-
 func (do StepDoREST) Describe() string {
 	doStr, err := yaml.Marshal(do)
 	if err != nil {
@@ -130,10 +116,10 @@ func (do StepDoREST) Describe() string {
 	return string(doStr)
 }
 
-func (t *Template) LoadFromBytes(runId string, isYaml bool, yamlDocument []byte) error {
+func (t *Template) LoadFromBytes(BL *BL, runId string, isYaml bool, yamlDocument []byte) error {
 	var err error
 	if runId != "" {
-		entry, ok := templateCache.Get(runId)
+		entry, ok := BL.templateCache.Get(runId)
 		if ok {
 			*t = *entry.(*Template)
 			return nil
@@ -163,13 +149,13 @@ func (t *Template) LoadFromBytes(runId string, isYaml bool, yamlDocument []byte)
 	return nil
 }
 
-func (t *Template) RefreshInput(runId string) {
+func (t *Template) RefreshInput(BL *BL, runId string) {
 	var err error
 	t.rego.inputMutex.RLock()
 	if t.rego.input == nil {
 		t.rego.inputMutex.RUnlock()
 		if wasInit := t.initInput(); wasInit {
-			templateCache.Add(runId, t)
+			BL.templateCache.Add(runId, t)
 		}
 		t.rego.inputMutex.RLock()
 	}
@@ -200,7 +186,7 @@ func (t *Template) RefreshInput(runId string) {
 			Value:         index,
 		})
 	}
-	stepRecords, _, err := listStepsByQuery(query)
+	stepRecords, _, err := BL.listStepsByQuery(query)
 	if err != nil {
 		panic(err)
 	}
@@ -267,7 +253,7 @@ func (t *Template) initInput() bool {
 	return wasInit
 }
 
-func (t *Template) LoadAndCreateRun(key string, fileName string, fileType string) (string, error) {
+func (t *Template) LoadAndCreateRun(BL *BL, key string, fileName string, fileType string) (string, error) {
 	yamlDocument, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
@@ -276,7 +262,7 @@ func (t *Template) LoadAndCreateRun(key string, fileName string, fileType string
 	if strings.EqualFold(fileType, "json") {
 		isYaml = false
 	}
-	err = t.LoadFromBytes("", isYaml, yamlDocument)
+	err = t.LoadFromBytes(BL, "", isYaml, yamlDocument)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
 	}
@@ -292,7 +278,7 @@ func (t *Template) LoadAndCreateRun(key string, fileName string, fileType string
 		return runId, err
 	} else {
 		var runRow *api.RunRecord
-		runRow, err = t.CreateRun(key)
+		runRow, err = t.CreateRun(BL, key)
 		if err != nil {
 			return "", fmt.Errorf("failed to start: %w", err)
 		}
@@ -367,7 +353,7 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 	}
 	return nil
 }
-func (t *Template) ResolveCurlyPercent(str string) (string, error) {
+func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 	var buffer bytes.Buffer
 	tokens, escapedStr := TokenizeCurlyPercent(str)
 	if len(tokens) == 0 {
@@ -380,12 +366,12 @@ func (t *Template) ResolveCurlyPercent(str string) (string, error) {
 		queryStr := escapedStr[token.Start:token.End]
 		query, err := rego.New(
 			rego.Query(queryStr),
-		).PrepareForEval(ValveCtx)
+		).PrepareForEval(BL.ValveCtx)
 		if err != nil {
 			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}
 		var eval rego.ResultSet
-		eval, err = t.evaluateCurlyPercent(query)
+		eval, err = t.evaluateCurlyPercent(BL, query)
 		if err != nil {
 			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}
@@ -401,14 +387,14 @@ func (t *Template) ResolveCurlyPercent(str string) (string, error) {
 	return buffer.String(), nil
 }
 
-func (t *Template) evaluateCurlyPercent(query rego.PreparedEvalQuery) (rego.ResultSet, error) {
+func (t *Template) evaluateCurlyPercent(BL *BL, query rego.PreparedEvalQuery) (rego.ResultSet, error) {
 	t.rego.inputMutex.RLock()
 	defer t.rego.inputMutex.RUnlock()
-	return query.Eval(ValveCtx, rego.EvalInput(t.rego.input))
+	return query.Eval(BL.ValveCtx, rego.EvalInput(t.rego.input))
 }
-func (t *Template) ResolveContext(context string) (api.Context, error) {
+func (t *Template) ResolveContext(BL *BL, context string) (api.Context, error) {
 	var result api.Context
-	resolvedContextStr, err := t.ResolveCurlyPercent(context)
+	resolvedContextStr, err := t.ResolveCurlyPercent(BL, context)
 	if err != nil {
 		return nil, err
 	}

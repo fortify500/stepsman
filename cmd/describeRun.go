@@ -69,7 +69,7 @@ You can also describe a single step by adding --step <Index>.`,
 				Value:         Parameters.Step,
 			})
 		}
-		stepRecords, _, err := bl.ListSteps(&api.ListQuery{
+		stepRecords, _, err := BL.ListSteps(&api.ListQuery{
 			Sort: api.Sort{
 				Fields: []string{dao.Index},
 				Order:  "asc",
@@ -86,7 +86,7 @@ You can also describe a single step by adding --step <Index>.`,
 			return
 		}
 		script := bl.Template{}
-		err = script.LoadFromBytes(run.Id, false, []byte(run.Template))
+		err = script.LoadFromBytes(BL, run.Id, false, []byte(run.Template))
 		if err != nil {
 			msg := "failed to describe steps"
 			Parameters.Err = &Error{

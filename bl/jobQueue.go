@@ -17,44 +17,37 @@
 package bl
 
 import (
+	"context"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/go-chi/valve"
 	log "github.com/sirupsen/logrus"
 	"runtime/debug"
-	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type DoWork string
+type doWork string
+type workCounter int32
 
-var memoryQueue chan *DoWork
-var queue = make(chan *DoWork)
-var stop <-chan struct{}
-
-type WorkCounter int32
-
-var workCounter WorkCounter
-
-func (c *WorkCounter) inc() int32 {
+func (c *workCounter) inc() int32 {
 	return atomic.AddInt32((*int32)(c), 1)
 }
-func (c *WorkCounter) dec() int32 {
+func (c *workCounter) dec() int32 {
 	return atomic.AddInt32((*int32)(c), -1)
 }
 
-func (c *WorkCounter) get() int32 {
+func (c *workCounter) get() int32 {
 	return atomic.LoadInt32((*int32)(c))
 }
 
-func Enqueue(do *DoWork) error {
+func (b *BL) Enqueue(do *doWork) error {
 	select {
-	case <-stop:
+	case <-b.stop:
 		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
-	case <-ValveCtx.Done():
+	case <-b.ValveCtx.Done():
 		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
-	case memoryQueue <- do:
+	case b.memoryQueue <- do:
 		return nil
 	case <-time.After(10 * time.Second):
 		return api.NewError(api.ErrJobQueueUnavailable, "leaving enqueue, timeout writing to the job queue")
@@ -62,8 +55,8 @@ func Enqueue(do *DoWork) error {
 }
 
 // try not to use this, this is primarily for testing
-func QueuesIdle() bool {
-	if len(memoryQueue) == 0 && len(queue) == 0 && workCounter.get() == 0 {
+func (b *BL) QueuesIdle() bool {
+	if len(b.memoryQueue) == 0 && len(b.queue) == 0 && b.workCounter.get() == 0 {
 		return true
 	}
 	return false
@@ -84,66 +77,69 @@ func recoverable(recoverableFunction func() error) {
 	}()
 	err = recoverableFunction()
 }
-func processMsg(msg *DoWork) {
-	workCounter.inc()
-	defer workCounter.dec()
+func (b *BL) processMsg(msg *doWork) {
+	b.workCounter.inc()
+	defer b.workCounter.dec()
 	if log.IsLevelEnabled(log.TraceLevel) {
 		log.Tracef("processing msg: %#v", msg)
 	}
 	recoverable(func() error {
-		_, err := doStepSynchronous(&api.DoStepParams{
+		_, err := b.doStepSynchronous(&api.DoStepParams{
 			UUID: string(*msg),
 		})
 		return err
 	})
 }
 
-func startWorkers() {
-	for w := 0; w < JobQueueNumberOfWorkers; w++ {
-		if err := valve.Lever(ValveCtx).Open(); err != nil {
+func (b *BL) startWorkers() {
+	for w := 0; w < b.jobQueueNumberOfWorkers; w++ {
+		if err := valve.Lever(b.ValveCtx).Open(); err != nil {
 			panic(err)
 		}
 		go func() {
-			defer valve.Lever(ValveCtx).Close()
-			for item := range queue {
-				processMsg(item)
+			defer valve.Lever(b.ValveCtx).Close()
+			for item := range b.queue {
+				b.processMsg(item)
 			}
 		}()
 	}
 }
-func startWorkLoop() {
-	startWorkers()
-	if IsPostgreSQL() {
-		go StartRecoveryListening()
+func (b *BL) startWorkLoop() {
+	b.startWorkers()
+	if b.IsPostgreSQL() {
+		go b.startRecoveryListening()
 	}
-	go RecoveryScheduler()
+	go b.recoveryScheduler()
 	go func() {
-		defer close(queue)
+		defer close(b.queue)
 		for {
 			select {
-			case <-stop:
+			case <-b.stop:
+				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
+				for {
+					if b.QueuesIdle() {
+						break
+					}
+					time.Sleep(1 * time.Second)
+				}
+				return
+			case <-b.ValveCtx.Done():
 				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
 				return
-			case <-ValveCtx.Done():
-				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
-				return
-			case msg := <-memoryQueue:
-				queue <- msg
+			case msg := <-b.memoryQueue:
+				b.queue <- msg
 			}
 		}
 	}()
 }
 
-var mu sync.Mutex
-
-func InitQueue() {
-	mu.Lock()
-	defer mu.Unlock()
-	if ShutdownValve == nil {
-		ShutdownValve = valve.New()
-		ValveCtx = ShutdownValve.Context()
-		stop = valve.Lever(ValveCtx).Stop()
-		memoryQueue = make(chan *DoWork, JobQueueMemoryQueueLimit)
-		startWorkLoop()
+func (b *BL) initQueue() {
+	if b.ShutdownValve == nil {
+		b.ShutdownValve = valve.New()
+		b.ValveCtx, b.CancelValveCtx = context.WithCancel(b.ShutdownValve.Context())
+		b.queue = make(chan *doWork)
+		b.stop = valve.Lever(b.ValveCtx).Stop()
+		b.memoryQueue = make(chan *doWork, b.jobQueueMemoryQueueLimit)
+		b.startWorkLoop()
 	}
 }

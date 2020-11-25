@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/bl"
 	"github.com/spf13/cobra"
 )
 
@@ -48,7 +47,7 @@ Use run <run id>.`,
 			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
 			return
 		}
-		err = bl.UpdateRunStatus(runId, status)
+		err = BL.UpdateRunStatus(runId, status)
 		if err != nil {
 			msg := "failed to update run status"
 			Parameters.Err = &Error{

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"github.com/c-bata/go-prompt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/gobs/args"
 	log "github.com/sirupsen/logrus"
@@ -207,7 +206,7 @@ OUT:
 	if strings.EqualFold(relevantCommand.Use, "run") &&
 		len(runWord) > len("run") &&
 		strings.EqualFold(strings.TrimSpace(runWord), "run") {
-		runs, _, err := bl.ListRuns(&api.ListQuery{
+		runs, _, err := BL.ListRuns(&api.ListQuery{
 			Range: api.RangeQuery{
 				Range: api.Range{
 					Start: 0,
