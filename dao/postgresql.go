@@ -100,17 +100,17 @@ func (db *PostgreSQLSqlxDB) Notify(tx *sqlx.Tx, channel string, message string) 
 		panic(err)
 	}
 }
-func (db *PostgreSQLSqlxDB) RecoverSteps(tx *sqlx.Tx) []string {
+func (db *PostgreSQLSqlxDB) RecoverSteps(tx *sqlx.Tx, limit int) []string {
 	var result []string
 	rows, err := tx.Queryx(fmt.Sprintf(`with R as (select run_id, "index" from steps
 		where  complete_by<(NOW() - interval '10 second')
-		FOR UPDATE SKIP LOCKED)
+		FOR UPDATE SKIP LOCKED LIMIT $1)
 
 		update steps
-		set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
+		set status=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
 		FROM R
 		where steps.run_id = R.run_id and steps.index = R.index
-		RETURNING steps.UUID`, CompleteByPendingInterval), api.StepPending)
+		RETURNING steps.UUID`, CompleteByPendingInterval), limit, api.StepPending)
 	if err != nil {
 		panic(err)
 	}

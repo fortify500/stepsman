@@ -61,7 +61,7 @@ type DBI interface {
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
 	completeByUpdateStatement(completeBy *int64) string
-	RecoverSteps(tx *sqlx.Tx) []string
+	RecoverSteps(tx *sqlx.Tx, limit int) []string
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
 

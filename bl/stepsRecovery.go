@@ -31,14 +31,15 @@ const RecoveryChannelName = "recovery"
 
 type RecoveryMessage struct {
 	InstanceUUID string `json:"instance-uuid"`
+	ReachedLimit bool
 }
 
 func (b *BL) recoveryScheduler() {
-	var first = true
+	var shortInterval = true
 	for {
 		var interval time.Duration
-		if first {
-			first = false
+		if shortInterval {
+			shortInterval = false
 			if !b.IsSqlite() {
 				interval = time.Duration(60)*time.Second + time.Duration(rand.Intn(2*60))*time.Second
 			} else {
@@ -54,25 +55,59 @@ func (b *BL) recoveryScheduler() {
 		case <-b.ValveCtx.Done():
 			log.Info("leaving postgresql listener, server is shutting down")
 			return
-		case <-b.reschedule:
+		case msg := <-b.recoveryReschedule:
 			log.Debug("rescheduling postgresql listener")
+			if msg.ReachedLimit {
+				shortInterval = true
+			} else {
+				shortInterval = false
+			}
 		case <-time.After(interval):
 			var stepsUUIDs []string
+			if b.IsPostgreSQL() && len(b.memoryQueue) >= b.recoveryAllowUnderJobQueueNumberOfItems {
+				shortInterval = true
+				continue
+			}
 			tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
-				msg, err := json.Marshal(RecoveryMessage{
-					InstanceUUID: api.InstanceId,
-				})
-				if err != nil {
-					panic(err)
-				}
 				if b.IsPostgreSQL() {
+					msg, err := json.Marshal(RecoveryMessage{
+						InstanceUUID: api.InstanceId,
+					})
+					if err != nil {
+						panic(err)
+					}
 					b.DAO.DB.Notify(tx, RecoveryChannelName, string(msg))
 				}
-				stepsUUIDs = b.DAO.DB.RecoverSteps(tx)
 				return nil
 			})
 			if tErr != nil {
 				log.Errorf("failed to recover steps: %w", tErr)
+			}
+			tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
+				stepsUUIDs = b.DAO.DB.RecoverSteps(tx, b.recoveryMaxRecoverItemsPassLimit)
+				return nil
+			})
+			if tErr != nil {
+				log.Errorf("failed to recover steps: %w", tErr)
+			}
+			if tErr != nil || (b.IsPostgreSQL() && len(stepsUUIDs) >= b.recoveryMaxRecoverItemsPassLimit) {
+				tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
+					if b.IsPostgreSQL() {
+						shortInterval = true
+						msg, err := json.Marshal(RecoveryMessage{
+							InstanceUUID: api.InstanceId,
+							ReachedLimit: true,
+						})
+						if err != nil {
+							panic(err)
+						}
+						b.DAO.DB.Notify(tx, RecoveryChannelName, string(msg))
+					}
+					return nil
+				})
+				if tErr != nil {
+					log.Errorf("failed to recover steps: %w", tErr)
+				}
 			}
 			for _, item := range stepsUUIDs {
 				work := doWork(item)
@@ -122,7 +157,7 @@ func (b *BL) startRecoveryListening() {
 			}
 			log.Debugf("received skip recovery message: %v", recoveryMessage)
 			if recoveryMessage.InstanceUUID != api.InstanceId {
-				b.reschedule <- struct{}{}
+				b.recoveryReschedule <- recoveryMessage
 			}
 		}
 	}

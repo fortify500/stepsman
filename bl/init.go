@@ -32,21 +32,23 @@ import (
 )
 
 type BL struct {
-	netTransport                 *http.Transport
-	ValveCtx                     context.Context
-	ShutdownValve                *valve.Valve
-	CancelValveCtx               context.CancelFunc
-	memoryQueue                  chan *doWork
-	queue                        chan *doWork
-	stop                         <-chan struct{}
-	workCounter                  workCounter
-	completeByInProgressInterval int64
-	jobQueueNumberOfWorkers      int
-	jobQueueMemoryQueueLimit     int
-	reschedule                   chan struct{}
-	templateCacheSize            int
-	templateCache                *lru.Cache
-	DAO                          *dao.DAO
+	netTransport                            *http.Transport
+	ValveCtx                                context.Context
+	ShutdownValve                           *valve.Valve
+	CancelValveCtx                          context.CancelFunc
+	memoryQueue                             chan *doWork
+	queue                                   chan *doWork
+	stop                                    <-chan struct{}
+	workCounter                             workCounter
+	completeByInProgressInterval            int64
+	jobQueueNumberOfWorkers                 int
+	jobQueueMemoryQueueLimit                int
+	recoveryMaxRecoverItemsPassLimit        int
+	recoveryAllowUnderJobQueueNumberOfItems int
+	recoveryReschedule                      chan RecoveryMessage
+	templateCacheSize                       int
+	templateCache                           *lru.Cache
+	DAO                                     *dao.DAO
 }
 
 func (b *BL) IsPostgreSQL() bool {
@@ -69,7 +71,9 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	newBL.jobQueueNumberOfWorkers = 5000
 	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
 	newBL.templateCacheSize = 1000
-	newBL.reschedule = make(chan struct{})
+	newBL.recoveryMaxRecoverItemsPassLimit = newBL.jobQueueMemoryQueueLimit / 2
+	newBL.recoveryAllowUnderJobQueueNumberOfItems = newBL.jobQueueMemoryQueueLimit / 2
+	newBL.recoveryReschedule = make(chan RecoveryMessage)
 	if viper.IsSet("JOB_QUEUE_NUMBER_OF_WORKERS") {
 		newBL.jobQueueNumberOfWorkers = viper.GetInt("JOB_QUEUE_NUMBER_OF_WORKERS")
 	}
@@ -79,6 +83,13 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	if viper.IsSet("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS") {
 		newBL.completeByInProgressInterval = viper.GetInt64("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS")
 	}
+	if viper.IsSet("RECOVERY_MAX_RECOVER_ITEMS_PASS_LIMIT") {
+		newBL.recoveryMaxRecoverItemsPassLimit = viper.GetInt("RECOVERY_MAX_RECOVER_ITEMS_PASS_LIMIT")
+	}
+	if viper.IsSet("RECOVERY_ALLOW_UNDER_JOB_QUEUE_NUMBER_OF_ITEMS") {
+		newBL.recoveryAllowUnderJobQueueNumberOfItems = viper.GetInt("RECOVERY_ALLOW_UNDER_JOB_QUEUE_NUMBER_OF_ITEMS")
+	}
+
 	if viper.IsSet("TEMPLATE_CACHE_SIZE") {
 		newBL.templateCacheSize = viper.GetInt("TEMPLATE_CACHE_SIZE")
 	}
