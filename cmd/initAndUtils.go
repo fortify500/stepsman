@@ -162,11 +162,7 @@ func recoverAndLog(msg string) {
 }
 
 func InitConfig() {
-	uuid4, err := uuid.NewRandom()
-	if err != nil {
-		panic(err)
-	}
-	api.InstanceId = uuid4.String()
+	var err error
 	flag.Parse()
 	viper.SetEnvPrefix("STEPSMAN")
 	viper.AutomaticEnv() // read in environment variables that match
@@ -221,13 +217,6 @@ func InitConfig() {
 		InitLogrusALL(os.Stdout, level)
 	} else {
 		InitLogrusALL(LumberJack, level)
-	}
-
-	log.Info(fmt.Sprintf("stepsman instance id: %s", api.InstanceId))
-	log.Info(fmt.Sprintf("stepsman starting [build commit id: %s]", dao.GitCommit))
-	bi, ok := debug.ReadBuildInfo()
-	if ok {
-		log.WithField("build-info", bi).Info()
 	}
 
 	if viper.IsSet("DB_VENDOR") {

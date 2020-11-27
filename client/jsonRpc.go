@@ -28,14 +28,9 @@ import (
 	"time"
 )
 
-//goland:noinspection GoDeprecation,SpellCheckingInspection
-var Transport = http.Transport{
-	MaxResponseHeaderBytes: 128 * 1024,
-	IdleConnTimeout:        10 * time.Minute,
-}
-var Client = &http.Client{
-	Timeout:   time.Second * 60,
-	Transport: &Transport,
+type CLI struct {
+	Client     *http.Client
+	JsonRpcUrl string
 }
 
 type JSONRPCRequest struct {
@@ -59,27 +54,38 @@ func NewMarshaledJSONRPCRequest(id string, method string, params interface{}) []
 	return marshal
 }
 
-var jsonRpcUrl string
-
-func InitClient(ssl bool, host string, port int64) {
+func New(ssl bool, host string, port int64) *CLI {
 	protocol := "http"
 	if ssl {
 		protocol += "s"
 	}
-	jsonRpcUrl = fmt.Sprintf("%s://%s:%d/v0/json-rpc",
-		protocol,
-		host,
-		port)
+	//goland:noinspection GoDeprecation,SpellCheckingInspection
+	var transport = http.Transport{
+		MaxResponseHeaderBytes: 128 * 1024,
+		IdleConnTimeout:        10 * time.Minute,
+	}
+	var c = &http.Client{
+		Timeout:   time.Second * 60,
+		Transport: &transport,
+	}
+	cli := &CLI{
+		Client: c,
+		JsonRpcUrl: fmt.Sprintf("%s://%s:%d/v0/json-rpc",
+			protocol,
+			host,
+			port),
+	}
+	return cli
 }
 
 //goland:noinspection GoUnhandledErrorResult
-func remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCloser) error) error {
-	newRequest, err := http.NewRequest("POST", jsonRpcUrl, bytes.NewBuffer(request))
+func (c *CLI) remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCloser) error) error {
+	newRequest, err := http.NewRequest("POST", c.JsonRpcUrl, bytes.NewBuffer(request))
 	if err != nil {
 		return fmt.Errorf("failed to form rest request: %w", err)
 	}
 	newRequest.Header.Set("Content-type", "application/json")
-	response, err := Client.Do(newRequest)
+	response, err := c.Client.Do(newRequest)
 	if err != nil {
 		return fmt.Errorf("failed to reach remote server: %w", err)
 	}

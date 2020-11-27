@@ -69,7 +69,7 @@ func (b *BL) recoveryScheduler() {
 			tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 				if b.IsPostgreSQL() {
 					msg, err := json.Marshal(RecoveryMessage{
-						InstanceUUID: api.InstanceId,
+						InstanceUUID: b.InstanceId,
 					})
 					if err != nil {
 						panic(err)
@@ -93,7 +93,7 @@ func (b *BL) recoveryScheduler() {
 					if b.IsPostgreSQL() {
 						shortInterval = true
 						msg, err := json.Marshal(RecoveryMessage{
-							InstanceUUID: api.InstanceId,
+							InstanceUUID: b.InstanceId,
 							ReachedLimit: true,
 						})
 						if err != nil {
@@ -154,7 +154,7 @@ func (b *BL) startRecoveryListening() {
 				log.Trace("received event: %s", msg.Extra)
 			}
 			log.Debugf("received skip recovery message: %v", recoveryMessage)
-			if recoveryMessage.InstanceUUID != api.InstanceId {
+			if recoveryMessage.InstanceUUID != b.InstanceId {
 				b.recoveryReschedule <- recoveryMessage
 			}
 		}

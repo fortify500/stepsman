@@ -30,7 +30,7 @@ type ListStepsResponse struct {
 	ID      string              `json:"id,omitempty"`
 }
 
-func RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
+func (c *CLI) RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
 	var result []api.StepRecord
 	params := api.ListParams{}
 	if query != nil {
@@ -38,7 +38,7 @@ func RemoteListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, 
 	}
 	request := NewMarshaledJSONRPCRequest("1", api.RPCListSteps, &params)
 	var rangeResult *api.RangeResult
-	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult ListStepsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -68,10 +68,10 @@ type GetStepsResponse struct {
 	ID      string             `json:"id,omitempty"`
 }
 
-func RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
+func (c *CLI) RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	var result []api.StepRecord
 	request := NewMarshaledJSONRPCRequest("1", api.RPCGetSteps, query)
-	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult GetStepsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -97,9 +97,9 @@ type UpdateStepResponse struct {
 	ID      string               `json:"id,omitempty"`
 }
 
-func RemoteUpdateStep(query *api.UpdateQuery) error {
+func (c *CLI) RemoteUpdateStep(query *api.UpdateQuery) error {
 	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateStep, query)
-	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult UpdateStepResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -121,10 +121,10 @@ type DoStepResponse struct {
 	ID      string           `json:"id,omitempty"`
 }
 
-func RemoteDoStep(params *api.DoStepParams) (*api.DoStepResult, error) {
+func (c *CLI) RemoteDoStep(params *api.DoStepParams) (*api.DoStepResult, error) {
 	var result *api.DoStepResult
 	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStep, params)
-	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult DoStepResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()

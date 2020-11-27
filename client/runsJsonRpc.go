@@ -30,7 +30,7 @@ type ListRunsResponse struct {
 	ID      string             `json:"id,omitempty"`
 }
 
-func RemoteListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
+func (c *CLI) RemoteListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
 	var result []api.RunRecord
 	params := api.ListParams{}
 	if query != nil {
@@ -38,7 +38,7 @@ func RemoteListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, er
 	}
 	request := NewMarshaledJSONRPCRequest("1", api.RPCListRuns, &params)
 	var rangeResult *api.RangeResult
-	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult ListRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -68,10 +68,10 @@ type GetRunsResponse struct {
 	ID      string            `json:"id,omitempty"`
 }
 
-func RemoteGetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
+func (c *CLI) RemoteGetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	var result []api.RunRecord
 	request := NewMarshaledJSONRPCRequest("1", api.RPCGetRuns, query)
-	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult GetRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -97,9 +97,9 @@ type UpdateRunResponse struct {
 	ID      string              `json:"id,omitempty"`
 }
 
-func RemoteUpdateRun(query *api.UpdateQuery) error {
+func (c *CLI) RemoteUpdateRun(query *api.UpdateQuery) error {
 	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateRun, query)
-	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult UpdateRunResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -121,9 +121,9 @@ type DeleteRunsResponse struct {
 	ID      string               `json:"id,omitempty"`
 }
 
-func RemoteDeleteRuns(query *api.DeleteQuery) error {
+func (c *CLI) RemoteDeleteRuns(query *api.DeleteQuery) error {
 	request := NewMarshaledJSONRPCRequest("1", api.RPCDeleteRun, query)
-	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult DeleteRunsResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
@@ -145,12 +145,12 @@ type CreateRunResponse struct {
 	ID      string               `json:"id,omitempty"`
 }
 
-func RemoteCreateRun(params *api.CreateRunParams) (string, string, api.RunStatusType, error) {
+func (c *CLI) RemoteCreateRun(params *api.CreateRunParams) (string, string, api.RunStatusType, error) {
 	var runId string
 	key := params.Key
 	var status api.RunStatusType
 	request := NewMarshaledJSONRPCRequest("1", api.RPCCreateRun, params)
-	err := remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult CreateRunResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()

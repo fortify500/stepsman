@@ -245,7 +245,7 @@ BreakOut:
 			wg.Done()
 		}()
 		time.Sleep(time.Duration(4) * time.Second)
-		client.InitClient(false, "localhost", 3333)
+		httpClient := client.New(false, "localhost", 3333)
 		createdRunId := ""
 		{
 			fileName := "examples/basic.yaml"
@@ -262,7 +262,7 @@ BreakOut:
 			}
 			{
 				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
-					createdRunId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
+					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
 						Key:      "",
 						Template: template,
 					})
@@ -277,7 +277,7 @@ BreakOut:
 			}
 		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListRuns"), func(t *testing.T) {
-			runs, _, err := client.RemoteListRuns(&api.ListQuery{
+			runs, _, err := httpClient.RemoteListRuns(&api.ListQuery{
 				Filters: []api.Expression{{
 					AttributeName: "id",
 					Operator:      "=",
@@ -294,7 +294,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
-			err := client.RemoteUpdateRun(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunDone.TranslateRunStatus()},
 			})
@@ -304,7 +304,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
-			runs, err := client.RemoteGetRuns(&api.GetRunsQuery{
+			runs, err := httpClient.RemoteGetRuns(&api.GetRunsQuery{
 				Ids:              []string{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
 			})
@@ -322,7 +322,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun idle"), func(t *testing.T) {
-			err := client.RemoteUpdateRun(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunIdle.TranslateRunStatus()},
 			})
@@ -332,7 +332,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
-			runs, err := client.RemoteGetRuns(&api.GetRunsQuery{
+			runs, err := httpClient.RemoteGetRuns(&api.GetRunsQuery{
 				Ids:              []string{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
 			})
@@ -351,7 +351,7 @@ BreakOut:
 		})
 		var stepUUIDs []string
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
-			steps, _, err := client.RemoteListSteps(&api.ListQuery{
+			steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
 				Filters: []api.Expression{{
 					AttributeName: dao.RunId,
 					Operator:      "=",
@@ -377,7 +377,7 @@ BreakOut:
 			break BreakOut
 		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
-			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
 				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
@@ -393,7 +393,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
-			err := client.RemoteUpdateStep(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateStep(&api.UpdateQuery{
 				Id:      stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepFailed.TranslateStepStatus()},
 			})
@@ -403,7 +403,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
-			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
 				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
@@ -422,7 +422,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
-			err := client.RemoteUpdateStep(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateStep(&api.UpdateQuery{
 				Id:      stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepIdle.TranslateStepStatus()},
 			})
@@ -432,7 +432,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
-			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
 				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
@@ -452,7 +452,7 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
 			statusOwner := "allTestOwner"
-			response, err := client.RemoteDoStep(&api.DoStepParams{
+			response, err := httpClient.RemoteDoStep(&api.DoStepParams{
 				UUID:        stepUUIDs[0],
 				StatusOwner: statusOwner,
 			})
@@ -467,7 +467,7 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
 			statusOwner := "allTestOwner"
-			response, err := client.RemoteDoStep(&api.DoStepParams{
+			response, err := httpClient.RemoteDoStep(&api.DoStepParams{
 				UUID:        stepUUIDs[0],
 				StatusOwner: statusOwner,
 			})
@@ -482,7 +482,7 @@ BreakOut:
 		})
 		waitForQueuesToFinish()
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
-			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
 				UUIDs: []string{stepUUIDs[0]},
 			})
 			if err != nil {
@@ -501,7 +501,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
-			steps, err := client.RemoteGetSteps(&api.GetStepsQuery{
+			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
 				UUIDs: []string{stepUUIDs[1]},
 			})
 			if err != nil {
@@ -535,7 +535,7 @@ BreakOut:
 			}
 			{
 				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
-					createdRunId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
+					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
 						Key:      "",
 						Template: template,
 					})
@@ -551,7 +551,7 @@ BreakOut:
 		}
 
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
-			err := client.RemoteUpdateRun(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateRun(&api.UpdateQuery{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunInProgress.TranslateRunStatus()},
 			})
@@ -562,7 +562,7 @@ BreakOut:
 		})
 
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDeleteRun done"), func(t *testing.T) {
-			err := client.RemoteDeleteRuns(&api.DeleteQuery{
+			err := httpClient.RemoteDeleteRuns(&api.DeleteQuery{
 				Ids:   []string{createdRunId},
 				Force: false,
 			})
@@ -575,7 +575,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDeleteRun done"), func(t *testing.T) {
-			err := client.RemoteDeleteRuns(&api.DeleteQuery{
+			err := httpClient.RemoteDeleteRuns(&api.DeleteQuery{
 				Ids:   []string{createdRunId},
 				Force: true,
 			})

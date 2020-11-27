@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -268,7 +267,7 @@ func (t *Template) LoadAndCreateRun(BL *BL, key string, fileName string, fileTyp
 	}
 	if dao.IsRemote {
 		var runId string
-		runId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
+		runId, _, _, err = BL.Client.RemoteCreateRun(&api.CreateRunParams{
 			Key:      key,
 			Template: t,
 		})

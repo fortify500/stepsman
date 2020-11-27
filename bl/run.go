@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -28,7 +27,7 @@ import (
 
 func (b *BL) ListRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
-		return client.RemoteListRuns(query)
+		return b.Client.RemoteListRuns(query)
 	} else {
 		return b.listRuns(query)
 	}
@@ -50,7 +49,7 @@ func (b *BL) listRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, 
 
 func (b *BL) DeleteRuns(query *api.DeleteQuery) error {
 	if dao.IsRemote {
-		return client.RemoteDeleteRuns(query)
+		return b.Client.RemoteDeleteRuns(query)
 	} else {
 		return b.deleteRunInternal(query)
 	}
@@ -65,7 +64,7 @@ func (b *BL) deleteRunInternal(query *api.DeleteQuery) error {
 
 func (b *BL) GetRun(id string) (*api.RunRecord, error) {
 	if dao.IsRemote {
-		runs, err := client.RemoteGetRuns(&api.GetRunsQuery{
+		runs, err := b.Client.RemoteGetRuns(&api.GetRunsQuery{
 			Ids:              []string{id},
 			ReturnAttributes: nil,
 		})
@@ -80,7 +79,7 @@ func (b *BL) GetRun(id string) (*api.RunRecord, error) {
 
 func (b *BL) GetRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	if dao.IsRemote {
-		return client.RemoteGetRuns(query)
+		return b.Client.RemoteGetRuns(query)
 	} else {
 		return b.getRuns(query)
 	}
@@ -100,7 +99,7 @@ func (b *BL) getRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 }
 func (b *BL) UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
 	if dao.IsRemote {
-		return client.RemoteUpdateRun(&api.UpdateQuery{
+		return b.Client.RemoteUpdateRun(&api.UpdateQuery{
 			Id: runId,
 			Changes: map[string]interface{}{
 				"status": newStatus.TranslateRunStatus(),

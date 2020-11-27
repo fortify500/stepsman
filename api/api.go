@@ -30,8 +30,6 @@ import (
 	"time"
 )
 
-var InstanceId string
-
 const (
 	RPCListRuns  = "listRuns"
 	RPCGetRuns   = "getRuns"

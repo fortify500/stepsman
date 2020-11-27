@@ -22,6 +22,7 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
+	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru"
 	_ "github.com/jackc/pgx/stdlib"
 	_ "github.com/mattn/go-sqlite3"
@@ -29,6 +30,7 @@ import (
 	"github.com/spf13/viper"
 	"io"
 	"net/http"
+	"runtime/debug"
 )
 
 type BL struct {
@@ -51,8 +53,10 @@ type BL struct {
 	recoveryLongIntervalRandomizedSeconds   int
 	recoveryReschedule                      chan RecoveryMessage
 	templateCacheSize                       int
+	InstanceId                              string
 	templateCache                           *lru.Cache
 	DAO                                     *dao.DAO
+	Client                                  *client.CLI
 }
 
 func (b *BL) IsPostgreSQL() bool {
@@ -71,13 +75,23 @@ func (b *BL) IsSqlite() bool {
 }
 func New(daoParameters *dao.ParametersType) (*BL, error) {
 	var newBL BL
+	uuid4, err := uuid.NewRandom()
+	if err != nil {
+		panic(err)
+	}
+	newBL.InstanceId = uuid4.String()
+	log.Info(fmt.Sprintf("stepsman instance id: %s", newBL.InstanceId))
+	log.Info(fmt.Sprintf("stepsman starting [build commit id: %s]", dao.GitCommit))
+	bi, ok := debug.ReadBuildInfo()
+	if ok {
+		log.WithField("build-info", bi).Info()
+	}
 	newBL.completeByInProgressInterval = 3600
 	newBL.jobQueueNumberOfWorkers = 5000
 	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
 	newBL.templateCacheSize = 1000
 	newBL.recoveryLongIntervalMinimumSeconds = 10 * 60
 	newBL.recoveryLongIntervalRandomizedSeconds = 10 * 60
-
 	newBL.recoveryMaxRecoverItemsPassLimit = newBL.jobQueueMemoryQueueLimit / 2
 	newBL.recoveryAllowUnderJobQueueNumberOfItems = newBL.jobQueueMemoryQueueLimit / 2
 	newBL.recoveryReschedule = make(chan RecoveryMessage)
@@ -148,7 +162,7 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 		}
 		newBL.initQueue()
 	} else {
-		client.InitClient(newBL.DAO.Parameters.DatabaseSSLMode, newBL.DAO.Parameters.DatabaseHost, newBL.DAO.Parameters.DatabasePort)
+		newBL.Client = client.New(newBL.DAO.Parameters.DatabaseSSLMode, newBL.DAO.Parameters.DatabaseHost, newBL.DAO.Parameters.DatabasePort)
 	}
 
 	return &newBL, nil

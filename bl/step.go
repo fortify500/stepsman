@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
@@ -33,21 +32,21 @@ const defaultHeartBeatInterval = 10 * time.Second
 
 func (b *BL) GetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	if dao.IsRemote {
-		return client.RemoteGetSteps(query)
+		return b.Client.RemoteGetSteps(query)
 	} else {
 		return b.getStepsByQuery(query)
 	}
 }
 func (b *BL) ListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
 	if dao.IsRemote {
-		return client.RemoteListSteps(query)
+		return b.Client.RemoteListSteps(query)
 	}
 	return b.listStepsByQuery(query)
 }
 
 func (b *BL) UpdateStep(query *api.UpdateQuery) error {
 	if dao.IsRemote {
-		return client.RemoteUpdateStep(query)
+		return b.Client.RemoteUpdateStep(query)
 	} else {
 		return b.updateStep(query)
 	}
@@ -434,7 +433,7 @@ func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner
 
 func (b *BL) DoStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResult, error) {
 	if dao.IsRemote {
-		return client.RemoteDoStep(params) //always async
+		return b.Client.RemoteDoStep(params) //always async
 	} else {
 		return b.doStep(params, synchronous)
 	}
