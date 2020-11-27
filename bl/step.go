@@ -278,7 +278,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, stepUUID strin
 		var retriesLeftVar int
 		var completeBy *int64
 		if newStatus == api.StepPending || toEnqueue {
-			completeBy = &dao.CompleteByPendingInterval
+			completeBy = &BL.DAO.CompleteByPendingInterval
 		} else if newStatus == api.StepInProgress {
 			completeBy = step.GetCompleteBy(BL)
 			retriesLeftVar = updatedStepRecord.RetriesLeft - 1
@@ -393,7 +393,7 @@ func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner
 							}
 							if tErr := BL.DAO.Transactional(func(tx *sqlx.Tx) error {
 								for _, indexAndContext := range indicesAndContext {
-									uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexAndContext.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &dao.CompleteByPendingInterval, nil, indexAndContext.resolvedContext, nil)
+									uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexAndContext.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexAndContext.resolvedContext, nil)
 									if len(uuids) == 1 {
 										uuidsToEnqueue = append(uuidsToEnqueue, uuids[0])
 									}
@@ -445,7 +445,7 @@ func (b *BL) doStep(params *api.DoStepParams, synchronous bool) (*api.DoStepResu
 		var owner dao.UUIDAndStatusOwner
 		var toEnqueue = true
 		tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
-			updated := b.DAO.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{params.UUID}, api.StepPending, params.StatusOwner, []api.StepStatusType{api.StepIdle}, params.Context, &dao.CompleteByPendingInterval)
+			updated := b.DAO.UpdateManyStatusAndHeartBeatByUUIDTx(tx, []string{params.UUID}, api.StepPending, params.StatusOwner, []api.StepStatusType{api.StepIdle}, params.Context, &b.DAO.CompleteByPendingInterval)
 			if len(updated) != 1 {
 				partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
 					UUIDs:            []string{params.UUID},

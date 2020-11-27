@@ -40,13 +40,11 @@ func (b *BL) recoveryScheduler() {
 		var interval time.Duration
 		if shortInterval {
 			shortInterval = false
-			if !b.IsSqlite() {
-				interval = time.Duration(60)*time.Second + time.Duration(rand.Intn(2*60))*time.Second
-			} else {
-				interval = time.Duration(5) * time.Second
-			}
+			interval = time.Duration(b.recoveryShortIntervalMinimumSeconds)*time.Second +
+				time.Duration(rand.Intn(b.recoveryShortIntervalRandomizedSeconds))*time.Second
 		} else {
-			interval = time.Duration(10*60)*time.Second + time.Duration(rand.Intn(10*60))*time.Second
+			interval = time.Duration(b.recoveryLongIntervalMinimumSeconds)*time.Second +
+				time.Duration(rand.Intn(b.recoveryLongIntervalRandomizedSeconds))*time.Second
 		}
 		select {
 		case <-b.stop:
@@ -84,7 +82,7 @@ func (b *BL) recoveryScheduler() {
 				log.Errorf("failed to recover steps: %w", tErr)
 			}
 			tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
-				stepsUUIDs = b.DAO.DB.RecoverSteps(tx, b.recoveryMaxRecoverItemsPassLimit)
+				stepsUUIDs = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit)
 				return nil
 			})
 			if tErr != nil {

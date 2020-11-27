@@ -45,6 +45,10 @@ type BL struct {
 	jobQueueMemoryQueueLimit                int
 	recoveryMaxRecoverItemsPassLimit        int
 	recoveryAllowUnderJobQueueNumberOfItems int
+	recoveryShortIntervalMinimumSeconds     int
+	recoveryShortIntervalRandomizedSeconds  int
+	recoveryLongIntervalMinimumSeconds      int
+	recoveryLongIntervalRandomizedSeconds   int
 	recoveryReschedule                      chan RecoveryMessage
 	templateCacheSize                       int
 	templateCache                           *lru.Cache
@@ -71,6 +75,9 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	newBL.jobQueueNumberOfWorkers = 5000
 	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
 	newBL.templateCacheSize = 1000
+	newBL.recoveryLongIntervalMinimumSeconds = 10 * 60
+	newBL.recoveryLongIntervalRandomizedSeconds = 10 * 60
+
 	newBL.recoveryMaxRecoverItemsPassLimit = newBL.jobQueueMemoryQueueLimit / 2
 	newBL.recoveryAllowUnderJobQueueNumberOfItems = newBL.jobQueueMemoryQueueLimit / 2
 	newBL.recoveryReschedule = make(chan RecoveryMessage)
@@ -102,6 +109,30 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	newBL.DAO, err = dao.New(daoParameters)
 	if err != nil {
 		return nil, err
+	}
+
+	if newBL.IsSqlite() {
+		newBL.recoveryShortIntervalMinimumSeconds = 5
+		newBL.recoveryShortIntervalRandomizedSeconds = 2
+	} else {
+		newBL.recoveryShortIntervalMinimumSeconds = 60
+		newBL.recoveryShortIntervalRandomizedSeconds = 2 * 60
+	}
+
+	if viper.IsSet("RECOVERY_SHORT_INTERVAL_MINIMUM_SECONDS") {
+		newBL.recoveryShortIntervalMinimumSeconds = viper.GetInt("RECOVERY_SHORT_INTERVAL_MINIMUM_SECONDS")
+	}
+
+	if viper.IsSet("RECOVERY_SHORT_INTERVAL_RANDOMIZED_SECONDS") {
+		newBL.recoveryShortIntervalRandomizedSeconds = viper.GetInt("RECOVERY_SHORT_INTERVAL_RANDOMIZED_SECONDS")
+	}
+
+	if viper.IsSet("RECOVERY_LONG_INTERVAL_MINIMUM_SECONDS") {
+		newBL.recoveryLongIntervalMinimumSeconds = viper.GetInt("RECOVERY_LONG_INTERVAL_MINIMUM_SECONDS")
+	}
+
+	if viper.IsSet("RECOVERY_LONG_INTERVAL_RANDOMIZED_SECONDS") {
+		newBL.recoveryLongIntervalRandomizedSeconds = viper.GetInt("RECOVERY_LONG_INTERVAL_RANDOMIZED_SECONDS")
 	}
 
 	maxResponseHeaderByte := int64(0)

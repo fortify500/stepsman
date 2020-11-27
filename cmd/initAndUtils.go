@@ -230,10 +230,6 @@ func InitConfig() {
 		log.WithField("build-info", bi).Info()
 	}
 
-	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
-		dao.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
-	}
-
 	if viper.IsSet("DB_VENDOR") {
 		Parameters.DatabaseVendor = viper.GetString("DB_VENDOR")
 	}

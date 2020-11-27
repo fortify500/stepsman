@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"io"
 	"os"
 	"runtime/debug"
@@ -31,8 +32,6 @@ import (
 )
 
 var GitCommit string
-
-var CompleteByPendingInterval int64 = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
 
 const (
 	Id              = "id"
@@ -61,7 +60,7 @@ type DBI interface {
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
 	Migrate0(tx *sqlx.Tx) error
 	completeByUpdateStatement(completeBy *int64) string
-	RecoverSteps(tx *sqlx.Tx, limit int) []string
+	RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int) []string
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
 
@@ -132,12 +131,17 @@ type ParametersType struct {
 }
 
 type DAO struct {
-	Parameters ParametersType
-	DB         DBI
+	Parameters                ParametersType
+	CompleteByPendingInterval int64
+	DB                        DBI
 }
 
 func New(parameters *ParametersType) (*DAO, error) {
 	var newDAO DAO
+	newDAO.CompleteByPendingInterval = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
+	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
+		newDAO.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
+	}
 	newDAO.Parameters = *parameters
 	switch strings.TrimSpace(newDAO.Parameters.DatabaseVendor) {
 	//goland:noinspection SpellCheckingInspection
