@@ -37,6 +37,7 @@ const (
 	RPCGetRuns   = "getRuns"
 	RPCUpdateRun = "updateRun"
 	RPCCreateRun = "createRun"
+	RPCDeleteRun = "deleteRun"
 
 	RPCListSteps  = "listSteps"
 	RPCGetSteps   = "getSteps"
@@ -99,6 +100,9 @@ type UpdateQuery struct {
 type UpdateRunParams UpdateQuery
 type UpdateRunResult struct{}
 
+type DeleteRunsParams DeleteQuery
+type DeleteRunsResult struct{}
+
 type CreateRunsResult RunRecord
 type CreateRunParams struct {
 	Key          string      `json:"key,omitempty"`
@@ -128,6 +132,11 @@ type DoStepParams struct {
 }
 type DoStepResult struct {
 	StatusOwner string `json:"status-owner,omitempty"`
+}
+
+type DeleteQuery struct {
+	Ids   []string `json:"id,omitempty"`
+	Force bool     `json:"force,omitempty"`
 }
 
 type RunRecord struct {
@@ -441,8 +450,29 @@ var ErrTemplateEvaluationFailed = &ErrorCode{
 	Message: "failed to evaluate a template expression",
 }
 var ErrStepDoneCannotBeChanged = &ErrorCode{
-	Code:    1010,
+	Code:    1011,
 	Message: "step is already done and we rely on it to not be changed",
+}
+var ErrCannotDeleteRunIsInProgress = &ErrorCode{
+	Code:    1012,
+	Message: "a run cannot be deleted if in progress, unless force is specified",
+}
+
+var ErrorCodes = map[int64]*ErrorCode{
+	int64(ErrStatusNotChanged.Code):            ErrStatusNotChanged,
+	int64(ErrInvalidParams.Code):               ErrInvalidParams,
+	int64(ErrRecordNotFound.Code):              ErrRecordNotFound,
+	int64(ErrRecordNotAffected.Code):           ErrRecordNotAffected,
+	int64(ErrExternal.Code):                    ErrExternal,
+	int64(ErrStepAlreadyInProgress.Code):       ErrStepAlreadyInProgress,
+	int64(ErrRunIsAlreadyDone.Code):            ErrRunIsAlreadyDone,
+	int64(ErrShuttingDown.Code):                ErrShuttingDown,
+	int64(ErrPrevStepStatusDoesNotMatch.Code):  ErrPrevStepStatusDoesNotMatch,
+	int64(ErrJobQueueUnavailable.Code):         ErrJobQueueUnavailable,
+	int64(ErrStepNoRetriesLeft.Code):           ErrStepNoRetriesLeft,
+	int64(ErrTemplateEvaluationFailed.Code):    ErrTemplateEvaluationFailed,
+	int64(ErrStepDoneCannotBeChanged.Code):     ErrStepDoneCannotBeChanged,
+	int64(ErrCannotDeleteRunIsInProgress.Code): ErrCannotDeleteRunIsInProgress,
 }
 
 type ErrorCaller struct {

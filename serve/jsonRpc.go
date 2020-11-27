@@ -100,6 +100,9 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 	if err := mr.RegisterMethod(api.RPCCreateRun, CreateRunHandler{}, api.CreateRunParams{}, api.CreateRunsResult{}); err != nil {
 		log.Fatal(err)
 	}
+	if err := mr.RegisterMethod(api.RPCDeleteRun, DeleteRunsHandler{}, api.DeleteRunsParams{}, api.DeleteRunsResult{}); err != nil {
+		log.Fatal(err)
+	}
 
 	if err := mr.RegisterMethod(api.RPCListSteps, ListStepsHandler{}, api.ListParams{}, api.ListStepsResult{}); err != nil {
 		log.Fatal(err)

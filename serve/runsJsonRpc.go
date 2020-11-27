@@ -30,10 +30,11 @@ import (
 )
 
 type (
-	ListRunsHandler  struct{}
-	GetRunsHandler   struct{}
-	CreateRunHandler struct{}
-	UpdateRunHandler struct{}
+	ListRunsHandler   struct{}
+	GetRunsHandler    struct{}
+	CreateRunHandler  struct{}
+	UpdateRunHandler  struct{}
+	DeleteRunsHandler struct{}
 )
 
 func (h ListRunsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -123,6 +124,30 @@ func (h UpdateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 		}
 
 		result = &api.UpdateRunResult{}
+		return nil
+	})
+	return result, jsonRPCErr
+}
+
+func (h DeleteRunsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.DeleteRunsParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
+		}
+		if err := dao.VetIds(p.Ids); err != nil {
+			return resolveError(err)
+		}
+		err := BL.DeleteRuns((*api.DeleteQuery)(&p))
+		if err != nil {
+			return resolveError(err)
+		}
+
+		result = &api.DeleteRunsResult{}
 		return nil
 	})
 	return result, jsonRPCErr

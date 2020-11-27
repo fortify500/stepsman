@@ -114,6 +114,30 @@ func RemoteUpdateRun(query *api.UpdateQuery) error {
 	})
 }
 
+type DeleteRunsResponse struct {
+	Version string               `json:"jsonrpc"`
+	Result  api.DeleteRunsResult `json:"result,omitempty"`
+	Error   JSONRPCError         `json:"error,omitempty"`
+	ID      string               `json:"id,omitempty"`
+}
+
+func RemoteDeleteRuns(query *api.DeleteQuery) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCDeleteRun, query)
+	return remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+		var jsonRPCResult DeleteRunsResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return fmt.Errorf("failed to remote delete runs: %w", err)
+		}
+		return nil
+	})
+}
+
 type CreateRunResponse struct {
 	Version string               `json:"jsonrpc"`
 	Result  api.CreateRunsResult `json:"result,omitempty"`

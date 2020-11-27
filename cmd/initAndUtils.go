@@ -54,6 +54,7 @@ const (
 	CommandGetRun
 	CommandUpdateRun
 	CommandUpdateStep
+	CommandDeleteRun
 )
 
 type AllParameters struct {

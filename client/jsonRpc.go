@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -103,6 +104,10 @@ type (
 
 func getJSONRPCError(jsonRpcError *JSONRPCError) error {
 	if jsonRpcError.Code != 0 {
+		code, ok := api.ErrorCodes[int64(jsonRpcError.Code)]
+		if ok {
+			return api.NewError(code, jsonRpcError.Message)
+		}
 		return fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRpcError.Code, jsonRpcError.Message)
 	}
 	return nil

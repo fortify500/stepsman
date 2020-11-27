@@ -138,6 +138,11 @@ func TestLocal(t *testing.T) {
 		{"do -V %[1]s step %[3]s", false, false},
 		{"get -V %[1]s step %[3]s", false, false},
 		{"describe -V %[1]s run %[2]s", false, false},
+		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
+		{`delete -V %[1]s run %[2]s`, false, false},
+		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
+		{`update -V %[1]s run %[2]s -s "In Progress"`, false, false},
+		{`delete -V %[1]s run %[2]s -f`, false, false},
 	}
 	breakOut := false
 BreakOut:
@@ -512,6 +517,71 @@ BreakOut:
 				if step.Status != api.StepDone {
 					t.Errorf("step %s status must be done", step.UUID)
 				}
+			}
+		})
+
+		{
+			fileName := "examples/basic.yaml"
+			var template bl.Template
+			yamlDocument, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
+				break BreakOut
+			}
+			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
+				break BreakOut
+			}
+			{
+				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
+					createdRunId, _, _, err = client.RemoteCreateRun(&api.CreateRunParams{
+						Key:      "",
+						Template: template,
+					})
+					if err != nil {
+						t.Error(err)
+						breakOut = true
+					}
+				})
+				if breakOut {
+					break BreakOut
+				}
+			}
+		}
+
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
+			err := client.RemoteUpdateRun(&api.UpdateQuery{
+				Id:      createdRunId,
+				Changes: map[string]interface{}{"status": api.RunInProgress.TranslateRunStatus()},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		})
+
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDeleteRun done"), func(t *testing.T) {
+			err := client.RemoteDeleteRuns(&api.DeleteQuery{
+				Ids:   []string{createdRunId},
+				Force: false,
+			})
+			if err != nil {
+				var apiErr *api.Error
+				if !errors.As(err, &apiErr) && apiErr.Code() == api.ErrCannotDeleteRunIsInProgress {
+					t.Error(err)
+					return
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDeleteRun done"), func(t *testing.T) {
+			err := client.RemoteDeleteRuns(&api.DeleteQuery{
+				Ids:   []string{createdRunId},
+				Force: true,
+			})
+			if err != nil {
+				t.Error(err)
+				return
 			}
 		})
 		waitForQueuesToFinish()

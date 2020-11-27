@@ -48,6 +48,21 @@ func (b *BL) listRuns(query *api.ListQuery) ([]api.RunRecord, *api.RangeResult, 
 	return runRecords, rangeResult, tErr
 }
 
+func (b *BL) DeleteRuns(query *api.DeleteQuery) error {
+	if dao.IsRemote {
+		return client.RemoteDeleteRuns(query)
+	} else {
+		return b.deleteRunInternal(query)
+	}
+}
+func (b *BL) deleteRunInternal(query *api.DeleteQuery) error {
+	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
+		return dao.DeleteRunsTx(tx, query)
+	})
+	return tErr
+
+}
+
 func (b *BL) GetRun(id string) (*api.RunRecord, error) {
 	if dao.IsRemote {
 		runs, err := client.RemoteGetRuns(&api.GetRunsQuery{

@@ -324,6 +324,50 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 	return result, nil
 }
 
+func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
+	var err error
+	var query string
+	var args []interface{}
+
+	if !deleteRunsQuery.Force {
+		query, args, err = sqlx.In("SELECT COUNT(*) FROM RUNS WHERE status<>? AND id IN (?)", api.RunInProgress, deleteRunsQuery.Ids)
+		if err != nil {
+			panic(err)
+		}
+		query = tx.Rebind(query)
+		var count int64
+		err = tx.Get(&count, query, args...)
+		if err != nil {
+			panic(fmt.Errorf("failed to delete runs from database: %w", err))
+		}
+		if count != int64(len(deleteRunsQuery.Ids)) {
+			return api.NewError(api.ErrRecordNotFound, "failed to delete run record, some records where not found or where in progress")
+		}
+	}
+
+	query, args, err = sqlx.In("DELETE FROM steps WHERE run_id IN (?)", deleteRunsQuery.Ids)
+	if err != nil {
+		panic(err)
+	}
+	query = tx.Rebind(query)
+	_, err = tx.Exec(query, args...)
+	if err != nil {
+		panic(fmt.Errorf("failed to delete runs from database: %w", err))
+	}
+
+	query, args, err = sqlx.In("DELETE FROM runs where id IN (?)", deleteRunsQuery.Ids)
+	if err != nil {
+		panic(err)
+	}
+	query = tx.Rebind(query)
+	_, err = tx.Exec(query, args...)
+	if err != nil {
+		panic(fmt.Errorf("failed to delete runs from database: %w", err))
+	}
+
+	return nil
+}
+
 func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType) {
 	if _, err := tx.Exec("update runs set status=$1 where id=$2", newStatus, id); err != nil {
 		panic(err)
