@@ -23,17 +23,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var doRunCmd = &cobra.Command{
+var doStepCmd = &cobra.Command{
 	Use:   "step",
 	Args:  cobra.ExactArgs(1),
 	Short: "Do can execute a step do.",
 	Long: `Do can execute a step do.
-Use do step <step uuid>.`,
+Use do step <step uuid> or do step <run id> --label <step label>.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		Parameters.CurrentCommand = CommandDoStep
 		defer recoverAndLog("failed to do step")
 		syncDoStepParams()
-		stepUUID, err := parseStepUUID(args[0])
+		stepUUIDOrRunId, err := parseStepUUID(args[0])
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
@@ -48,30 +48,50 @@ Use do step <step uuid>.`,
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
-		var doStepResult *api.DoStepResult
-		doStepResult, err = BL.DoStep(&api.DoStepParams{
-			UUID:        stepUUID,
-			Context:     stepContext,
-			StatusOwner: statusOwner,
-		}, true)
-		if err != nil {
-			msg := "failed to do step"
-			Parameters.Err = &Error{
-				Technical: fmt.Errorf(msg+": %w", err),
-				Friendly:  msg,
+		if Parameters.Label != "" {
+			var doStepResult api.DoStepByLabelResult
+			doStepResult, err = BL.DoStepByLabel(&api.DoStepByLabelParams{
+				RunId:       stepUUIDOrRunId,
+				Label:       Parameters.Label,
+				Context:     stepContext,
+				StatusOwner: statusOwner,
+			}, true)
+			if err != nil {
+				msg := "failed to do step"
+				Parameters.Err = &Error{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
+				return
 			}
-			return
+			stepUUIDOrRunId = doStepResult.UUID
+			fmt.Printf("returned step uuid and status owner: %s,%s\n", doStepResult, doStepResult.StatusOwner)
+		} else {
+			var doStepResult api.DoStepByUUIDResult
+			doStepResult, err = BL.DoStepByUUID(&api.DoStepByUUIDParams{
+				UUID:        stepUUIDOrRunId,
+				Context:     stepContext,
+				StatusOwner: statusOwner,
+			}, true)
+			if err != nil {
+				msg := "failed to do step"
+				Parameters.Err = &Error{
+					Technical: fmt.Errorf(msg+": %w", err),
+					Friendly:  msg,
+				}
+				return
+			}
+			fmt.Printf("returned status owner: %s\n", doStepResult.StatusOwner)
 		}
-		fmt.Printf("returned status owner: %s\n", doStepResult.StatusOwner)
 		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
-			UUIDs: []string{stepUUID},
+			UUIDs: []string{stepUUIDOrRunId},
 		})
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
 			return
 		}
 		if len(stepRecords) != 1 {
-			Parameters.Err = fmt.Errorf("failed to locate step uuid [%s]", stepUUID)
+			Parameters.Err = fmt.Errorf("failed to locate step uuid [%s]", stepUUIDOrRunId)
 			return
 		}
 		stepRecord := stepRecords[0]
@@ -89,13 +109,15 @@ var doStepParams AllParameters
 func syncDoStepParams() {
 	Parameters.StatusOwner = doStepParams.Step
 	Parameters.Context = doStepParams.Context
+	Parameters.Label = doStepParams.Label
 }
 func init() {
-	doCmd.AddCommand(doRunCmd)
+	doCmd.AddCommand(doStepCmd)
 	initFlags := func() error {
-		doRunCmd.ResetFlags()
-		doRunCmd.Flags().StringVarP(&doStepParams.StatusOwner, "step-owner", "s", "", "Step Owner - to prevent do step contentions and duplicate calls, a step owner will allow duplicate calls and behave as the first call")
-		doRunCmd.Flags().StringVarP(&doStepParams.Context, "context", "e", "{}", "step do context which will be available in {% %} or rego code")
+		doStepCmd.ResetFlags()
+		doStepCmd.Flags().StringVarP(&doStepParams.Label, "label", "l", "", "step label")
+		doStepCmd.Flags().StringVarP(&doStepParams.StatusOwner, "step-owner", "s", "", "step owner - to prevent do step contentions and duplicate calls, a step owner will allow duplicate calls and behave as the first call")
+		doStepCmd.Flags().StringVarP(&doStepParams.Context, "context", "e", "{}", "step do context which will be available in {% %} or rego code")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)

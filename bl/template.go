@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
-	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
@@ -289,11 +288,11 @@ func (t *Template) LoadAndCreateRun(BL *BL, key string, fileName string, fileTyp
 
 func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 	if s.Label == "" {
-		random, err := uuid.NewRandom()
-		if err != nil {
-			panic(err)
-		}
-		s.Label = random.String()
+		return api.NewError(api.ErrInvalidParams, "label must be specified for step: %v", *s)
+	}
+	_, ok := t.labelsToIndices[s.Label]
+	if ok {
+		return api.NewError(api.ErrInvalidParams, "label must be unique among steps: %s", s.Label)
 	}
 	t.labelsToIndices[s.Label] = index
 	t.indicesToLabels[index] = s.Label

@@ -114,18 +114,18 @@ func (c *CLI) RemoteUpdateStep(query *api.UpdateQuery) error {
 	})
 }
 
-type DoStepResponse struct {
-	Version string           `json:"jsonrpc"`
-	Result  api.DoStepResult `json:"result,omitempty"`
-	Error   JSONRPCError     `json:"error,omitempty"`
-	ID      string           `json:"id,omitempty"`
+type DoStepByUUIDResponse struct {
+	Version string                 `json:"jsonrpc"`
+	Result  api.DoStepByUUIDResult `json:"result,omitempty"`
+	Error   JSONRPCError           `json:"error,omitempty"`
+	ID      string                 `json:"id,omitempty"`
 }
 
-func (c *CLI) RemoteDoStep(params *api.DoStepParams) (*api.DoStepResult, error) {
-	var result *api.DoStepResult
-	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStep, params)
+func (c *CLI) RemoteDoStepByUUID(params *api.DoStepByUUIDParams) (api.DoStepByUUIDResult, error) {
+	var result api.DoStepByUUIDResult
+	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStepByUUID, params)
 	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
-		var jsonRPCResult DoStepResponse
+		var jsonRPCResult DoStepByUUIDResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
 		if err = decoder.Decode(&jsonRPCResult); err != nil {
@@ -135,7 +135,34 @@ func (c *CLI) RemoteDoStep(params *api.DoStepParams) (*api.DoStepResult, error) 
 		if err != nil {
 			return fmt.Errorf("failed to remote do step: %w", err)
 		}
-		result = &jsonRPCResult.Result
+		result = jsonRPCResult.Result
+		return nil
+	})
+	return result, err
+}
+
+type DoStepByLabelResponse struct {
+	Version string                  `json:"jsonrpc"`
+	Result  api.DoStepByLabelResult `json:"result,omitempty"`
+	Error   JSONRPCError            `json:"error,omitempty"`
+	ID      string                  `json:"id,omitempty"`
+}
+
+func (c *CLI) RemoteDoStepByLabel(params *api.DoStepByLabelParams) (api.DoStepByLabelResult, error) {
+	var result api.DoStepByLabelResult
+	request := NewMarshaledJSONRPCRequest("1", api.RPCDoStepByLabel, params)
+	err := c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+		var jsonRPCResult DoStepByLabelResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return fmt.Errorf("failed to remote do step: %w", err)
+		}
+		result = jsonRPCResult.Result
 		return nil
 	})
 	return result, err

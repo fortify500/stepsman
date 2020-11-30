@@ -37,10 +37,11 @@ const (
 	RPCCreateRun = "createRun"
 	RPCDeleteRun = "deleteRun"
 
-	RPCListSteps  = "listSteps"
-	RPCGetSteps   = "getSteps"
-	RPCUpdateStep = "updateStep"
-	RPCDoStep     = "doStep"
+	RPCListSteps     = "listSteps"
+	RPCGetSteps      = "getSteps"
+	RPCUpdateStep    = "updateStep"
+	RPCDoStepByUUID  = "doStepByUUID"
+	RPCDoStepByLabel = "doStepByLabel"
 )
 
 const CurrentTimeStamp = "2006-01-02 15:04:05"
@@ -123,12 +124,23 @@ type GetStepsParams GetStepsQuery
 type UpdateStepParams UpdateQuery
 type UpdateStepResult struct{}
 
-type DoStepParams struct {
+type DoStepByUUIDParams struct {
 	UUID        string  `json:"uuid,omitempty"`
 	Context     Context `json:"context,omitempty"`
 	StatusOwner string  `json:"status-owner,omitempty"`
 }
-type DoStepResult struct {
+type DoStepByUUIDResult struct {
+	StatusOwner string `json:"status-owner,omitempty"`
+}
+
+type DoStepByLabelParams struct {
+	RunId       string  `json:"run-id,omitempty"`
+	Label       string  `json:"label,omitempty"`
+	Context     Context `json:"context,omitempty"`
+	StatusOwner string  `json:"status-owner,omitempty"`
+}
+type DoStepByLabelResult struct {
+	UUID        string `json:"uuid,omitempty"`
 	StatusOwner string `json:"status-owner,omitempty"`
 }
 

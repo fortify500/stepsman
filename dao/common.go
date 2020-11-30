@@ -228,6 +228,7 @@ func VetIds(ids []string) error {
 
 type indicesUUIDs struct {
 	runId string
+	label string
 	index int64
 	uuid  string
 }
@@ -270,6 +271,10 @@ func (d *DAO) updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indices
 		if indexOrUUID.runId != "" {
 			where = append(where, "run_id")
 			params = append(params, indexOrUUID.runId)
+		}
+		if indexOrUUID.label != "" {
+			where = append(where, "label")
+			params = append(params, indexOrUUID.label)
 		}
 		if indexOrUUID.index > 0 {
 			where = append(where, "\"index\"")
@@ -318,8 +323,17 @@ func (d *DAO) updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indices
 			panic(err)
 		}
 		if affected == 1 {
-			var partialStep *api.StepRecord
-			if indexOrUUID.uuid == "" {
+			var partialStep api.StepRecord
+			if indexOrUUID.label != "" {
+				partialStep, err = GetStepByLabelTx(tx, indexOrUUID.runId, indexOrUUID.label, []string{UUID})
+				if err != nil {
+					panic(err)
+				}
+				result = append(result, UUIDAndStatusOwner{
+					UUID:        partialStep.UUID,
+					StatusOwner: statusOwner,
+				})
+			} else if indexOrUUID.runId != "" && indexOrUUID.index > 0 {
 				partialStep, err = GetStepTx(tx, indexOrUUID.runId, indexOrUUID.index, []string{UUID})
 				if err != nil {
 					panic(err)

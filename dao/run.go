@@ -254,6 +254,39 @@ func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) {
 		panic(err)
 	}
 }
+func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runReturnAttributes []string) (api.RunRecord, string, error) {
+	var result []api.RunRecord
+	var rows *sqlx.Rows
+	var err error
+	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, runReturnAttributes)
+	if err != nil {
+		return api.RunRecord{}, "", fmt.Errorf("failed to get run transactional: %w", err)
+	}
+	query := fmt.Sprintf("SELECT %s, steps.uuid as step_uuid FROM runs inner join steps on runs.id=steps.run_id where runs.id=$1 AND steps.label = $2", attributesStr)
+	rows, err = tx.Queryx(query, runId, label)
+	if err != nil {
+		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
+	}
+	stepUUIDStruct := struct {
+		StepUUID string `db:"step_uuid"`
+		api.RunRecord
+	}{}
+	defer rows.Close()
+	for rows.Next() {
+		err = rows.StructScan(&stepUUIDStruct)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database runs row - get: %w", err))
+		}
+		if stepUUIDStruct.StepUUID == "" {
+			panic(fmt.Errorf("failed to parse step uuid when retrieving runs row"))
+		}
+		result = append(result, stepUUIDStruct.RunRecord)
+	}
+	if result == nil || len(result) != 1 {
+		return api.RunRecord{}, "", api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
+	}
+	return result[0], stepUUIDStruct.StepUUID, nil
+}
 func GetRunsByStepUUIDsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {
 	var result []api.RunRecord
 	var rows *sqlx.Rows

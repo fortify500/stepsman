@@ -26,10 +26,11 @@ import (
 )
 
 type (
-	ListStepsHandler  struct{}
-	GetStepsHandler   struct{}
-	UpdateStepHandler struct{}
-	DoStepHandler     struct{}
+	ListStepsHandler     struct{}
+	GetStepsHandler      struct{}
+	UpdateStepHandler    struct{}
+	DoStepByUUIDHandler  struct{}
+	DoStepByLabelHandler struct{}
 )
 
 func (h ListStepsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -103,11 +104,11 @@ func (h UpdateStepHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Ra
 	return result, jsonRPCErr
 }
 
-func (h DoStepHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h DoStepByUUIDHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
 	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
-		var p api.DoStepParams
+		var p api.DoStepByUUIDParams
 		if params != nil {
 			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 				return errResult
@@ -116,7 +117,36 @@ func (h DoStepHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMes
 		if err := dao.VetIds([]string{p.UUID}); err != nil {
 			return resolveError(err)
 		}
-		doResult, err := BL.DoStep(&p, false)
+		doResult, err := BL.DoStepByUUID(&p, false)
+		if err != nil {
+			return resolveError(err)
+		}
+		result = doResult
+		return nil
+	})
+	return result, jsonRPCErr
+}
+
+func (h DoStepByLabelHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+	var result interface{}
+	BL := ctx.Value("BL").(*bl.BL)
+	jsonRPCErr := recoverable(func() *jsonrpc.Error {
+		var p api.DoStepByLabelParams
+		if params != nil {
+			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
+				return errResult
+			}
+		}
+		if err := dao.VetIds([]string{p.RunId}); err != nil {
+			return resolveError(err)
+		}
+		if p.Label == "" {
+			return &jsonrpc.Error{
+				Code:    jsonrpc.ErrorCodeInvalidParams,
+				Message: "label string must not be empty",
+			}
+		}
+		doResult, err := BL.DoStepByLabel(&p, false)
 		if err != nil {
 			return resolveError(err)
 		}

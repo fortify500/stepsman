@@ -98,6 +98,7 @@ type AllParameters struct {
 	CurrentRun       *api.RunRecord
 	FlagsReInit      []func() error
 	Err              error
+	Label            string
 }
 
 var Parameters = AllParameters{

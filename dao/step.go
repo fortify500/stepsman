@@ -100,11 +100,43 @@ func GetStepsTx(tx *sqlx.Tx, getQuery *api.GetStepsQuery) ([]api.StepRecord, err
 	return result, nil
 }
 
-func GetStepTx(tx *sqlx.Tx, runId string, index int64, attributes []string) (*api.StepRecord, error) {
-	var result *api.StepRecord
+func GetStepByLabelTx(tx *sqlx.Tx, runId string, label string, attributes []string) (api.StepRecord, error) {
+	var result api.StepRecord
 	attributesStr, err := buildStepsReturnAttributesStrAndVet(attributes)
 	if err != nil {
-		return nil, err
+		return api.StepRecord{}, err
+	}
+	query := "SELECT %s,CURRENT_TIMESTAMP as now FROM steps where run_id=$1 and label=$2"
+	query = fmt.Sprintf(query, attributesStr)
+	var rows *sqlx.Rows
+	rows, err = tx.Queryx(query, runId, label)
+	if err != nil {
+		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
+	}
+
+	var found = false
+	defer rows.Close()
+	for rows.Next() {
+		found = true
+		var step api.StepRecord
+		err = rows.StructScan(&step)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
+		}
+		result = step
+		break
+	}
+	if !found {
+		return api.StepRecord{}, api.NewError(api.ErrRecordNotFound, "failed to get step record, no record found")
+	}
+	return result, nil
+}
+
+func GetStepTx(tx *sqlx.Tx, runId string, index int64, attributes []string) (api.StepRecord, error) {
+	var result api.StepRecord
+	attributesStr, err := buildStepsReturnAttributesStrAndVet(attributes)
+	if err != nil {
+		return api.StepRecord{}, err
 	}
 	query := "SELECT %s,CURRENT_TIMESTAMP as now FROM steps where run_id=$1 and \"index\"=$2"
 	query = fmt.Sprintf(query, attributesStr)
@@ -114,18 +146,20 @@ func GetStepTx(tx *sqlx.Tx, runId string, index int64, attributes []string) (*ap
 		panic(fmt.Errorf("failed to query database steps table - get: %w", err))
 	}
 
+	found := false
 	defer rows.Close()
 	for rows.Next() {
+		found = true
 		var step api.StepRecord
 		err = rows.StructScan(&step)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
 		}
-		result = &step
+		result = step
 		break
 	}
-	if result == nil {
-		return nil, api.NewError(api.ErrRecordNotFound, "failed to get step record, no record found")
+	if !found {
+		return api.StepRecord{}, api.NewError(api.ErrRecordNotFound, "failed to get step record, no record found")
 	}
 	return result, nil
 }
@@ -189,6 +223,18 @@ func (d *DAO) UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, runId string, indices []in
 	}
 	return d.updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, retriesLeft, context, state)
 }
+
+func (d *DAO) UpdateManyStatusAndHeartBeatByLabelTx(tx *sqlx.Tx, runId string, labels []string, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, context api.Context, completeBy *int64) []UUIDAndStatusOwner {
+	var indicesUuids []indicesUUIDs
+	for _, label := range labels {
+		indicesUuids = append(indicesUuids, indicesUUIDs{
+			runId: runId,
+			label: label,
+		})
+	}
+	return d.updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, nil, context, nil)
+}
+
 func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.RangeResult, error) {
 	var result []api.StepRecord
 	var rows *sqlx.Rows

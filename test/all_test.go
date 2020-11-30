@@ -179,6 +179,8 @@ func TestLocal(t *testing.T) {
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
 		{`update -V %[1]s run %[2]s -s "In Progress"`, false, false},
 		{`delete -V %[1]s run %[2]s -f`, false, false},
+		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
+		{"do -V %[1]s step %[2]s --label starting", false, false},
 	}
 	breakOut := false
 BreakOut:
@@ -486,9 +488,9 @@ BreakOut:
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByUUID"), func(t *testing.T) {
 			statusOwner := "allTestOwner"
-			response, err := httpClient.RemoteDoStep(&api.DoStepParams{
+			response, err := httpClient.RemoteDoStepByUUID(&api.DoStepByUUIDParams{
 				UUID:        stepUUIDs[0],
 				StatusOwner: statusOwner,
 			})
@@ -501,9 +503,9 @@ BreakOut:
 				return
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStep"), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByUUID"), func(t *testing.T) {
 			statusOwner := "allTestOwner"
-			response, err := httpClient.RemoteDoStep(&api.DoStepParams{
+			response, err := httpClient.RemoteDoStepByUUID(&api.DoStepByUUIDParams{
 				UUID:        stepUUIDs[0],
 				StatusOwner: statusOwner,
 			})
@@ -617,6 +619,51 @@ BreakOut:
 			})
 			if err != nil {
 				t.Error(err)
+				return
+			}
+		})
+		{
+			fileName := "examples/basic.yaml"
+			var template bl.Template
+			yamlDocument, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
+				break BreakOut
+			}
+			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
+				break BreakOut
+			}
+			{
+				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
+					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
+						Key:      "",
+						Template: template,
+					})
+					if err != nil {
+						t.Error(err)
+						breakOut = true
+					}
+				})
+				if breakOut {
+					break BreakOut
+				}
+			}
+		}
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByLabel"), func(t *testing.T) {
+			statusOwner := "allTestOwner"
+			response, err := httpClient.RemoteDoStepByLabel(&api.DoStepByLabelParams{
+				RunId:       createdRunId,
+				Label:       "starting",
+				StatusOwner: statusOwner,
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if response.StatusOwner != statusOwner {
+				t.Error(fmt.Sprintf("status owner should be: %s, got %s", statusOwner, response.StatusOwner))
 				return
 			}
 		})
