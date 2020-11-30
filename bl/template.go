@@ -148,7 +148,7 @@ func (t *Template) LoadFromBytes(BL *BL, runId string, isYaml bool, yamlDocument
 	return nil
 }
 
-func (t *Template) RefreshInput(BL *BL, runId string) {
+func (t *Template) RefreshInput(BL *BL, runId string, context api.Context) {
 	var err error
 	t.rego.inputMutex.RLock()
 	if t.rego.input == nil {
@@ -161,6 +161,9 @@ func (t *Template) RefreshInput(BL *BL, runId string) {
 	lastStateHeartBeat := t.rego.lastStateHeartBeat
 	lastStateHeartBeatIndices := t.rego.lastStateHeartBeatIndices
 	t.rego.inputMutex.RUnlock()
+	t.rego.inputMutex.Lock()
+	t.rego.input["context"] = context
+	t.rego.inputMutex.Unlock()
 	query := &api.ListQuery{
 		Filters: []api.Expression{{
 			AttributeName: dao.RunId,
@@ -380,7 +383,11 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 		if len(eval) > 0 &&
 			len(eval[0].Expressions) > 0 &&
 			eval[0].Expressions[0].Value != nil {
-			buffer.WriteString(fmt.Sprintf("%v", eval[0].Expressions[0].Value))
+			marshaledValue, err := json.Marshal(eval[0].Expressions[0].Value)
+			if err != nil {
+				return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+			}
+			buffer.WriteString(string(marshaledValue))
 		} else {
 			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}

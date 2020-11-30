@@ -287,15 +287,16 @@ func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runRetu
 	}
 	return result[0], stepUUIDStruct.StepUUID, nil
 }
-func GetRunsByStepUUIDsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {
+func GetRunsByStepUUIDsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, []api.Context, error) {
 	var result []api.RunRecord
+	var contexts []api.Context
 	var rows *sqlx.Rows
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, getQuery.ReturnAttributes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get run transactional: %w", err)
+		return nil, nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	queryStr := fmt.Sprintf("SELECT %s FROM runs inner join steps on runs.id=steps.run_id where steps.uuid IN (?)", attributesStr)
+	queryStr := fmt.Sprintf("SELECT %s, steps.context FROM runs inner join steps on runs.id=steps.run_id where steps.uuid IN (?)", attributesStr)
 	var query string
 	var args []interface{}
 	query, args, err = sqlx.In(queryStr, getQuery.Ids)
@@ -309,17 +310,21 @@ func GetRunsByStepUUIDsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRec
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var run api.RunRecord
-		err = rows.StructScan(&run)
+		contextAndRunStruct := struct {
+			Context api.Context `db:"context"`
+			api.RunRecord
+		}{}
+		err = rows.StructScan(&contextAndRunStruct)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database runs row - get: %w", err))
 		}
-		result = append(result, run)
+		result = append(result, contextAndRunStruct.RunRecord)
+		contexts = append(contexts, contextAndRunStruct.Context)
 	}
 	if result == nil || len(result) != len(getQuery.Ids) {
-		return nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
+		return nil, nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
 	}
-	return result, nil
+	return result, contexts, nil
 }
 
 func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {

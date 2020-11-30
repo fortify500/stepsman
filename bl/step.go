@@ -548,11 +548,11 @@ func (b *BL) doStepSynchronous(byLabelParams *api.DoStepByLabelParams, byUUIDPar
 	var context api.Context
 	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		if byUUIDParams != nil {
-			runs, err := dao.GetRunsByStepUUIDsTx(tx, &api.GetRunsQuery{
+			runs, contexts, err := dao.GetRunsByStepUUIDsTx(tx, &api.GetRunsQuery{
 				Ids:              []string{byUUIDParams.UUID},
 				ReturnAttributes: []string{dao.Id, dao.Status, dao.Template},
 			})
-			if err != nil || len(runs) != 1 {
+			if err != nil || len(runs) != 1 || len(contexts) != 1 {
 				if err != nil {
 					return fmt.Errorf("failed to locate run by step uuid [%s]: %w", byUUIDParams.UUID, err)
 				} else {
@@ -561,7 +561,11 @@ func (b *BL) doStepSynchronous(byLabelParams *api.DoStepByLabelParams, byUUIDPar
 			}
 			stepUUID = byUUIDParams.UUID
 			statusOwner = byUUIDParams.StatusOwner
-			context = byUUIDParams.Context
+			if byUUIDParams.Context == nil {
+				context = contexts[0]
+			} else {
+				context = byUUIDParams.Context
+			}
 			run = runs[0]
 		} else if byLabelParams != nil {
 			var err error
@@ -570,6 +574,10 @@ func (b *BL) doStepSynchronous(byLabelParams *api.DoStepByLabelParams, byUUIDPar
 				return fmt.Errorf("failed to locate run by step run-id and label [%s:%s]: %w", byLabelParams.RunId, byLabelParams.Label, err)
 			}
 			statusOwner = byLabelParams.StatusOwner
+			//context always comes from either the caller or internally with uuid so this will not be reached.
+			if byLabelParams.Context == nil {
+				panic(fmt.Errorf("context cannot be nil in this code position"))
+			}
 			context = byLabelParams.Context
 		} else {
 			panic(fmt.Errorf("one of label or uuid params must not be nil"))
@@ -588,7 +596,7 @@ func (b *BL) doStepSynchronous(byLabelParams *api.DoStepByLabelParams, byUUIDPar
 	if err != nil {
 		return api.DoStepByUUIDResult{}, api.DoStepByLabelResult{}, fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
 	}
-	template.RefreshInput(b, run.Id)
+	template.RefreshInput(b, run.Id, context)
 	var updatedStepRecord *api.StepRecord
 	updatedStepRecord, err = template.StartDo(b, run.Id, stepUUID, statusOwner, context)
 	if err != nil {

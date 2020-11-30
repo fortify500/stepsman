@@ -19,12 +19,12 @@ steps:
         rules:
           - then:
               do:
-                # - label: emails
-                #   context: >
-                #     {% input.context %}
+                - label: emails
+                  context: >
+                    {% input.context %}
                 - label: next
                   context: >
-                    { "result": "next", "title": "{% input.template.title %}"}  
+                    { "result": "next", "title": {% input.template.title %}}  
   - name: "next"
     description: >
       example for a rest call 2
@@ -46,7 +46,7 @@ steps:
               do:
                 - label: finishing
                   context: >
-                    { "result": "finish", "status-phrase": "{% input.labels["starting"]["result"]["status-phrase"] %}"}
+                    { "result": "finish", "status-phrase": {% input.labels["starting"]["result"]["status-phrase"] %}}
   - name: "Finishing" # mandatory
     description: > # optional
       example for a rest call 3
@@ -65,8 +65,10 @@ steps:
     label: emails
     do:
       type: REST
-      heartbeat-timeout: 50 # we send the the callee our step uuid in the call. 
-        # It need to get back to us and update the heartbeat if he is going to be late.
+      heartbeat-timeout: 50 # we send the the callee our run-id and step label in the call. 
+      # In an async flow, the callee returns stepsman-complete-by (seconds) which can only be lower than the template complete-by or 0 for template maximum.
+      # if the callee does not return stepsman-complete-by it will by a synchronous call.
+      # It need to get back to us and update the heartbeat before the timeout if he is going to be late, otherwise it MAY be retried.
       # In this case it is not serious that emails are not sent but anyone who did not get the email will not press
       # Starting, for example, in an approval process. Therefor we wish to track the status.
       options:
@@ -80,4 +82,4 @@ steps:
               {% input.context["email-authorization"] %}
           stepsman-info:
             - >
-              {"run-id": "{% input["run"]["id"] %}", "label":"emails"}
+              {"run-id": {% input["run"]["id"] %}, "label":"emails"}
