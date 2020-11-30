@@ -5,8 +5,16 @@ version: 1
 tags:
   uuid:
     - e09d86c4-b907-4674-af4f-8aceeb2b7ef1
+on:
+  error:
+    rules:
+      - if: >
+          result{input.error["phrase"]=="run-expired"}
+        then:
+          do:
+            - label: expiration
 steps:
-  - name: "expiration" # you can setup a scheduler to call this step after a timeout. alternatively, flow will call this if it detects the timeout has expired on any call/query to it.
+  - name: "expiration"
     description: expire the workflow
     label: expiration
     on:
@@ -28,7 +36,7 @@ steps:
         timeout: 60 #seconds
         method: GET
         url: >
-          {% input.env.flow%}/send-emails/path_1_step_1
+          {% input.env.flow %}/send-emails/path_1_step_1
         headers:
           authorization:
             - >
@@ -54,7 +62,7 @@ steps:
       options:
         - then:
             set-result: >
-              {"status":{% input.context["status"]%}}
+              {"status":{% input.context["status"] %}}
     on:
       pre-do: #important to note that pre-do is decided before locking the step into one execution of DO (i.e. in-progress status)
         decisions:
@@ -70,7 +78,7 @@ steps:
                 code: 403
                 message: "access denied"
                 data: >
-                  {% input.decision["check_access"]["result"]%}
+                  {% input.decision["check_access"]["result"] %}
           - if: >
               result{input.decision["check_valid_input"]["result"]!="valid"}
             then:
@@ -78,7 +86,7 @@ steps:
                 code: 400
                 message: "invalid input"
                 data: >
-                  {% input.decision["check_valid_input"]["result"]%}
+                  {% input.decision["check_valid_input"]["result"] %}
       pre-done:
         decisions:
           - label: decision_step
@@ -134,7 +142,7 @@ steps:
       options:
         - then:
             set-result: >
-              {"status":{% input.context["status"]%}}
+              {"status":{% input.context["status"] %}}
     on:
       pre-do:
         decisions:
@@ -150,7 +158,7 @@ steps:
                 code: 403
                 message: "access denied"
                 data: >
-                  {% input.decision["check_access"]["result"]%}
+                  {% input.decision["check_access"]["result"] %}
           - if: >
               result{input.decision["check_valid_input"]["result"]!="valid"}
             then:
@@ -209,7 +217,7 @@ steps:
       options:
         method: POST
         url: >
-          {% input.env.rulengine%}/re_notification
+          {% input.env.rulengine %}/re_notification
         body: >
           { "result": {% input.context["result"] %} }
         headers:

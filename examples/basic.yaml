@@ -19,6 +19,9 @@ steps:
         rules:
           - then:
               do:
+                - label: emails
+                  context: >
+                    {% input.context %}
                 - label: next
                   context: >
                     { "result": "next", "title": "{% input.template.title %}"}  
@@ -56,3 +59,25 @@ steps:
         max-response-body-bytes: 524288
         method: GET
         url: https://jsonplaceholder.typicode.com/todos/3
+  - name: "send emails we are starting"
+    description: >
+      Send email by given step. Example for an async rest call
+    label: emails
+    do:
+      type: REST
+      heartbeat-timeout: 50 # we send the the callee our step uuid in the call. 
+        # It need to get back to us and update the heartbeat if he is going to be late.
+        # In this case it is not serious that emails are not sent but anyone who did not get the email will not press
+      # Starting, for example, in an approval process. Therefor we wish to track the status.
+      options:
+        timeout: 60 #seconds
+        method: GET
+        url: >
+          https://jsonplaceholder.typicode.com/todos/4
+        headers:
+          authorization:
+            - >
+              {% input.context["email-authorization"] %}
+          stepsman-info:
+            - >
+              {"run-id": "{% input["run"]["id"] %}", "label":"emails"}
