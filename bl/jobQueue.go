@@ -42,6 +42,8 @@ func (c *workCounter) get() int32 {
 }
 
 func (b *BL) Enqueue(do *doWork) error {
+	timer := time.NewTimer(10 * time.Second) // timer that will be GC even if not reached
+	defer timer.Stop()
 	select {
 	case <-b.stop:
 		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
@@ -49,7 +51,7 @@ func (b *BL) Enqueue(do *doWork) error {
 		return api.NewError(api.ErrShuttingDown, "leaving enqueue, server is shutting down")
 	case b.memoryQueue <- do:
 		return nil
-	case <-time.After(10 * time.Second):
+	case <-timer.C:
 		return api.NewError(api.ErrJobQueueUnavailable, "leaving enqueue, timeout writing to the job queue")
 	}
 }

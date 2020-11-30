@@ -495,7 +495,12 @@ func (b *BL) doStepSynchronous(params *api.DoStepParams) (*api.DoStepResult, err
 			ReturnAttributes: []string{dao.Id, dao.Status, dao.Template},
 		})
 		if err != nil || len(runs) != 1 {
-			return api.NewError(api.ErrRecordNotFound, "failed to locate run by step uuid [%s]", params.UUID)
+			if err != nil {
+				return api.NewWrapError(api.ErrRecordNotFound, err, "failed to locate run by step uuid [%s]: %w", params.UUID, err)
+			} else {
+				return api.NewError(api.ErrRecordNotFound, "failed to locate run by step uuid [%s]", params.UUID)
+			}
+
 		}
 		run = &runs[0]
 		return nil

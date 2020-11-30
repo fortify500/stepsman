@@ -36,6 +36,8 @@ type RecoveryMessage struct {
 
 func (b *BL) recoveryScheduler() {
 	var shortInterval = true
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
 	for {
 		var interval time.Duration
 		if shortInterval {
@@ -46,6 +48,7 @@ func (b *BL) recoveryScheduler() {
 			interval = time.Duration(b.recoveryLongIntervalMinimumSeconds)*time.Second +
 				time.Duration(rand.Intn(b.recoveryLongIntervalRandomizedSeconds))*time.Second
 		}
+		resetTimer(timer, interval)
 		select {
 		case <-b.stop:
 			log.Info("leaving postgresql listener, server is shutting down")
@@ -60,7 +63,7 @@ func (b *BL) recoveryScheduler() {
 			} else {
 				shortInterval = false
 			}
-		case <-time.After(interval):
+		case <-timer.C:
 			var stepsUUIDs []string
 			if b.IsPostgreSQL() && len(b.memoryQueue) >= b.recoveryAllowUnderJobQueueNumberOfItems {
 				shortInterval = true
@@ -116,6 +119,20 @@ func (b *BL) recoveryScheduler() {
 		}
 		log.Debug("rescheduling postgresql listener, restarting loop")
 	}
+}
+
+func resetTimer(timer *time.Timer, interval time.Duration) {
+	timer.Stop()
+	for {
+		select {
+		case <-timer.C:
+			continue
+		default:
+			break
+		}
+		break
+	}
+	timer.Reset(interval)
 }
 func (b *BL) startRecoveryListening() {
 	reportErrFunc := func(ev pq.ListenerEventType, err error) {

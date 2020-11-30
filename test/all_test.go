@@ -31,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
+	"github.com/open-policy-agent/opa/types"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -74,10 +75,19 @@ func TestParsing(t *testing.T) {
 			"status": "in-progress",
 		},
 	}
-	compiler, err := ast.CompileModules(map[string]string{
-		fmt.Sprintf("s%d", 1): fmt.Sprintf("package s%d\n%s", 1, "result{input.context[\"status\"]=\"in-progress\"}"),
-	})
+
+	module, err := ast.ParseModule(
+		fmt.Sprintf("s%d", 1), fmt.Sprintf("package s%d\n%s", 1, "result{input.context[\"status\"]=\"in-progress\"}"),
+	)
 	if err != nil {
+		t.Error(err)
+		return
+	}
+	capabilitiesForThisVersion := ast.CapabilitiesForThisVersion()
+	compiler := ast.NewCompiler().WithCapabilities(capabilitiesForThisVersion)
+	compiler.Compile(map[string]*ast.Module{fmt.Sprintf("s%d", 1): module})
+	if compiler.Failed() {
+		err = fmt.Errorf("failed to compile: %v", compiler.Errors)
 		t.Error(err)
 		return
 	}
@@ -105,7 +115,33 @@ func TestParsing(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
+	eval, err = query.Eval(context.Background(), rego.EvalInput(input))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	for _, result := range eval {
+		fmt.Println(result)
+	}
+	compiler = ast.NewCompiler().WithCapabilities(&ast.Capabilities{
+		Builtins: []*ast.Builtin{
+			ast.Equal,
+			ast.NowNanos,
+			ast.Equality,
+			{
+				Name: "foo",
+				Decl: types.NewFunction([]types.Type{types.N}, types.B),
+			},
+		},
+	})
+	query, err = rego.New(
+		rego.Query("time.now_ns()"),
+		rego.Compiler(compiler),
+	).PrepareForEval(context.Background())
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	eval, err = query.Eval(context.Background(), rego.EvalInput(input))
 	if err != nil {
 		t.Error(err)

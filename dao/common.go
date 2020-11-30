@@ -219,7 +219,7 @@ func VetIds(ids []string) error {
 		for _, id := range ids {
 			_, err := uuid.Parse(id)
 			if err != nil {
-				return api.NewError(api.ErrInvalidParams, "failed to parse UUID: %s", id)
+				return api.NewWrapError(api.ErrInvalidParams, err, "failed to parse UUID: %s, %w", id, err)
 			}
 		}
 	}

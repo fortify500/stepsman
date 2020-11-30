@@ -18,6 +18,7 @@ package bl
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
@@ -363,16 +364,19 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 		buffer.WriteString(escapedStr[tokenEnd : token.Start-2])
 		tokenEnd = token.End + 2
 		queryStr := escapedStr[token.Start:token.End]
+		ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
 		query, err := rego.New(
 			rego.Query(queryStr),
-		).PrepareForEval(BL.ValveCtx)
+			rego.Compiler(t.rego.compiler),
+		).PrepareForEval(ctx)
+		cancel()
 		if err != nil {
-			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to resolve curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		var eval rego.ResultSet
 		eval, err = t.evaluateCurlyPercent(BL, query)
 		if err != nil {
-			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to resolve curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		if len(eval) > 0 &&
 			len(eval[0].Expressions) > 0 &&
@@ -387,9 +391,11 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 }
 
 func (t *Template) evaluateCurlyPercent(BL *BL, query rego.PreparedEvalQuery) (rego.ResultSet, error) {
+	ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
+	defer cancel()
 	t.rego.inputMutex.RLock()
 	defer t.rego.inputMutex.RUnlock()
-	return query.Eval(BL.ValveCtx, rego.EvalInput(t.rego.input))
+	return query.Eval(ctx, rego.EvalInput(t.rego.input))
 }
 func (t *Template) ResolveContext(BL *BL, context string) (api.Context, error) {
 	var result api.Context

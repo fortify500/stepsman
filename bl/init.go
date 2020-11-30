@@ -53,6 +53,7 @@ type BL struct {
 	recoveryLongIntervalRandomizedSeconds   int
 	recoveryReschedule                      chan RecoveryMessage
 	templateCacheSize                       int
+	maxRegoEvaluationTimeoutSeconds         int
 	InstanceId                              string
 	templateCache                           *lru.Cache
 	DAO                                     *dao.DAO
@@ -86,6 +87,7 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	if ok {
 		log.WithField("build-info", bi).Info()
 	}
+	newBL.maxRegoEvaluationTimeoutSeconds = 10
 	newBL.completeByInProgressInterval = 3600
 	newBL.jobQueueNumberOfWorkers = 5000
 	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
@@ -147,6 +149,9 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 
 	if viper.IsSet("RECOVERY_LONG_INTERVAL_RANDOMIZED_SECONDS") {
 		newBL.recoveryLongIntervalRandomizedSeconds = viper.GetInt("RECOVERY_LONG_INTERVAL_RANDOMIZED_SECONDS")
+	}
+	if viper.IsSet("MAX_REGO_EVALUATION_TIMEOUT_SECONDS") {
+		newBL.maxRegoEvaluationTimeoutSeconds = viper.GetInt("MAX_REGO_EVALUATION_TIMEOUT_SECONDS")
 	}
 
 	maxResponseHeaderByte := int64(0)
