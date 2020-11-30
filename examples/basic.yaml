@@ -19,9 +19,9 @@ steps:
         rules:
           - then:
               do:
-                - label: emails
-                  context: >
-                    {% input.context %}
+                # - label: emails
+                #   context: >
+                #     {% input.context %}
                 - label: next
                   context: >
                     { "result": "next", "title": "{% input.template.title %}"}  
