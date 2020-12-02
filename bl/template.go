@@ -383,11 +383,16 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 		if len(eval) > 0 &&
 			len(eval[0].Expressions) > 0 &&
 			eval[0].Expressions[0].Value != nil {
-			marshaledValue, err := json.Marshal(eval[0].Expressions[0].Value)
+			var marshaledValue []byte
+			marshaledValue, err = json.Marshal(eval[0].Expressions[0].Value)
 			if err != nil {
 				return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 			}
-			buffer.WriteString(string(marshaledValue))
+			s := string(marshaledValue)
+			if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") {
+				s = strings.TrimSuffix(strings.TrimPrefix(s, "\""), "\"")
+			}
+			buffer.WriteString(s)
 		} else {
 			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
 		}
@@ -411,7 +416,7 @@ func (t *Template) ResolveContext(BL *BL, context string) (api.Context, error) {
 	}
 	err = json.Unmarshal([]byte(resolvedContextStr), &result)
 	if err != nil {
-		panic(err)
+		return nil, api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve context for: %s", resolvedContextStr)
 	}
 	return result, nil
 }

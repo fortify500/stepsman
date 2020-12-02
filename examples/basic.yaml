@@ -24,7 +24,7 @@ steps:
                     {% input.context %}
                 - label: next
                   context: >
-                    { "result": "next", "title": {% input.template.title %}}  
+                    { "result": "next", "title": "{% input.template.title %}"}  
   - name: "next"
     description: >
       example for a rest call 2
@@ -46,7 +46,7 @@ steps:
               do:
                 - label: finishing
                   context: >
-                    { "result": "finish", "status-phrase": {% input.labels["starting"]["result"]["status-phrase"] %}}
+                    { "result": "finish", "status-phrase": "{% input.labels["starting"]["result"]["status-phrase"] %}"}
   - name: "Finishing" # mandatory
     description: > # optional
       example for a rest call 3
@@ -82,4 +82,4 @@ steps:
               {% input.context["email-authorization"] %}
           stepsman-info:
             - >
-              {"run-id": {% input["run"]["id"] %}, "label":"emails"}
+              {"run-id": "{% input["run"]["id"] %}", "label":"emails"}
