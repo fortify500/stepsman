@@ -276,13 +276,15 @@ BreakOut:
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			err := cmd.RootCmd.Execute()
 			if err != nil {
 				t.Error(err)
 			}
-			wg.Done()
 		}()
+
 		time.Sleep(time.Duration(4) * time.Second)
+
 		httpClient := client.New(false, "localhost", 3333)
 		createdRunId := ""
 		{
@@ -431,8 +433,8 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByUUID idle"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryById{
-				Id:      stepUUIDs[0],
+			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryByUUID{
+				UUID:    stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepFailed.TranslateStepStatus()},
 			})
 			if err != nil {
@@ -460,8 +462,8 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByUUID idle"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryById{
-				Id:      stepUUIDs[0],
+			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryByUUID{
+				UUID:    stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepIdle.TranslateStepStatus()},
 			})
 			if err != nil {

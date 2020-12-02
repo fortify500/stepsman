@@ -37,11 +37,12 @@ const (
 	RPCCreateRun = "createRun"
 	RPCDeleteRun = "deleteRun"
 
-	RPCListSteps        = "listSteps"
-	RPCGetSteps         = "getSteps"
-	RPCUpdateStepByUUID = "updateStepByUUID"
-	RPCDoStepByUUID     = "doStepByUUID"
-	RPCDoStepByLabel    = "doStepByLabel"
+	RPCListSteps         = "listSteps"
+	RPCGetSteps          = "getSteps"
+	RPCUpdateStepByUUID  = "updateStepByUUID"
+	RPCUpdateStepByLabel = "updateStepByLabel"
+	RPCDoStepByUUID      = "doStepByUUID"
+	RPCDoStepByLabel     = "doStepByLabel"
 )
 
 const CurrentTimeStamp = "2006-01-02 15:04:05"
@@ -96,6 +97,22 @@ type UpdateQueryById struct {
 	Force   bool                   `json:"force,omitempty"`
 	Changes map[string]interface{} `json:"changes,omitempty"`
 }
+
+type UpdateQueryByUUID struct {
+	UUID        string                 `json:"uuid,omitempty"`
+	StatusOwner string                 `json:"status-owner,omitempty"`
+	Force       bool                   `json:"force,omitempty"`
+	Changes     map[string]interface{} `json:"changes,omitempty"`
+}
+
+type UpdateQueryByLabel struct {
+	RunId       string                 `json:"run-id,omitempty"`
+	StatusOwner string                 `json:"status-owner,omitempty"`
+	Label       string                 `json:"label,omitempty"`
+	Force       bool                   `json:"force,omitempty"`
+	Changes     map[string]interface{} `json:"changes,omitempty"`
+}
+
 type UpdateRunParams UpdateQueryById
 type UpdateRunResult struct{}
 
@@ -121,8 +138,11 @@ type GetStepsQuery struct {
 type GetStepsResult []StepRecord
 type GetStepsParams GetStepsQuery
 
-type UpdateStepByUUIDParams UpdateQueryById
+type UpdateStepByUUIDParams UpdateQueryByUUID
 type UpdateStepByUUIDResult struct{}
+
+type UpdateStepByLabelParams UpdateQueryByLabel
+type UpdateStepByLabelResult struct{}
 
 type DoStepByUUIDParams struct {
 	UUID        string  `json:"uuid,omitempty"`

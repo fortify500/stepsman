@@ -90,17 +90,17 @@ func (c *CLI) RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error)
 	return result, err
 }
 
-type UpdateStepResponse struct {
+type UpdateStepByUUIDResponse struct {
 	Version string                     `json:"jsonrpc"`
 	Result  api.UpdateStepByUUIDResult `json:"result,omitempty"`
 	Error   JSONRPCError               `json:"error,omitempty"`
 	ID      string                     `json:"id,omitempty"`
 }
 
-func (c *CLI) RemoteUpdateStepByUUID(query *api.UpdateQueryById) error {
+func (c *CLI) RemoteUpdateStepByUUID(query *api.UpdateQueryByUUID) error {
 	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateStepByUUID, query)
 	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
-		var jsonRPCResult UpdateStepResponse
+		var jsonRPCResult UpdateStepByUUIDResponse
 		decoder := json.NewDecoder(*body)
 		decoder.DisallowUnknownFields()
 		if err = decoder.Decode(&jsonRPCResult); err != nil {
@@ -108,7 +108,31 @@ func (c *CLI) RemoteUpdateStepByUUID(query *api.UpdateQueryById) error {
 		}
 		err = getJSONRPCError(&jsonRPCResult.Error)
 		if err != nil {
-			return fmt.Errorf("failed to remote update step: %w", err)
+			return fmt.Errorf("failed to remote update step by uuid: %w", err)
+		}
+		return nil
+	})
+}
+
+type UpdateStepByLabelResponse struct {
+	Version string                      `json:"jsonrpc"`
+	Result  api.UpdateStepByLabelResult `json:"result,omitempty"`
+	Error   JSONRPCError                `json:"error,omitempty"`
+	ID      string                      `json:"id,omitempty"`
+}
+
+func (c *CLI) RemoteUpdateStepByLabel(query *api.UpdateQueryByLabel) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateStepByLabel, query)
+	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
+		var jsonRPCResult UpdateStepByLabelResponse
+		decoder := json.NewDecoder(*body)
+		decoder.DisallowUnknownFields()
+		if err = decoder.Decode(&jsonRPCResult); err != nil {
+			return err
+		}
+		err = getJSONRPCError(&jsonRPCResult.Error)
+		if err != nil {
+			return fmt.Errorf("failed to remote update step by label: %w", err)
 		}
 		return nil
 	})

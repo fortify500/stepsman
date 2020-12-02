@@ -114,17 +114,15 @@ func (b *BL) startWorkLoop() {
 	go b.recoveryScheduler()
 	go func() {
 		defer close(b.queue)
+		startExit := false
 		for {
+			if startExit && b.QueuesIdle() {
+				return
+			}
 			select {
 			case <-b.stop:
-				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
-				for {
-					if b.QueuesIdle() {
-						break
-					}
-					time.Sleep(1 * time.Second)
-				}
-				return
+				log.Info(fmt.Errorf("starting leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
+				startExit = true
 			case <-b.ValveCtx.Done():
 				log.Info(fmt.Errorf("leaving work loop: %w", api.NewError(api.ErrShuttingDown, "server is shutting down")))
 				return

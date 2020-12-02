@@ -99,6 +99,7 @@ type AllParameters struct {
 	FlagsReInit      []func() error
 	Err              error
 	Label            string
+	State            string
 }
 
 var Parameters = AllParameters{

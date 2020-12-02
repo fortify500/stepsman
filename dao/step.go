@@ -24,7 +24,6 @@ import (
 )
 
 type StepState struct {
-	DoType string      `json:"do-type,omitempty" mapstructure:"do-type" yaml:"do-type,omitempty"`
 	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }

@@ -24,7 +24,9 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
+	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"time"
 )
 
@@ -44,73 +46,135 @@ func (b *BL) ListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult
 	return b.listStepsByQuery(query)
 }
 
-func (b *BL) UpdateStepByUUID(query *api.UpdateQueryById) error {
+func (b *BL) UpdateStepByUUID(query *api.UpdateQueryByUUID) error {
 	if dao.IsRemote {
 		return b.Client.RemoteUpdateStepByUUID(query)
 	} else {
-		return b.updateStepByUUID(query)
+		return b.updateStep(query, nil)
 	}
 }
 
-func (b *BL) updateStepByUUID(query *api.UpdateQueryById) error {
-	vetErr := dao.VetIds([]string{query.Id})
+func (b *BL) UpdateStepByLabel(query *api.UpdateQueryByLabel) error {
+	if dao.IsRemote {
+		return b.Client.RemoteUpdateStepByLabel(query)
+	} else {
+		return b.updateStep(nil, query)
+	}
+}
+
+func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.UpdateQueryByLabel) error {
+	vetErr := dao.VetIds([]string{queryByUUID.UUID})
 	if vetErr != nil {
 		return fmt.Errorf("failed to update step: %w", vetErr)
 	}
-	if len(query.Changes) > 0 {
-		if len(query.Changes) > 2 {
-			return api.NewError(api.ErrInvalidParams, "more than 2 change types. currently only 2 change type are supported: status or heartbeat")
+	wasUpdate := false
+	var changes map[string]interface{}
+	var statusOwner string
+	var force bool
+	if queryByUUID != nil {
+		changes = queryByUUID.Changes
+		statusOwner = queryByUUID.StatusOwner
+		force = queryByUUID.Force
+	} else if queryByLabel != nil {
+		changes = queryByLabel.Changes
+		statusOwner = queryByLabel.StatusOwner
+		force = queryByLabel.Force
+	} else {
+		panic(fmt.Errorf("update step code bit should never be reached"))
+	}
+	if len(changes) > 0 {
+		for k := range changes {
+			switch k {
+			case "status":
+			case "state":
+			default:
+				return api.NewError(api.ErrInvalidParams, fmt.Sprintf("unsupported change type: %s, either do not specify changes to update the heartbeat, or you must specify changes with a 'status' and optionally 'state'", k))
+			}
 		}
-		val, ok := query.Changes["status"]
+		val, ok := changes["status"]
 		if ok {
 			var statusStr string
 			statusStr, ok = val.(string)
 			if !ok {
 				return api.NewError(api.ErrInvalidParams, "status must be of string type")
 			}
+			var newState *dao.StepState
+			val, ok = changes["state"]
+			if ok {
+				var newStateTmp dao.StepState
+				var md mapstructure.Metadata
+				decoder, err := mapstructure.NewDecoder(
+					&mapstructure.DecoderConfig{
+						Metadata: &md,
+						Result:   &newStateTmp,
+					})
+				if err != nil {
+					return api.NewWrapError(api.ErrInvalidParams, err, "failed to update step and parse state: %w", err)
+				}
+				err = decoder.Decode(changes["state"])
+				if err != nil {
+					return api.NewWrapError(api.ErrInvalidParams, err, "failed to update step and decode state: %w", err)
+				}
+				if len(md.Unused) > 0 {
+					return api.NewError(api.ErrInvalidParams, "unsupported attributes provided in update state: %s", strings.Join(md.Unused, ","))
+				}
+				newState = &newStateTmp
+			}
+			var stepUUID string
+			var run api.RunRecord
 			newStatus, err := api.TranslateToStepStatus(statusStr)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
 
-			stepRecords, err := b.GetSteps(&api.GetStepsQuery{
-				UUIDs: []string{query.Id},
+			err = b.DAO.Transactional(func(tx *sqlx.Tx) error {
+				var e error
+				if queryByUUID != nil {
+					var runs []api.RunRecord
+					runs, _, e = dao.GetRunsByStepUUIDsTx(tx, &api.GetRunsQuery{
+						Ids:              []string{queryByUUID.UUID},
+						ReturnAttributes: []string{dao.Id, dao.Template},
+					})
+					if e != nil || len(runs) != 1 {
+						if e != nil {
+							return fmt.Errorf("failed to update step, failed to locate run: %w", e)
+						} else {
+							return api.NewError(api.ErrRecordNotFound, "failed to update step, failed to locate run by step record for uuid [%s]", queryByUUID.UUID)
+						}
+					}
+					stepUUID = queryByUUID.UUID
+					run = runs[0]
+				} else if queryByLabel != nil {
+					run, stepUUID, err = dao.GetRunAndStepUUIDByLabelTx(tx, queryByLabel.RunId, queryByLabel.Label, []string{dao.Id, dao.Template})
+					if err != nil {
+						return fmt.Errorf("failed to update step by step run-id and label [%s:%s]: %w", queryByLabel.RunId, queryByLabel.Label, err)
+					}
+				} else {
+					panic(fmt.Errorf("update step code bit should never be reached"))
+				}
+				return e
 			})
 			if err != nil {
-				return fmt.Errorf("failed to update step: %w", err)
-			}
-			if len(stepRecords) != 1 {
-				return api.NewError(api.ErrRecordNotFound, "failed to locate step record for uuid [%s]", query.Id)
-			}
-
-			stepRecord := stepRecords[0]
-			run, err := b.GetRun(stepRecord.RunId)
-			if err != nil {
-				return fmt.Errorf("failed to update step: %w", err)
+				return err
 			}
 			template := Template{}
-			err = template.LoadFromBytes(b, stepRecord.RunId, false, []byte(run.Template))
+			err = template.LoadFromBytes(b, run.Id, false, []byte(run.Template))
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
-			_, err = template.TransitionStateAndStatus(b, run.Id, stepRecord.UUID, "", newStatus, "", nil, nil, query.Force)
+			_, err = template.TransitionStateAndStatus(b, run.Id, stepUUID, statusOwner, newStatus, "", nil, newState, force)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
+			wasUpdate = true
 		} else {
-			val, ok = query.Changes["heartbeat"]
-			if !ok {
-				return api.NewError(api.ErrInvalidParams, "unsupported update fields provided")
-			}
-			var statusOwnerStr string
-			statusOwnerStr, ok = val.(string)
-			if !ok {
-				return api.NewError(api.ErrInvalidParams, "status owner uuid4 must be of string type")
-			}
-			err := b.DAO.UpdateStepHeartBeat(query.Id, statusOwnerStr)
-			if err != nil {
-				return fmt.Errorf("failed to update step: %w", err)
-			}
+			return api.NewError(api.ErrInvalidParams, "either do not specify changes to update the heartbeat, or you must specify changes with a 'status' and optionally 'state'")
+		}
+	}
+	if !wasUpdate {
+		err := b.DAO.UpdateStepHeartBeat(queryByUUID.UUID, statusOwner)
+		if err != nil {
+			return fmt.Errorf("failed to update step: %w", err)
 		}
 	}
 	return nil

@@ -38,10 +38,11 @@ Use run <run id>.`,
 			return
 		}
 		changes := make(map[string]interface{})
-		updateQuery := &api.UpdateQueryById{
-			Id:      stepUUID,
-			Force:   Parameters.Force,
-			Changes: changes,
+		updateQuery := &api.UpdateQueryByUUID{
+			UUID:        stepUUID,
+			StatusOwner: Parameters.StatusOwner,
+			Force:       Parameters.Force,
+			Changes:     changes,
 		}
 
 		if Parameters.Status != "" {
@@ -53,10 +54,12 @@ Use run <run id>.`,
 			}
 			changes["status"] = status.TranslateStepStatus()
 		} else if Parameters.StatusOwner != "" {
-			changes["heartbeat"] = Parameters.StatusOwner
 		} else {
 			Parameters.Err = fmt.Errorf("failed to update step no argument provided")
 			return
+		}
+		if Parameters.State != "" {
+			changes["state"] = Parameters.State
 		}
 		err = BL.UpdateStepByUUID(updateQuery)
 		if err != nil {
@@ -84,6 +87,7 @@ func syncUpdateStepParams() {
 	Parameters.Status = updateStepParams.Status
 	Parameters.Force = updateStepParams.Force
 	Parameters.StatusOwner = updateStepParams.StatusOwner
+	Parameters.State = updateStepParams.State
 }
 
 func init() {
@@ -91,8 +95,9 @@ func init() {
 	initFlags := func() error {
 		updateStepCmd.ResetFlags()
 		updateStepCmd.Flags().StringVarP(&updateStepParams.Status, "status", "s", "", fmt.Sprintf("Status - %s,%s,%s,%s,%s", api.StepIdle.TranslateStepStatus(), api.StepPending.TranslateStepStatus(), api.StepInProgress.TranslateStepStatus(), api.StepFailed.TranslateStepStatus(), api.StepDone.TranslateStepStatus()))
+		updateStepCmd.Flags().StringVarP(&updateStepParams.State, "state", "t", "", "will update the state, but status must also be specified")
 		updateStepCmd.Flags().BoolVarP(&updateStepParams.Force, "force", "f", false, fmt.Sprintf("force change status - ignores heartbeat"))
-		updateStepCmd.Flags().StringVarP(&updateStepParams.StatusOwner, "heartbeat", "b", "", "Will update the heartbeat. The status Owner must be supplied.")
+		updateStepCmd.Flags().StringVarP(&updateStepParams.StatusOwner, "status-owner", "o", "", "will only update the heartbeat if no other options supplied")
 		return nil
 	}
 	Parameters.FlagsReInit = append(Parameters.FlagsReInit, initFlags)
