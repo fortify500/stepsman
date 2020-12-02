@@ -171,7 +171,7 @@ func TestLocal(t *testing.T) {
 		{"get -V %[1]s step %[3]s", false, false},
 		{`update -V %[1]s step %[3]s -s "Failed"`, false, false},
 		{`update -V %[1]s step %[3]s -s "Idle"`, false, false},
-		{"do -V %[1]s step %[3]s", false, false},
+		{"do -V %[1]s step %[3]s --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
 		{"get -V %[1]s step %[3]s", false, false},
 		{"describe -V %[1]s run %[2]s", false, false},
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
@@ -180,7 +180,7 @@ func TestLocal(t *testing.T) {
 		{`update -V %[1]s run %[2]s -s "In Progress"`, false, false},
 		{`delete -V %[1]s run %[2]s -f`, false, false},
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
-		{"do -V %[1]s step %[2]s --label starting", false, false},
+		{"do -V %[1]s step %[2]s --label starting --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
 	}
 	breakOut := false
 BreakOut:
@@ -492,6 +492,7 @@ BreakOut:
 			statusOwner := "allTestOwner"
 			response, err := httpClient.RemoteDoStepByUUID(&api.DoStepByUUIDParams{
 				UUID:        stepUUIDs[0],
+				Context:     api.Context{"email-authorization": "dXNlcjpwYXNzd29yZA=="},
 				StatusOwner: statusOwner,
 			})
 			if err != nil {
@@ -508,6 +509,7 @@ BreakOut:
 			response, err := httpClient.RemoteDoStepByUUID(&api.DoStepByUUIDParams{
 				UUID:        stepUUIDs[0],
 				StatusOwner: statusOwner,
+				Context:     api.Context{"email-authorization": "dXNlcjpwYXNzd29yZA=="},
 			})
 			if err != nil {
 				t.Error(err)
@@ -657,6 +659,7 @@ BreakOut:
 				RunId:       createdRunId,
 				Label:       "starting",
 				StatusOwner: statusOwner,
+				Context:     api.Context{"email-authorization": "dXNlcjpwYXNzd29yZA=="},
 			})
 			if err != nil {
 				t.Error(err)

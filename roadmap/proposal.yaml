@@ -35,7 +35,7 @@ steps:
       options:
         timeout: 60 #seconds
         method: GET
-        url: >
+        url: >-
           {% input.env.flow %}/send-emails/path_1_step_1
         headers:
           authorization:
@@ -115,14 +115,14 @@ steps:
       options:
         timeout: 60
         method: GET
-        url: >
+        url: >-
           {% input.env.flow %}/send-emails/path_1_step_2
         headers:
           authorization:
-            - >
+            - >-
               {% base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) %}
           tenant:
-            - >
+            - >-
               {% input.context["tenant"] %}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
@@ -222,10 +222,10 @@ steps:
           { "result": {% input.context["result"] %} }
         headers:
           authorization:
-            - >
+            - >-
               {% base64.encode(concat("privilegedUser:",  input.vault["privilegedUser path"])) %}
           tenant:
-            - >
+            - >-
               {% input.context["tenant"] %}
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac

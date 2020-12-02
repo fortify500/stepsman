@@ -61,7 +61,7 @@ func (b *BL) initDO(maxResponseHeaderByte int64) {
 		b.netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
 	}
 }
-func (b *BL) do(doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.StepState, error) {
+func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.StepState, error) {
 	var newState dao.StepState
 	newState = *prevState
 	newState.Error = ""
@@ -83,6 +83,7 @@ func (b *BL) do(doType DoType, doInterface interface{}, prevState *dao.StepState
 				maxResponseBodyBytes = doRest.Options.MaxResponseBodyBytes
 			}
 			{
+				var err error
 				var body io.ReadCloser = nil
 				if len(doRest.Options.Body) > 0 {
 					body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
@@ -91,16 +92,33 @@ func (b *BL) do(doType DoType, doInterface interface{}, prevState *dao.StepState
 					Transport: b.netTransport,
 					Timeout:   timeout,
 				}
+				var resolvedUrl string
+				resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url)
+				if err != nil {
+					return newState, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), timeout)
 				defer cancel()
-				request, err := http.NewRequestWithContext(ctx, doRest.Options.Method, doRest.Options.Url, body)
+				var request *http.Request
+				request, err = http.NewRequestWithContext(ctx, doRest.Options.Method, resolvedUrl, body)
 				if err != nil {
 					newState.Error = err.Error()
 					return newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
 				}
 				for k, v := range doRest.Options.Headers {
-					request.Header[k] = v
+					var header []string
+					for _, h := range v {
+						var resolvedHeaderPart string
+						resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h)
+						if err != nil {
+							return newState, fmt.Errorf("failed to evaluate header part: %s", h)
+						}
+						header = append(header, resolvedHeaderPart)
+					}
+					request.Header[k] = header
 				}
+				request.Header["stepsman-run-id"] = []string{stepRecord.RunId}
+				request.Header["stepsman-label"] = []string{step.Label}
 				response, err = netClient.Do(request)
 				if err != nil {
 					newState.Error = err.Error()

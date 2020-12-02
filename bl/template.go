@@ -355,7 +355,7 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 	}
 	return nil
 }
-func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
+func (t *Template) EvaluateCurlyPercent(BL *BL, str string) (string, error) {
 	var buffer bytes.Buffer
 	tokens, escapedStr := TokenizeCurlyPercent(str)
 	if len(tokens) == 0 {
@@ -373,12 +373,12 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 		).PrepareForEval(ctx)
 		cancel()
 		if err != nil {
-			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to resolve curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
+			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to parse curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		var eval rego.ResultSet
 		eval, err = t.evaluateCurlyPercent(BL, query)
 		if err != nil {
-			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to resolve curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
+			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to evaluate curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		if len(eval) > 0 &&
 			len(eval[0].Expressions) > 0 &&
@@ -386,7 +386,7 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 			var marshaledValue []byte
 			marshaledValue, err = json.Marshal(eval[0].Expressions[0].Value)
 			if err != nil {
-				return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+				return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to extract result from rego for a curly percent for: %s", escapedStr[token.Start:token.End])
 			}
 			s := string(marshaledValue)
 			if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") {
@@ -394,7 +394,7 @@ func (t *Template) ResolveCurlyPercent(BL *BL, str string) (string, error) {
 			}
 			buffer.WriteString(s)
 		} else {
-			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve curly percent for: %s", escapedStr[token.Start:token.End])
+			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate curly percent, rego did not return a result for: %s", escapedStr[token.Start:token.End])
 		}
 	}
 	buffer.WriteString(escapedStr[tokenEnd:])
@@ -410,7 +410,7 @@ func (t *Template) evaluateCurlyPercent(BL *BL, query rego.PreparedEvalQuery) (r
 }
 func (t *Template) ResolveContext(BL *BL, context string) (api.Context, error) {
 	var result api.Context
-	resolvedContextStr, err := t.ResolveCurlyPercent(BL, context)
+	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, context)
 	if err != nil {
 		return nil, err
 	}

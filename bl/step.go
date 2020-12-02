@@ -355,7 +355,7 @@ func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner
 	var newState dao.StepState
 	var doErr error
 	step := t.Steps[updatedPartialStepRecord.Index-1]
-	newState, doErr = BL.do(step.doType, step.Do, &prevState)
+	newState, doErr = BL.do(t, &step, updatedPartialStepRecord, step.doType, step.Do, &prevState)
 	var newStepStatus api.StepStatusType
 	if doErr != nil {
 		newStepStatus = api.StepFailed

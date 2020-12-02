@@ -65,7 +65,7 @@ steps:
     label: emails
     do:
       type: REST
-      heartbeat-timeout: 50 # we send the the callee our run-id and step label in the call. 
+      heartbeat-timeout: 50 # we send the the callee our run-id and step label in the call headers - stepsman-label, stepsman-run-id. 
       # In an async flow, the callee returns stepsman-complete-by (seconds) which can only be lower than the template complete-by or 0 for template maximum.
       # if the callee does not return stepsman-complete-by it will by a synchronous call.
       # It need to get back to us and update the heartbeat before the timeout if he is going to be late, otherwise it MAY be retried.
@@ -74,12 +74,8 @@ steps:
       options:
         timeout: 60 #seconds
         method: GET
-        url: >
-          https://jsonplaceholder.typicode.com/todos/4
+        url: https://jsonplaceholder.typicode.com/todos/4
         headers:
           authorization:
-            - >
+            - >-
               {% input.context["email-authorization"] %}
-          stepsman-info:
-            - >
-              {"run-id": "{% input["run"]["id"] %}", "label":"emails"}
