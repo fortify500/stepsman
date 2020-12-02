@@ -112,7 +112,7 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 		log.Fatal(err)
 	}
 
-	if err := mr.RegisterMethod(api.RPCUpdateStep, UpdateStepHandler{}, api.UpdateStepParams{}, api.UpdateStepResult{}); err != nil {
+	if err := mr.RegisterMethod(api.RPCUpdateStepByUUID, UpdateStepByUUIDHandler{}, api.UpdateStepByUUIDParams{}, api.UpdateStepByUUIDResult{}); err != nil {
 		log.Fatal(err)
 	}
 

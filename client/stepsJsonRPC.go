@@ -91,14 +91,14 @@ func (c *CLI) RemoteGetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error)
 }
 
 type UpdateStepResponse struct {
-	Version string               `json:"jsonrpc"`
-	Result  api.UpdateStepResult `json:"result,omitempty"`
-	Error   JSONRPCError         `json:"error,omitempty"`
-	ID      string               `json:"id,omitempty"`
+	Version string                     `json:"jsonrpc"`
+	Result  api.UpdateStepByUUIDResult `json:"result,omitempty"`
+	Error   JSONRPCError               `json:"error,omitempty"`
+	ID      string                     `json:"id,omitempty"`
 }
 
-func (c *CLI) RemoteUpdateStep(query *api.UpdateQuery) error {
-	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateStep, query)
+func (c *CLI) RemoteUpdateStepByUUID(query *api.UpdateQueryById) error {
+	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateStepByUUID, query)
 	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult UpdateStepResponse
 		decoder := json.NewDecoder(*body)

@@ -97,7 +97,7 @@ type UpdateRunResponse struct {
 	ID      string              `json:"id,omitempty"`
 }
 
-func (c *CLI) RemoteUpdateRun(query *api.UpdateQuery) error {
+func (c *CLI) RemoteUpdateRun(query *api.UpdateQueryById) error {
 	request := NewMarshaledJSONRPCRequest("1", api.RPCUpdateRun, query)
 	return c.remoteJRPCCall(request, func(body *io.ReadCloser) (err error) {
 		var jsonRPCResult UpdateRunResponse

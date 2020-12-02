@@ -61,7 +61,7 @@ func (b *BL) initDO(maxResponseHeaderByte int64) {
 		b.netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
 	}
 }
-func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoType, doInterface interface{}, prevState *dao.StepState) (dao.StepState, error) {
+func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoType, doInterface interface{}, prevState *dao.StepState, currentContext api.Context) (dao.StepState, error) {
 	var newState dao.StepState
 	newState = *prevState
 	newState.Error = ""
@@ -93,7 +93,7 @@ func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoTy
 					Timeout:   timeout,
 				}
 				var resolvedUrl string
-				resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url)
+				resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url, currentContext)
 				if err != nil {
 					return newState, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
 				}
@@ -109,7 +109,7 @@ func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoTy
 					var header []string
 					for _, h := range v {
 						var resolvedHeaderPart string
-						resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h)
+						resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h, currentContext)
 						if err != nil {
 							return newState, fmt.Errorf("failed to evaluate header part: %s", h)
 						}

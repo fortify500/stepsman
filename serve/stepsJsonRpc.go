@@ -26,11 +26,11 @@ import (
 )
 
 type (
-	ListStepsHandler     struct{}
-	GetStepsHandler      struct{}
-	UpdateStepHandler    struct{}
-	DoStepByUUIDHandler  struct{}
-	DoStepByLabelHandler struct{}
+	ListStepsHandler        struct{}
+	GetStepsHandler         struct{}
+	UpdateStepByUUIDHandler struct{}
+	DoStepByUUIDHandler     struct{}
+	DoStepByLabelHandler    struct{}
 )
 
 func (h ListStepsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
@@ -83,22 +83,22 @@ func (h GetStepsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawM
 	return result, jsonRPCErr
 }
 
-func (h UpdateStepHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
+func (h UpdateStepByUUIDHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMessage) (interface{}, *jsonrpc.Error) {
 	var result interface{}
 	BL := ctx.Value("BL").(*bl.BL)
 	jsonRPCErr := recoverable(func() *jsonrpc.Error {
-		var p api.UpdateStepParams
+		var p api.UpdateStepByUUIDParams
 		if params != nil {
 			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 				return errResult
 			}
 		}
-		query := api.UpdateQuery(p)
-		err := BL.UpdateStep(&query)
+		query := api.UpdateQueryById(p)
+		err := BL.UpdateStepByUUID(&query)
 		if err != nil {
 			return resolveError(err)
 		}
-		result = &api.UpdateStepResult{}
+		result = &api.UpdateStepByUUIDResult{}
 		return nil
 	})
 	return result, jsonRPCErr

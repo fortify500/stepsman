@@ -332,7 +332,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateRun(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunDone.TranslateRunStatus()},
 			})
@@ -360,7 +360,7 @@ BreakOut:
 			}
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun idle"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateRun(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunIdle.TranslateRunStatus()},
 			})
@@ -430,8 +430,8 @@ BreakOut:
 				fmt.Println(fmt.Sprintf("%+v", step))
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateStep(&api.UpdateQuery{
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByUUID idle"), func(t *testing.T) {
+			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryById{
 				Id:      stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepFailed.TranslateStepStatus()},
 			})
@@ -459,8 +459,8 @@ BreakOut:
 				}
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStep idle"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateStep(&api.UpdateQuery{
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByUUID idle"), func(t *testing.T) {
+			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryById{
 				Id:      stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepIdle.TranslateStepStatus()},
 			})
@@ -591,7 +591,7 @@ BreakOut:
 		}
 
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
-			err := httpClient.RemoteUpdateRun(&api.UpdateQuery{
+			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunInProgress.TranslateRunStatus()},
 			})

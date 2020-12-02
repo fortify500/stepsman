@@ -99,7 +99,7 @@ func (b *BL) getRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 }
 func (b *BL) UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
 	if dao.IsRemote {
-		return b.Client.RemoteUpdateRun(&api.UpdateQuery{
+		return b.Client.RemoteUpdateRun(&api.UpdateQueryById{
 			Id: runId,
 			Changes: map[string]interface{}{
 				"status": newStatus.TranslateRunStatus(),

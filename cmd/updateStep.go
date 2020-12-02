@@ -38,7 +38,7 @@ Use run <run id>.`,
 			return
 		}
 		changes := make(map[string]interface{})
-		updateQuery := &api.UpdateQuery{
+		updateQuery := &api.UpdateQueryById{
 			Id:      stepUUID,
 			Force:   Parameters.Force,
 			Changes: changes,
@@ -58,7 +58,7 @@ Use run <run id>.`,
 			Parameters.Err = fmt.Errorf("failed to update step no argument provided")
 			return
 		}
-		err = BL.UpdateStep(updateQuery)
+		err = BL.UpdateStepByUUID(updateQuery)
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to update step: %w", err)
 			return

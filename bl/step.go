@@ -44,15 +44,15 @@ func (b *BL) ListSteps(query *api.ListQuery) ([]api.StepRecord, *api.RangeResult
 	return b.listStepsByQuery(query)
 }
 
-func (b *BL) UpdateStep(query *api.UpdateQuery) error {
+func (b *BL) UpdateStepByUUID(query *api.UpdateQueryById) error {
 	if dao.IsRemote {
-		return b.Client.RemoteUpdateStep(query)
+		return b.Client.RemoteUpdateStepByUUID(query)
 	} else {
-		return b.updateStep(query)
+		return b.updateStepByUUID(query)
 	}
 }
 
-func (b *BL) updateStep(query *api.UpdateQuery) error {
+func (b *BL) updateStepByUUID(query *api.UpdateQueryById) error {
 	vetErr := dao.VetIds([]string{query.Id})
 	if vetErr != nil {
 		return fmt.Errorf("failed to update step: %w", vetErr)
@@ -115,7 +115,7 @@ func (b *BL) updateStep(query *api.UpdateQuery) error {
 	}
 	return nil
 }
-func (t *Template) TransitionStateAndStatus(BL *BL, runId string, stepUUID string, prevStatusOwner string, newStatus api.StepStatusType, newStatusOwner string, context api.Context, newState *dao.StepState, force bool) (*api.StepRecord, error) {
+func (t *Template) TransitionStateAndStatus(BL *BL, runId string, stepUUID string, prevStatusOwner string, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *dao.StepState, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	var softError *api.Error
 	toEnqueue := false
@@ -150,9 +150,9 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, stepUUID strin
 			switch newStatus {
 			case api.StepPending:
 				toEnqueue = true
-				stepContext = context
+				stepContext = currentContext
 			case api.StepInProgress:
-				stepContext = context
+				stepContext = currentContext
 				var toReturn bool
 				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, stepContext, newState)
 				if toReturn {
@@ -340,8 +340,8 @@ func (s *Step) GetHeartBeatTimeout() time.Duration {
 	}
 	return defaultHeartBeatInterval
 }
-func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner string, context api.Context) (*api.StepRecord, error) {
-	updatedPartialStepRecord, err := t.TransitionStateAndStatus(BL, runId, stepUUID, "", api.StepInProgress, newStatusOwner, context, nil, false)
+func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner string, currentContext api.Context) (*api.StepRecord, error) {
+	updatedPartialStepRecord, err := t.TransitionStateAndStatus(BL, runId, stepUUID, "", api.StepInProgress, newStatusOwner, currentContext, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
@@ -355,7 +355,7 @@ func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner
 	var newState dao.StepState
 	var doErr error
 	step := t.Steps[updatedPartialStepRecord.Index-1]
-	newState, doErr = BL.do(t, &step, updatedPartialStepRecord, step.doType, step.Do, &prevState)
+	newState, doErr = BL.do(t, &step, updatedPartialStepRecord, step.doType, step.Do, &prevState, currentContext)
 	var newStepStatus api.StepStatusType
 	if doErr != nil {
 		newStepStatus = api.StepFailed
@@ -385,7 +385,7 @@ func (t *Template) StartDo(BL *BL, runId string, stepUUID string, newStatusOwner
 						if len(indicesAndContext) > 0 {
 							var uuidsToEnqueue []dao.UUIDAndStatusOwner
 							for i := range indicesAndContext {
-								indicesAndContext[i].resolvedContext, err = t.ResolveContext(BL, indicesAndContext[i].context)
+								indicesAndContext[i].resolvedContext, err = t.ResolveContext(BL, indicesAndContext[i].context, currentContext)
 								if err != nil {
 									break BREAKOUT
 								}
@@ -596,7 +596,7 @@ func (b *BL) doStepSynchronous(byLabelParams *api.DoStepByLabelParams, byUUIDPar
 	if err != nil {
 		return api.DoStepByUUIDResult{}, api.DoStepByLabelResult{}, fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
 	}
-	template.RefreshInput(b, run.Id, context)
+	template.RefreshInput(b, run.Id)
 	var updatedStepRecord *api.StepRecord
 	updatedStepRecord, err = template.StartDo(b, run.Id, stepUUID, statusOwner, context)
 	if err != nil {

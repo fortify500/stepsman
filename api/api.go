@@ -37,11 +37,11 @@ const (
 	RPCCreateRun = "createRun"
 	RPCDeleteRun = "deleteRun"
 
-	RPCListSteps     = "listSteps"
-	RPCGetSteps      = "getSteps"
-	RPCUpdateStep    = "updateStep"
-	RPCDoStepByUUID  = "doStepByUUID"
-	RPCDoStepByLabel = "doStepByLabel"
+	RPCListSteps        = "listSteps"
+	RPCGetSteps         = "getSteps"
+	RPCUpdateStepByUUID = "updateStepByUUID"
+	RPCDoStepByUUID     = "doStepByUUID"
+	RPCDoStepByLabel    = "doStepByLabel"
 )
 
 const CurrentTimeStamp = "2006-01-02 15:04:05"
@@ -91,12 +91,12 @@ type GetRunsQuery struct {
 type GetRunsResult []RunRecord
 type GetRunsParams GetRunsQuery
 
-type UpdateQuery struct {
+type UpdateQueryById struct {
 	Id      string                 `json:"id,omitempty"`
 	Force   bool                   `json:"force,omitempty"`
 	Changes map[string]interface{} `json:"changes,omitempty"`
 }
-type UpdateRunParams UpdateQuery
+type UpdateRunParams UpdateQueryById
 type UpdateRunResult struct{}
 
 type DeleteRunsParams DeleteQuery
@@ -121,8 +121,8 @@ type GetStepsQuery struct {
 type GetStepsResult []StepRecord
 type GetStepsParams GetStepsQuery
 
-type UpdateStepParams UpdateQuery
-type UpdateStepResult struct{}
+type UpdateStepByUUIDParams UpdateQueryById
+type UpdateStepByUUIDResult struct{}
 
 type DoStepByUUIDParams struct {
 	UUID        string  `json:"uuid,omitempty"`

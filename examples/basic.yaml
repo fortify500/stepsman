@@ -77,5 +77,4 @@ steps:
         url: https://jsonplaceholder.typicode.com/todos/4
         headers:
           authorization:
-            - >-
-              {% input.context["email-authorization"] %}
+            - '{% input.context["email-authorization"] %}'

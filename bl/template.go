@@ -148,7 +148,7 @@ func (t *Template) LoadFromBytes(BL *BL, runId string, isYaml bool, yamlDocument
 	return nil
 }
 
-func (t *Template) RefreshInput(BL *BL, runId string, context api.Context) {
+func (t *Template) RefreshInput(BL *BL, runId string) {
 	var err error
 	t.rego.inputMutex.RLock()
 	if t.rego.input == nil {
@@ -161,9 +161,6 @@ func (t *Template) RefreshInput(BL *BL, runId string, context api.Context) {
 	lastStateHeartBeat := t.rego.lastStateHeartBeat
 	lastStateHeartBeatIndices := t.rego.lastStateHeartBeatIndices
 	t.rego.inputMutex.RUnlock()
-	t.rego.inputMutex.Lock()
-	t.rego.input["context"] = context
-	t.rego.inputMutex.Unlock()
 	query := &api.ListQuery{
 		Filters: []api.Expression{{
 			AttributeName: dao.RunId,
@@ -196,7 +193,7 @@ func (t *Template) RefreshInput(BL *BL, runId string, context api.Context) {
 		var maxHeartBeat time.Time
 		var maxHeartBeatIndices []int64
 		t.rego.inputMutex.Lock()
-		input := t.rego.input
+		labels := t.rego.input["labels"].(map[string]interface{})
 		for _, record := range stepRecords {
 			if time.Time(record.Heartbeat).After(maxHeartBeat) {
 				maxHeartBeat = time.Time(record.Heartbeat)
@@ -211,9 +208,9 @@ func (t *Template) RefreshInput(BL *BL, runId string, context api.Context) {
 				t.rego.inputMutex.Unlock()
 				panic(err)
 			}
-			input["labels"].(map[string]interface{})[t.indicesToLabels[record.Index]] = state
+			labels[t.indicesToLabels[record.Index]] = state
 		}
-		t.rego.input = input
+		t.rego.input["labels"] = labels
 		t.rego.lastStateHeartBeat = maxHeartBeat
 		t.rego.lastStateHeartBeatIndices = maxHeartBeatIndices
 		t.rego.inputMutex.Unlock()
@@ -237,20 +234,20 @@ func (t *Template) initInput() bool {
 				"version": t.Version,
 			},
 		}
+		labels := map[string]interface{}{}
+		inputSteps := map[string]interface{}{}
 		for _, step := range t.Steps {
-			t.rego.input["labels"] = map[string]interface{}{
-				step.Label: map[string]interface{}{},
-			}
-			t.rego.input["steps"] = map[string]interface{}{
-				step.Label: map[string]interface{}{
-					"name":    step.Name,
-					"retries": step.Retries,
-					"do": map[string]interface{}{
-						"type": step.doType,
-					},
+			labels = map[string]interface{}{}
+			inputSteps[step.Label] = map[string]interface{}{
+				"name":    step.Name,
+				"retries": step.Retries,
+				"do": map[string]interface{}{
+					"type": step.doType,
 				},
 			}
 		}
+		t.rego.input["labels"] = labels
+		t.rego.input["steps"] = inputSteps
 	}
 	return wasInit
 }
@@ -355,7 +352,7 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 	}
 	return nil
 }
-func (t *Template) EvaluateCurlyPercent(BL *BL, str string) (string, error) {
+func (t *Template) EvaluateCurlyPercent(BL *BL, str string, currentContext api.Context) (string, error) {
 	var buffer bytes.Buffer
 	tokens, escapedStr := TokenizeCurlyPercent(str)
 	if len(tokens) == 0 {
@@ -367,16 +364,18 @@ func (t *Template) EvaluateCurlyPercent(BL *BL, str string) (string, error) {
 		tokenEnd = token.End + 2
 		queryStr := escapedStr[token.Start:token.End]
 		ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
+		t.rego.inputMutex.RLock()
 		query, err := rego.New(
 			rego.Query(queryStr),
 			rego.Compiler(t.rego.compiler),
 		).PrepareForEval(ctx)
+		t.rego.inputMutex.RUnlock()
 		cancel()
 		if err != nil {
 			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to parse curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		var eval rego.ResultSet
-		eval, err = t.evaluateCurlyPercent(BL, query)
+		eval, err = t.evaluateCurlyPercent(BL, query, currentContext)
 		if err != nil {
 			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to evaluate curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
@@ -401,16 +400,32 @@ func (t *Template) EvaluateCurlyPercent(BL *BL, str string) (string, error) {
 	return buffer.String(), nil
 }
 
-func (t *Template) evaluateCurlyPercent(BL *BL, query rego.PreparedEvalQuery) (rego.ResultSet, error) {
+func (t *Template) evaluateCurlyPercent(BL *BL, query rego.PreparedEvalQuery, currentContext api.Context) (rego.ResultSet, error) {
+	newInput := make(map[string]interface{})
+	t.rego.inputMutex.RLock()
+	// two levels deep copy should be enough to avoid race conditions at this time. But keep an eye on this.
+	for k, v := range t.rego.input {
+		switch v.(type) {
+		case map[string]interface{}:
+			newMap := make(map[string]interface{})
+			for subK, subV := range v.(map[string]interface{}) {
+				newMap[subK] = subV
+			}
+			newInput[k] = newMap
+		default:
+			newInput[k] = v
+		}
+	}
+	t.rego.inputMutex.RUnlock()
+	newInput["context"] = currentContext
 	ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
 	defer cancel()
-	t.rego.inputMutex.RLock()
-	defer t.rego.inputMutex.RUnlock()
-	return query.Eval(ctx, rego.EvalInput(t.rego.input))
+
+	return query.Eval(ctx, rego.EvalInput(newInput))
 }
-func (t *Template) ResolveContext(BL *BL, context string) (api.Context, error) {
+func (t *Template) ResolveContext(BL *BL, context string, currentContext api.Context) (api.Context, error) {
 	var result api.Context
-	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, context)
+	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, context, currentContext)
 	if err != nil {
 		return nil, err
 	}
