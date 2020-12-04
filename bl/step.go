@@ -31,6 +31,21 @@ import (
 )
 
 const defaultHeartBeatInterval = 10 * time.Second
+const (
+	OnPhasePreTransaction = iota
+	OnPhaseInTransaction
+	OnPhasePostTransaction
+)
+
+type onCookieContext struct {
+	index           int64
+	context         string
+	resolvedContext api.Context
+}
+type onCookie struct {
+	resolvedContexts []onCookieContext
+	uuidsToEnqueue   []dao.UUIDAndStatusOwner
+}
 
 func (b *BL) GetSteps(query *api.GetStepsQuery) ([]api.StepRecord, error) {
 	if dao.IsRemote {
@@ -173,74 +188,13 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 	}
 	return nil
 }
+
 func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, stepUUID string, prevStatusOwner string, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *dao.StepState, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	var softError *api.Error
 	toEnqueue := false
-	if newStatus == api.StepDone {
-		var err error
-		step := t.Steps[t.labelsToIndices[label]-1]
-		if step.On.Done != nil {
-		BREAKOUT:
-			for _, rule := range step.On.Done.Rules {
-				if rule.Then != nil {
-					if len(rule.Then.Do) > 0 {
-						var indicesAndContext []struct {
-							index           int64
-							context         string
-							resolvedContext api.Context
-						}
-						for _, thenDo := range rule.Then.Do {
-							index, ok := t.labelsToIndices[thenDo.Label]
-							if !ok {
-								panic(fmt.Errorf("label should have an index"))
-							}
-							indicesAndContext = append(indicesAndContext, struct {
-								index           int64
-								context         string
-								resolvedContext api.Context
-							}{index, thenDo.Context, nil})
-						}
-						if len(indicesAndContext) > 0 {
-							var uuidsToEnqueue []dao.UUIDAndStatusOwner
-							for i := range indicesAndContext {
-								indicesAndContext[i].resolvedContext, err = t.ResolveContext(BL, indicesAndContext[i].context, currentContext)
-								if err != nil {
-									break BREAKOUT
-								}
-							}
-							if tErr := BL.DAO.Transactional(func(tx *sqlx.Tx) error {
-								for _, indexAndContext := range indicesAndContext {
-									uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexAndContext.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexAndContext.resolvedContext, nil)
-									if len(uuids) == 1 {
-										uuidsToEnqueue = append(uuidsToEnqueue, uuids[0])
-									}
-								}
-								return nil
-							}); tErr != nil {
-								panic(tErr)
-							}
-							for _, item := range uuidsToEnqueue {
-								work := doWork(item.UUID)
-								if eErr := BL.Enqueue(&work); eErr != nil {
-									log.Error(eErr)
-								}
-							}
-						}
-						break BREAKOUT
-					}
-				}
-			}
-			if err != nil {
-				newStatus = api.StepFailed
-				//newState may contain err even if doErr is not nil
-				//goland:noinspection GoNilness
-				if newState.Error == "" {
-					newState.Error = err.Error()
-				}
-			}
-		}
-	}
+	var cookie onCookie
+	cookie, newStatus = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
 	tErr := BL.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
 		partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
@@ -422,7 +376,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			updatedStepRecord.State = string(newStateBytes)
 		}
 		updatedStepRecord.Status = newStatus
-
+		cookie, newStatus = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState)
 		return nil
 	})
 	if tErr == nil && softError != nil {
@@ -431,7 +385,81 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 		work := doWork(updatedStepRecord.UUID)
 		tErr = BL.Enqueue(&work)
 	}
+	if tErr == nil {
+		_, _ = t.on(nil, BL, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState)
+	}
 	return &updatedStepRecord, tErr
+}
+
+func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, onCookie onCookie, runId string, label string, newStatus api.StepStatusType, currentContext api.Context, newState *dao.StepState) (onCookie, api.StepStatusType) {
+	switch phase {
+	case OnPhasePreTransaction:
+		switch newStatus {
+		case api.StepInProgress:
+		case api.StepDone:
+			var err error
+			step := t.Steps[t.labelsToIndices[label]-1]
+			if step.On.Done != nil {
+			BREAKOUT:
+				for _, rule := range step.On.Done.Rules {
+					if rule.Then != nil {
+						if len(rule.Then.Do) > 0 {
+
+							for _, thenDo := range rule.Then.Do {
+								index, ok := t.labelsToIndices[thenDo.Label]
+								if !ok {
+									panic(fmt.Errorf("label should have an index"))
+								}
+								onCookie.resolvedContexts = append(onCookie.resolvedContexts, onCookieContext{
+									index,
+									thenDo.Context,
+									nil,
+								})
+							}
+							if len(onCookie.resolvedContexts) > 0 {
+								for i := range onCookie.resolvedContexts {
+									onCookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, onCookie.resolvedContexts[i].context, currentContext)
+									if err != nil {
+										break BREAKOUT
+									}
+								}
+							}
+							break BREAKOUT
+						}
+					}
+				}
+				if err != nil {
+					newStatus = api.StepFailed
+					//newState may contain err even if doErr is not nil
+					//goland:noinspection GoNilness
+					if newState.Error == "" {
+						newState.Error = err.Error()
+					}
+				}
+			}
+		}
+	case OnPhaseInTransaction:
+		if len(onCookie.resolvedContexts) > 0 {
+			for _, indexAndContext := range onCookie.resolvedContexts {
+				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexAndContext.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexAndContext.resolvedContext, nil)
+				if len(uuids) == 1 {
+					onCookie.uuidsToEnqueue = append(onCookie.uuidsToEnqueue, uuids[0])
+				}
+			}
+		}
+	case OnPhasePostTransaction:
+		if len(onCookie.uuidsToEnqueue) > 0 {
+			for _, item := range onCookie.uuidsToEnqueue {
+				work := doWork(item.UUID)
+				if eErr := BL.Enqueue(&work); eErr != nil {
+					log.Error(eErr)
+				}
+			}
+		}
+	default:
+		panic(fmt.Errorf("no such on phase, this code bit should never be reached"))
+	}
+	return onCookie, newStatus
 }
 
 func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *dao.StepState) (bool, *api.Error) {
