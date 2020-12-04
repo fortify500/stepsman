@@ -1,4 +1,4 @@
-title: "namespace HR approvals"
+title: "HR approvals"
 # optional, but recommended, if in the future we will have breaking changes this allows to migrate on the fly.
 version: 1
 # searchable tags. if you want to locate a template by an external key.
@@ -18,7 +18,7 @@ steps:
     description: expire the workflow
     label: expiration
     on:
-      pre-done:
+      done:
         rules:
           - then:
               do:
@@ -64,7 +64,7 @@ steps:
             set-result: >
               {"status":{% input.context["status"] %}}
     on:
-      pre-do: #important to note that pre-do is decided before locking the step into one execution of DO (i.e. in-progress status)
+      in-progress: #important to note that in-progress is decided before locking the step into one execution of DO (i.e. in-progress status)
         decisions:
           - label: check_access
           - label: check_valid_input
@@ -87,7 +87,7 @@ steps:
                 message: "invalid input"
                 data: >
                   {% input.decision["check_valid_input"]["result"] %}
-      pre-done:
+      done:
         decisions:
           - label: decision_step
             input: >
@@ -110,7 +110,7 @@ steps:
       Send email by given step
     label: path_1_step_2_email
     do:
-      type: REST # 201 with heartbeats of set InProgress and finaly set Done. 
+      type: REST # 201 with heartbeats of set InProgress and finally set Done.
       heartbeat-timeout: 180 # seconds. default 10. 
       options:
         timeout: 60
@@ -144,7 +144,7 @@ steps:
             set-result: >
               {"status":{% input.context["status"] %}}
     on:
-      pre-do:
+      in-progress:
         decisions:
           - label: check_access
           - label: check_valid_input
@@ -167,7 +167,7 @@ steps:
                 message: "invalid input"
                 data: >
                   {% input.decision["check_valid_input"]["result"] %}
-      pre-done:
+      done:
         decisions:
           - label: decision_step
             input: >
@@ -188,7 +188,7 @@ steps:
   - name: Check Resolution
     label: check_resolution
     on:
-      pre-do:
+      in-progress:
         decisions:
           - label: decision_resolution
             input: >
@@ -217,7 +217,7 @@ steps:
       options:
         method: POST
         url: >
-          {% input.env.rulengine %}/re_notification
+          {% input.env.server_url %}/re_notification
         body: >
           { "result": {% input.context["result"] %} }
         headers:
@@ -230,7 +230,7 @@ steps:
           namespace:
             - 351d87f0-9d4a-411b-9a98-7d55a9792eac
     on:
-      pre-done:
+      done:
         rules:
           - if: >
               result{input.label["report_run_result"]["status"]!=200}
@@ -246,7 +246,7 @@ steps:
                 - key: result
                   value: >
                     {% input.context["result"] %}
-              set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are descarded.
+              set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are discarded.
 
 #---------------------------------------------------------
 decisions:
@@ -273,7 +273,7 @@ decisions:
           result: valid
   - name: check a step has resolution
     label: decision_step # label must be unique
-    attributes: # essentially these are both validation an if neccessary type conversion if possible.
+    attributes: # essentially these are both validation an if necessary type conversion if possible.
       - label: step_status
         type: flow_status
     rules: # the IFs are first one true. we stop.
@@ -350,6 +350,6 @@ concepts: # int64, float64 and string, bool are reserved and need not specified.
         result{input.flow_status=="skipped"}else{input.flow_status=="approved"}else{input.flow_status=="declined"}
 
 # notes:
-# * as a convinience a response body is first attempted to be converted to a json. if it does not succeed it is stored as a string in the ["result"]["body"]
+# * as a convenience a response body is first attempted to be converted to a json. if it does not succeed it is stored as a string in the ["result"]["body"]
 # * Vault secrets and properties (such as tenant properties) will be retrieved by default from a static text file or hashicorp vault client.
 # * You can access environment variables via "env.".

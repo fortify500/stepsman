@@ -171,7 +171,7 @@ func TestLocal(t *testing.T) {
 		{"get -V %[1]s step %[3]s", false, false},
 		{`update -V %[1]s step %[3]s -s "Failed"`, false, false},
 		{`update -V %[1]s step %[3]s -s "Idle"`, false, false},
-		{"do -V %[1]s step %[3]s --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
+		{`do -V %[1]s step %[3]s --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}`, false, false},
 		{"get -V %[1]s step %[3]s", false, false},
 		{"describe -V %[1]s run %[2]s", false, false},
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},

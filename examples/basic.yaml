@@ -15,7 +15,7 @@ steps:
         method: GET
         url: https://jsonplaceholder.typicode.com/todos/1
     on:
-      pre-done:
+      done:
         rules:
           - then:
               do:
@@ -40,7 +40,7 @@ steps:
         method: GET
         url: https://jsonplaceholder.typicode.com/todos/2
     on:
-      pre-done:
+      done:
         rules:
           - then:
               do:
@@ -70,7 +70,7 @@ steps:
       # if the callee does not return stepsman-complete-by it will by a synchronous call.
       # It need to get back to us and update the heartbeat before the timeout if he is going to be late, otherwise it MAY be retried.
       # In this case it is not serious that emails are not sent but anyone who did not get the email will not press
-      # Starting, for example, in an approval process. Therefor we wish to track the status.
+      # Starting, for example, in an approval process. Therefore we wish to track the status.
       options:
         timeout: 60 #seconds
         method: GET

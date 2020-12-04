@@ -71,7 +71,7 @@ type Event struct {
 	Rules []Rule `json:"rules,omitempty"`
 }
 type On struct {
-	PreDone *Event `json:"pre-done,omitempty" mapstructure:"pre-done" yaml:"pre-done,omitempty"`
+	Done *Event `json:"done,omitempty" mapstructure:"done" yaml:"done,omitempty"`
 }
 type Step struct {
 	Name        string      `json:"name,omitempty"`

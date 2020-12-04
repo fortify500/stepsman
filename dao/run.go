@@ -254,21 +254,22 @@ func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) {
 		panic(err)
 	}
 }
-func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runReturnAttributes []string) (api.RunRecord, string, error) {
+func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runReturnAttributes []string) (api.RunRecord, string, api.Context, error) {
 	var result []api.RunRecord
 	var rows *sqlx.Rows
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, runReturnAttributes)
 	if err != nil {
-		return api.RunRecord{}, "", fmt.Errorf("failed to get run transactional: %w", err)
+		return api.RunRecord{}, "", nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s, steps.uuid as step_uuid FROM runs inner join steps on runs.id=steps.run_id where runs.id=$1 AND steps.label = $2", attributesStr)
+	query := fmt.Sprintf("SELECT %s, steps.uuid as step_uuid, steps.context FROM runs inner join steps on runs.id=steps.run_id where runs.id=$1 AND steps.label = $2", attributesStr)
 	rows, err = tx.Queryx(query, runId, label)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
 	}
 	stepUUIDStruct := struct {
-		StepUUID string `db:"step_uuid"`
+		StepUUID string      `db:"step_uuid"`
+		Context  api.Context `db:"context"`
 		api.RunRecord
 	}{}
 	defer rows.Close()
@@ -283,48 +284,41 @@ func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runRetu
 		result = append(result, stepUUIDStruct.RunRecord)
 	}
 	if result == nil || len(result) != 1 {
-		return api.RunRecord{}, "", api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
+		return api.RunRecord{}, "", nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
 	}
-	return result[0], stepUUIDStruct.StepUUID, nil
+	return result[0], stepUUIDStruct.StepUUID, stepUUIDStruct.Context, nil
 }
-func GetRunsByStepUUIDsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, []api.Context, error) {
-	var result []api.RunRecord
-	var contexts []api.Context
+func GetRunLabelAndContextByStepUUIDTx(tx *sqlx.Tx, stepUUID string, runReturnAttributes []string) (api.RunRecord, api.Context, string, error) {
 	var rows *sqlx.Rows
 	var err error
-	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, getQuery.ReturnAttributes)
+	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, runReturnAttributes)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get run transactional: %w", err)
+		return api.RunRecord{}, nil, "", fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	queryStr := fmt.Sprintf("SELECT %s, steps.context FROM runs inner join steps on runs.id=steps.run_id where steps.uuid IN (?)", attributesStr)
-	var query string
-	var args []interface{}
-	query, args, err = sqlx.In(queryStr, getQuery.Ids)
-	if err != nil {
-		panic(err)
-	}
-	query = tx.Rebind(query)
-	rows, err = tx.Queryx(query, args...)
+	query := fmt.Sprintf("SELECT %s, steps.context, steps.label FROM runs inner join steps on runs.id=steps.run_id where steps.uuid=$1", attributesStr)
+	rows, err = tx.Queryx(query, stepUUID)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
 	}
+	contextAndRunStruct := struct {
+		Context api.Context `db:"context"`
+		Label   string      `db:"label"`
+		api.RunRecord
+	}{}
+	i := 0
 	defer rows.Close()
 	for rows.Next() {
-		contextAndRunStruct := struct {
-			Context api.Context `db:"context"`
-			api.RunRecord
-		}{}
 		err = rows.StructScan(&contextAndRunStruct)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database runs row - get: %w", err))
 		}
-		result = append(result, contextAndRunStruct.RunRecord)
-		contexts = append(contexts, contextAndRunStruct.Context)
+		i++
+		break
 	}
-	if result == nil || len(result) != len(getQuery.Ids) {
-		return nil, nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
+	if i != 1 {
+		return api.RunRecord{}, nil, "", api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
 	}
-	return result, contexts, nil
+	return contextAndRunStruct.RunRecord, contextAndRunStruct.Context, contextAndRunStruct.Label, nil
 }
 
 func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error) {

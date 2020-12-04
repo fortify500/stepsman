@@ -63,99 +63,108 @@ func (b *BL) initDO(maxResponseHeaderByte int64) {
 }
 func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoType, doInterface interface{}, prevState *dao.StepState, currentContext api.Context) (dao.StepState, error) {
 	var newState dao.StepState
+	var err error
 	newState = *prevState
 	newState.Error = ""
 	newState.Result = emptyMap
 	if doInterface != nil {
 		switch doType {
 		case DoTypeREST:
-			doRest := doInterface.(StepDoREST)
-			var response *http.Response
-
-			var timeout = DefaultDoRestTimeout * time.Second
-			var maxResponseBodyBytes int64 = DefaultMaxResponseBodyBytes
-
-			if doRest.Options.Timeout > 0 {
-				timeout = time.Duration(doRest.Options.Timeout) * time.Second
-			}
-
-			if doRest.Options.MaxResponseBodyBytes > 0 {
-				maxResponseBodyBytes = doRest.Options.MaxResponseBodyBytes
-			}
-			{
-				var err error
-				var body io.ReadCloser = nil
-				if len(doRest.Options.Body) > 0 {
-					body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
-				}
-				var netClient = &http.Client{
-					Transport: b.netTransport,
-					Timeout:   timeout,
-				}
-				var resolvedUrl string
-				resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url, currentContext)
-				if err != nil {
-					return newState, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
-				}
-				ctx, cancel := context.WithTimeout(context.Background(), timeout)
-				defer cancel()
-				var request *http.Request
-				request, err = http.NewRequestWithContext(ctx, doRest.Options.Method, resolvedUrl, body)
-				if err != nil {
-					newState.Error = err.Error()
-					return newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
-				}
-				for k, v := range doRest.Options.Headers {
-					var header []string
-					for _, h := range v {
-						var resolvedHeaderPart string
-						resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h, currentContext)
-						if err != nil {
-							return newState, fmt.Errorf("failed to evaluate header part: %s", h)
-						}
-						header = append(header, resolvedHeaderPart)
-					}
-					request.Header[k] = header
-				}
-				request.Header["stepsman-run-id"] = []string{stepRecord.RunId}
-				request.Header["stepsman-label"] = []string{step.Label}
-				response, err = netClient.Do(request)
-				if err != nil {
-					newState.Error = err.Error()
-					return newState, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
-				}
-			}
-			result := StepStateRest{}
-			defer response.Body.Close()
-			bodyBytes, err := ioutil.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes))
+			newState, err = b.doRest(t, step, stepRecord, doInterface, currentContext, newState)
 			if err != nil {
-				newState.Error = err.Error()
-				return newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
+				return newState, err
 			}
-			result.ContentType = "text/plain"
-			result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
-			switch result.ContentType {
-			case "application/json":
-				err = json.Unmarshal(bodyBytes, &result.Body)
-				if err != nil {
-					newState.Error = err.Error()
-					return newState, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
-				}
-			default:
-				result.Body = string(bodyBytes)
-			}
-			result.StatusCode = response.StatusCode
-			result.StatusPhrase = response.Status
-			result.Header = response.Header
-			newState.Result = result
-			log.Debug(fmt.Sprintf("response status:%d, body:%s", response.StatusCode, result.Body))
 		default:
-			err := api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
+			err = api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 			newState.Error = err.Error()
 			return newState, err
 		}
 	}
 
+	return newState, err
+}
+
+func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInterface interface{}, currentContext api.Context, newState dao.StepState) (dao.StepState, error) {
+	doRest := doInterface.(StepDoREST)
+	var response *http.Response
+
+	var timeout = DefaultDoRestTimeout * time.Second
+	var maxResponseBodyBytes int64 = DefaultMaxResponseBodyBytes
+
+	if doRest.Options.Timeout > 0 {
+		timeout = time.Duration(doRest.Options.Timeout) * time.Second
+	}
+
+	if doRest.Options.MaxResponseBodyBytes > 0 {
+		maxResponseBodyBytes = doRest.Options.MaxResponseBodyBytes
+	}
+	{
+		var err error
+		var body io.ReadCloser = nil
+		if len(doRest.Options.Body) > 0 {
+			body = ioutil.NopCloser(strings.NewReader(doRest.Options.Body))
+		}
+		var netClient = &http.Client{
+			Transport: b.netTransport,
+			Timeout:   timeout,
+		}
+		var resolvedUrl string
+		resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url, currentContext)
+		if err != nil {
+			return newState, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		var request *http.Request
+		request, err = http.NewRequestWithContext(ctx, doRest.Options.Method, resolvedUrl, body)
+		if err != nil {
+			newState.Error = err.Error()
+			return newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
+		}
+		for k, v := range doRest.Options.Headers {
+			var header []string
+			for _, h := range v {
+				var resolvedHeaderPart string
+				resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h, currentContext)
+				if err != nil {
+					return newState, fmt.Errorf("failed to evaluate header part: %s", h)
+				}
+				header = append(header, resolvedHeaderPart)
+			}
+			request.Header[k] = header
+		}
+		request.Header["stepsman-run-id"] = []string{stepRecord.RunId}
+		request.Header["stepsman-label"] = []string{step.Label}
+		response, err = netClient.Do(request)
+		if err != nil {
+			newState.Error = err.Error()
+			return newState, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
+		}
+	}
+	result := StepStateRest{}
+	defer response.Body.Close()
+	bodyBytes, err := ioutil.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes))
+	if err != nil {
+		newState.Error = err.Error()
+		return newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
+	}
+	result.ContentType = "text/plain"
+	result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
+	switch result.ContentType {
+	case "application/json":
+		err = json.Unmarshal(bodyBytes, &result.Body)
+		if err != nil {
+			newState.Error = err.Error()
+			return newState, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
+		}
+	default:
+		result.Body = string(bodyBytes)
+	}
+	result.StatusCode = response.StatusCode
+	result.StatusPhrase = response.Status
+	result.Header = response.Header
+	newState.Result = result
+	log.Debug(fmt.Sprintf("response status:%d, body:%s", response.StatusCode, result.Body))
 	return newState, nil
 }
 
