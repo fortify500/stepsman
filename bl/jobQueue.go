@@ -58,7 +58,9 @@ func (b *BL) Enqueue(do *doWork) error {
 
 // try not to use this, this is primarily for testing
 func (b *BL) QueuesIdle() bool {
-	if len(b.memoryQueue) == 0 && len(b.queue) == 0 && b.workCounter.get() == 0 {
+	if b != nil && len(b.memoryQueue) == 0 && len(b.queue) == 0 && b.workCounter.get() == 0 {
+		return true
+	} else if b == nil {
 		return true
 	}
 	return false

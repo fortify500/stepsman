@@ -135,6 +135,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		}
 		request.Header["stepsman-run-id"] = []string{stepRecord.RunId}
 		request.Header["stepsman-label"] = []string{step.Label}
+		request.Header["stepsman-status-owner"] = []string{stepRecord.StatusOwner}
 		response, err = netClient.Do(request)
 		if err != nil {
 			newState.Error = err.Error()

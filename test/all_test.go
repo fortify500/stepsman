@@ -187,15 +187,16 @@ func TestLocal(t *testing.T) {
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
 		{"do -V %[1]s step %[2]s --label starting --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
 	}
-	breakOut := false
-BreakOut:
+
 	for _, vendor := range vendors {
+		breakOut := false
 		if cmd.BL != nil {
 			waitForQueuesToFinish()
 			_ = cmd.BL.ShutdownValve.Shutdown(time.Duration(5) * time.Second)
 			cmd.BL.CancelValveCtx()
 		}
 		cmd.BL = nil
+	BreakOut:
 		for _, tc := range testCases {
 			command := fmt.Sprintf(tc.command, vendor, createdRunId, createdRunIdStepUUID)
 			t.Run(command, func(t *testing.T) {
@@ -271,21 +272,6 @@ func TestRemotePostgreSQL(t *testing.T) {
 		{"postgresql", "serve -M -V %s"},
 	}
 	breakOut := false
-	mockContext, mockCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer mockCancel()
-	mockSrv := mockServer()
-	go func() {
-		err := mockSrv.ListenAndServe()
-		if err != nil {
-			log.Warn(err)
-		}
-	}()
-	defer func() {
-		err := mockSrv.Shutdown(mockContext)
-		if err != nil {
-			log.Warn(err)
-		}
-	}()
 BreakOut:
 	for _, tc := range testCases {
 		waitForQueuesToFinish()
@@ -303,7 +289,7 @@ BreakOut:
 			}
 		}()
 
-		time.Sleep(time.Duration(4) * time.Second)
+		time.Sleep(time.Duration(1) * time.Second)
 
 		httpClient := client.New(false, "localhost", 3333)
 		createdRunId := ""
@@ -693,11 +679,70 @@ BreakOut:
 			}
 		})
 		waitForQueuesToFinish()
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
+			steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
+				Range: api.RangeQuery{},
+				Sort:  api.Sort{},
+				Filters: []api.Expression{
+					{
+						AttributeName: dao.RunId,
+						Operator:      "=",
+						Value:         createdRunId,
+					},
+					{
+						AttributeName: dao.Label,
+						Operator:      "=",
+						Value:         "emails",
+					},
+				},
+				ReturnAttributes: nil,
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
+				if step.Status != api.StepInProgress {
+					t.Errorf("step %s status must be done", step.UUID)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByLabel emails done"), func(t *testing.T) {
+			currentStatusOwnerMu.Lock()
+			statusOwner := currentStatusOwner
+			currentStatusOwnerMu.Unlock()
+			err := httpClient.RemoteUpdateStepByLabel(&api.UpdateQueryByLabel{
+				RunId:       createdRunId,
+				StatusOwner: statusOwner,
+				Label:       "emails",
+				Force:       false,
+				Changes: map[string]interface{}{
+					"status": api.StepDone.TranslateStepStatus(),
+					"state": map[string]interface{}{
+						"result": map[string]interface{}{
+							"status": "sent",
+						},
+					},
+				},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		})
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end")
 	}
 }
+
+var currentStatusOwnerMu sync.Mutex
+var currentStatusOwner string
 
 func mockServer() http.Server {
 	// Mock
@@ -708,14 +753,18 @@ func mockServer() http.Server {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Route("/", func(r chi.Router) {
-		r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		r.Get("/async", func(w http.ResponseWriter, r *http.Request) {
+			statusOwner := r.Header.Get("Stepsman-Status-Owner")
+			currentStatusOwnerMu.Lock()
+			currentStatusOwner = statusOwner
+			currentStatusOwnerMu.Unlock()
 			w.Header().Set("Stepsman-Async", "true")
 			w.WriteHeader(200)
-			todos := map[string]interface{}{
+			test := map[string]interface{}{
 				"test": "test",
 			}
 
-			if err := json.NewEncoder(w).Encode(todos); err != nil {
+			if err := json.NewEncoder(w).Encode(test); err != nil {
 				panic(err)
 			}
 		})
@@ -734,6 +783,21 @@ func waitForQueuesToFinish() {
 	}
 }
 func TestMain(m *testing.M) {
+	mockContext, mockCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer mockCancel()
+	mockSrv := mockServer()
+	go func() {
+		err := mockSrv.ListenAndServe()
+		if err != nil {
+			log.Warn(err)
+		}
+	}()
+	defer func() {
+		err := mockSrv.Shutdown(mockContext)
+		if err != nil {
+			log.Warn(err)
+		}
+	}()
 	setup()
 	code := m.Run()
 	teardown()

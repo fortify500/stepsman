@@ -74,7 +74,7 @@ steps:
       options:
         timeout: 60 #seconds
         method: GET
-        url: https://jsonplaceholder.typicode.com/todos/4
+        url: http://localhost:3335/async
         headers:
           authorization:
             - '{% input.context["email-authorization"] %}'

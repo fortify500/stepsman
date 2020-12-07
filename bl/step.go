@@ -76,15 +76,15 @@ func (b *BL) UpdateStepByLabel(query *api.UpdateQueryByLabel) error {
 }
 
 func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.UpdateQueryByLabel) error {
-	vetErr := dao.VetIds([]string{queryByUUID.UUID})
-	if vetErr != nil {
-		return fmt.Errorf("failed to update step: %w", vetErr)
-	}
 	wasUpdate := false
 	var changes map[string]interface{}
 	var statusOwner string
 	var force bool
 	if queryByUUID != nil {
+		vetErr := dao.VetIds([]string{queryByUUID.UUID})
+		if vetErr != nil {
+			return fmt.Errorf("failed to update step: %w", vetErr)
+		}
 		changes = queryByUUID.Changes
 		statusOwner = queryByUUID.StatusOwner
 		force = queryByUUID.Force
@@ -254,7 +254,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 					}
 					heartBeatInterval := step.GetHeartBeatTimeout()
 					if delta <= heartBeatInterval {
-						return api.NewError(api.ErrStepAlreadyInProgress, "failed to update database stepRecord row, stepRecord is already in progress and has a heartbeat with an interval of %d", heartBeatInterval)
+						return api.NewError(api.ErrStepAlreadyInProgress, "failed to update database stepRecord row, stepRecord is already in progress and has a heartbeat with an interval of %f seconds and %f seconds has passed", heartBeatInterval.Seconds(), delta.Seconds())
 					}
 				}
 			}
