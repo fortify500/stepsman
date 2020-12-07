@@ -313,6 +313,20 @@ func (c *Context) Scan(src interface{}) error {
 	return nil
 }
 
+func (s State) Value() (driver.Value, error) {
+	if marshal, err := json.Marshal(s); err != nil {
+		return nil, err
+	} else {
+		return marshal, nil
+	}
+}
+func (s *State) Scan(src interface{}) error {
+	if err := json.Unmarshal(src.([]byte), s); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (a *AnyTime) Scan(src interface{}) error {
 	var err error
 	var result time.Time
@@ -343,6 +357,11 @@ const (
 
 type AnyTime time.Time
 type Context map[string]interface{}
+type State struct {
+	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
+	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
+}
+
 type StepRecord struct {
 	RunId       string         `db:"run_id" json:"run-id,omitempty"`
 	Index       int64          `db:"index" json:"index,omitempty"`
@@ -356,32 +375,18 @@ type StepRecord struct {
 	CompleteBy  *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`
 	Context     Context        `db:"context" json:"context,omitempty"`
 	RetriesLeft int            `db:"retries_left" json:"retries-left,omitempty"`
-	State       string         `json:"state,omitempty"`
+	State       State          `json:"state,omitempty"`
 }
 
 func (s *StepRecord) PrettyJSONState() string {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		panic(err)
-	}
-	prettyBytes, err := json.MarshalIndent(&tmp, "", "  ")
+	prettyBytes, err := json.MarshalIndent(s.State, "", "  ")
 	if err != nil {
 		panic(err)
 	}
 	return string(prettyBytes)
 }
 func (s *StepRecord) PrettyYamlState() string {
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(s.State)))
-	decoder.DisallowUnknownFields()
-	var tmp interface{}
-	err := decoder.Decode(&tmp)
-	if err != nil {
-		panic(err)
-	}
-	prettyBytes, err := yaml.Marshal(&tmp)
+	prettyBytes, err := yaml.Marshal(s.State)
 	if err != nil {
 		panic(err)
 	}

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
-	"github.com/fortify500/stepsman/dao"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -61,30 +60,31 @@ func (b *BL) initDO(maxResponseHeaderByte int64) {
 		b.netTransport.MaxResponseHeaderBytes = maxResponseHeaderByte
 	}
 }
-func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoType, doInterface interface{}, prevState *dao.StepState, currentContext api.Context) (dao.StepState, error) {
-	var newState dao.StepState
+func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoType, doInterface interface{}, prevState *api.State, currentContext api.Context) (api.State, bool, error) {
+	var newState api.State
 	var err error
+	var async bool
 	newState = *prevState
 	newState.Error = ""
 	newState.Result = emptyMap
 	if doInterface != nil {
 		switch doType {
 		case DoTypeREST:
-			newState, err = b.doRest(t, step, stepRecord, doInterface, currentContext, newState)
+			newState, async, err = b.doRest(t, step, stepRecord, doInterface, currentContext, newState)
 			if err != nil {
-				return newState, err
+				return newState, false, err
 			}
 		default:
 			err = api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 			newState.Error = err.Error()
-			return newState, err
+			return newState, false, err
 		}
 	}
 
-	return newState, err
+	return newState, async, err
 }
 
-func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInterface interface{}, currentContext api.Context, newState dao.StepState) (dao.StepState, error) {
+func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInterface interface{}, currentContext api.Context, newState api.State) (api.State, bool, error) {
 	doRest := doInterface.(StepDoREST)
 	var response *http.Response
 
@@ -111,7 +111,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		var resolvedUrl string
 		resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url, currentContext)
 		if err != nil {
-			return newState, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
+			return newState, false, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -119,7 +119,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		request, err = http.NewRequestWithContext(ctx, doRest.Options.Method, resolvedUrl, body)
 		if err != nil {
 			newState.Error = err.Error()
-			return newState, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
+			return newState, false, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
 		}
 		for k, v := range doRest.Options.Headers {
 			var header []string
@@ -127,7 +127,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 				var resolvedHeaderPart string
 				resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h, currentContext)
 				if err != nil {
-					return newState, fmt.Errorf("failed to evaluate header part: %s", h)
+					return newState, false, fmt.Errorf("failed to evaluate header part: %s", h)
 				}
 				header = append(header, resolvedHeaderPart)
 			}
@@ -138,7 +138,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		response, err = netClient.Do(request)
 		if err != nil {
 			newState.Error = err.Error()
-			return newState, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
+			return newState, false, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
 		}
 	}
 	result := StepStateRest{}
@@ -146,7 +146,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 	bodyBytes, err := ioutil.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes))
 	if err != nil {
 		newState.Error = err.Error()
-		return newState, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
+		return newState, false, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
 	}
 	result.ContentType = "text/plain"
 	result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
@@ -155,7 +155,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		err = json.Unmarshal(bodyBytes, &result.Body)
 		if err != nil {
 			newState.Error = err.Error()
-			return newState, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
+			return newState, false, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
 		}
 	default:
 		result.Body = string(bodyBytes)
@@ -164,8 +164,21 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 	result.StatusPhrase = response.Status
 	result.Header = response.Header
 	newState.Result = result
+	async := false
+	if result.Header != nil {
+		for k, v := range result.Header {
+			if strings.EqualFold(k, "stepsman-async") {
+				if v != nil && len(v) > 0 {
+					if strings.EqualFold(v[0], "true") {
+						async = true
+					}
+				}
+				break
+			}
+		}
+	}
 	log.Debug(fmt.Sprintf("response status:%d, body:%s", response.StatusCode, result.Body))
-	return newState, nil
+	return newState, async, nil
 }
 
 func TokenizeCurlyPercent(originalString string) (result []DoubleCurlyToken, sanitizedString string) {

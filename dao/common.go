@@ -233,7 +233,7 @@ type indicesUUIDs struct {
 	uuid  string
 }
 
-func (d *DAO) updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
+func (d *DAO) updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) []UUIDAndStatusOwner {
 	var result []UUIDAndStatusOwner
 	for _, indexOrUUID := range indicesUuids {
 		var err error

@@ -23,11 +23,6 @@ import (
 	"strings"
 )
 
-type StepState struct {
-	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
-	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
-}
-
 func (d *DAO) UpdateStepHeartBeat(stepUUID string, statusOwner string) error {
 	res, err := d.DB.SQL().Exec("update steps set heartbeat=CURRENT_TIMESTAMP where uuid=$1 and status_owner=$2", stepUUID, statusOwner)
 	if err == nil {
@@ -42,7 +37,7 @@ func (d *DAO) UpdateStepHeartBeat(stepUUID string, statusOwner string) error {
 	}
 	return nil
 }
-func (d *DAO) UpdateStepPartsTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int, context api.Context, state *string) UUIDAndStatusOwner {
+func (d *DAO) UpdateStepPartsTx(tx *sqlx.Tx, runId string, index int64, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) UUIDAndStatusOwner {
 	updated := d.UpdateManyStepsPartsBeatTx(tx, runId, []int64{index}, newStatus, newStatusOwner, nil, completeBy, retriesLeft, context, state)
 	if len(updated) != 1 {
 		panic(fmt.Errorf("illegal state, 1 updated record expected for runId:%s and index:%d", runId, index))
@@ -212,7 +207,7 @@ func (d *DAO) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, uuids []string, 
 	}
 	return d.updateManyStepsPartsTxInternal(tx, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, nil, context, nil)
 }
-func (d *DAO) UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *string) []UUIDAndStatusOwner {
+func (d *DAO) UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, runId string, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) []UUIDAndStatusOwner {
 	var indicesUuids []indicesUUIDs
 	for _, index := range indices {
 		indicesUuids = append(indicesUuids, indicesUUIDs{

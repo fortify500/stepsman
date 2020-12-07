@@ -86,6 +86,6 @@ func writeJSONResponse(rw http.ResponseWriter, statusCode int, content []byte) {
 	rw.WriteHeader(statusCode)
 	_, err := rw.Write(content)
 	if err != nil {
-		log.Errorf("failed to write json response: %w", err)
+		log.Error(fmt.Errorf("failed to write json response: %w", err))
 	}
 }

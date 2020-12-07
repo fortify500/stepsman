@@ -71,7 +71,9 @@ type Event struct {
 	Rules []Rule `json:"rules,omitempty"`
 }
 type On struct {
-	Done *Event `json:"done,omitempty" mapstructure:"done" yaml:"done,omitempty"`
+	InProgress *Event `json:"in-progress,omitempty" mapstructure:"in-progress" yaml:"in-progress,omitempty"`
+	Done       *Event `json:"done,omitempty" mapstructure:"done" yaml:"done,omitempty"`
+	Failed     *Event `json:"failed,omitempty" mapstructure:"failed" yaml:"failed,omitempty"`
 }
 type Step struct {
 	Name        string      `json:"name,omitempty"`
@@ -202,13 +204,7 @@ func (t *Template) RefreshInput(BL *BL, runId string) {
 			if time.Time(record.Heartbeat).Equal(maxHeartBeat) {
 				maxHeartBeatIndices = append(maxHeartBeatIndices, record.Index)
 			}
-			var state map[string]interface{}
-			err = json.Unmarshal([]byte(record.State), &state)
-			if err != nil {
-				t.rego.inputMutex.Unlock()
-				panic(err)
-			}
-			labels[t.indicesToLabels[record.Index]] = state
+			labels[t.indicesToLabels[record.Index]] = record.State
 		}
 		t.rego.input["labels"] = labels
 		t.rego.lastStateHeartBeat = maxHeartBeat

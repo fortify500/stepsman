@@ -19,5 +19,6 @@ Built to save the day
 
 p.s. StepsMan is a short for Steps Manager.
 
-The roadmap is located at https://github.com/fortify500/stepsman/blob/main/roadmap/proposal.yaml but it is currently in flux and not everything is up to date or correct, however it can give an idea about the direction.
-More documentation to come...
+The roadmap is located at https://github.com/fortify500/stepsman/blob/main/roadmap/proposal.yaml, but it is currently in
+flux and not everything is up to date or correct, however it can give an idea about the direction. More documentation to
+come...

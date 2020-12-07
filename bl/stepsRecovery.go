@@ -82,14 +82,14 @@ func (b *BL) recoveryScheduler() {
 				return nil
 			})
 			if tErr != nil {
-				log.Errorf("failed to recover steps: %w", tErr)
+				log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 			}
 			tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
 				stepsUUIDs = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit)
 				return nil
 			})
 			if tErr != nil {
-				log.Errorf("failed to recover steps: %w", tErr)
+				log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 			}
 			if tErr != nil || (b.IsPostgreSQL() && len(stepsUUIDs) >= b.recoveryMaxRecoverItemsPassLimit) {
 				tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
@@ -107,13 +107,13 @@ func (b *BL) recoveryScheduler() {
 					return nil
 				})
 				if tErr != nil {
-					log.Errorf("failed to recover steps: %w", tErr)
+					log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 				}
 			}
 			for _, item := range stepsUUIDs {
 				work := doWork(item)
 				if err := b.Enqueue(&work); err != nil {
-					log.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr)
+					log.Error(fmt.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr))
 				}
 			}
 		}
@@ -137,7 +137,7 @@ func resetTimer(timer *time.Timer, interval time.Duration) {
 func (b *BL) startRecoveryListening() {
 	reportErrFunc := func(ev pq.ListenerEventType, err error) {
 		if err != nil {
-			log.Errorf("failed to start listener: %w", err)
+			log.Error(fmt.Errorf("failed to start listener: %w", err))
 			select {
 			case <-b.ValveCtx.Done():
 				panic(api.NewError(api.ErrShuttingDown, "leaving postgresql listener, server is shutting down"))
@@ -182,7 +182,7 @@ func (b *BL) startRecoveryListening() {
 			listener := pq.NewListener(b.DAO.Parameters.DataSourceName, time.Duration(2)*time.Second, time.Duration(64)*time.Second, reportErrFunc)
 			defer func() {
 				err := listener.Close()
-				log.Errorf("failed to close listener: %w", err)
+				log.Error(fmt.Errorf("failed to close listener: %w", err))
 			}()
 			err := listener.Listen(RecoveryChannelName)
 			if err != nil {

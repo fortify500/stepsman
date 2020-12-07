@@ -17,8 +17,6 @@
 package bl
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
@@ -113,10 +111,10 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 			if !ok {
 				return api.NewError(api.ErrInvalidParams, "status must be of string type")
 			}
-			var newState *dao.StepState
+			var newState *api.State
 			val, ok = changes["state"]
 			if ok {
-				var newStateTmp dao.StepState
+				var newStateTmp api.State
 				var md mapstructure.Metadata
 				decoder, err := mapstructure.NewDecoder(
 					&mapstructure.DecoderConfig{
@@ -189,14 +187,16 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 	return nil
 }
 
-func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, stepUUID string, prevStatusOwner string, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *dao.StepState, force bool) (*api.StepRecord, error) {
+func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, stepUUID string, prevStatusOwner string, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *api.State, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	var softError *api.Error
 	toEnqueue := false
+	checkRetries := false
 	var cookie onCookie
-	cookie, newStatus = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
+	cookie, newStatus, _ = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
 	tErr := BL.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
+		startingStatus := newStatus
 		partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
 			UUIDs:            []string{stepUUID},
 			ReturnAttributes: []string{dao.HeartBeat, dao.StatusOwner, dao.Status, dao.State, dao.Index, dao.RetriesLeft},
@@ -217,7 +217,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			return api.NewError(api.ErrStatusNotChanged, "step status have not changed")
 		}
 		if newStatus != api.StepDone && newStatus != api.StepFailed {
-			newState = &dao.StepState{}
+			newState = &api.State{}
 		}
 		var stepContext api.Context
 		statusOwner := newStatusOwner
@@ -229,11 +229,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				stepContext = currentContext
 			case api.StepInProgress:
 				stepContext = currentContext
-				var toReturn bool
-				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, stepContext, newState)
-				if toReturn {
-					return nil
-				}
+				checkRetries = true
 			case api.StepFailed:
 			case api.StepDone:
 			}
@@ -242,19 +238,11 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			case api.StepIdle:
 			case api.StepInProgress:
 				statusOwner = partialStepRecord.StatusOwner
-				var toReturn bool
-				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-				if toReturn {
-					return nil
-				}
+				checkRetries = true
 			case api.StepFailed:
 				statusOwner = partialStepRecord.StatusOwner
-				var toReturn bool
-				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-				if toReturn {
-					return nil
-				}
 				toEnqueue = true
+				checkRetries = true
 			case api.StepDone:
 			}
 		case api.StepInProgress:
@@ -277,12 +265,8 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				toEnqueue = true
 			case api.StepFailed:
 				statusOwner = partialStepRecord.StatusOwner
-				var toReturn bool
-				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-				if toReturn {
-					return nil
-				}
 				toEnqueue = true
+				checkRetries = true
 			case api.StepDone:
 			}
 		case api.StepFailed:
@@ -290,19 +274,11 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			case api.StepIdle:
 			case api.StepPending:
 				statusOwner = partialStepRecord.StatusOwner
-				var toReturn bool
-				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-				if toReturn {
-					return nil
-				}
 				toEnqueue = true
+				checkRetries = true
 			case api.StepInProgress:
 				statusOwner = partialStepRecord.StatusOwner
-				var toReturn bool
-				toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-				if toReturn {
-					return nil
-				}
+				checkRetries = true
 			case api.StepDone:
 			}
 		case api.StepDone:
@@ -310,18 +286,10 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				switch newStatus {
 				case api.StepIdle:
 				case api.StepPending:
-					var toReturn bool
-					toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-					if toReturn {
-						return nil
-					}
 					toEnqueue = true
+					checkRetries = true
 				case api.StepInProgress:
-					var toReturn bool
-					toReturn, softError = BL.failStepIfNoRetries(tx, &partialStepRecord, statusOwner, nil, newState)
-					if toReturn {
-						return nil
-					}
+					checkRetries = true
 				case api.StepFailed:
 				}
 			} else {
@@ -329,6 +297,26 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			}
 		}
 
+		if checkRetries && partialStepRecord.RetriesLeft < 1 {
+			if partialStepRecord.Status != api.StepFailed {
+				var onErr error
+				if startingStatus != newStatus {
+					cookie, _, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
+					if onErr != nil {
+						newState.Error = fmt.Sprintf("%s: %s", onErr.Error(), newState.Error)
+					}
+				}
+				if onErr == nil {
+					cookie, _, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState)
+					if onErr != nil {
+						newState.Error = fmt.Sprintf("%s: %s", onErr.Error(), newState.Error)
+					}
+				}
+				_ = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, statusOwner, nil, nil, stepContext, newState)
+			}
+			softError = api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status")
+			return nil
+		}
 		var run *api.RunRecord
 		run, err = GetRunByIdTx(tx, runId)
 		if err != nil {
@@ -342,7 +330,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 					return api.NewError(api.ErrRunIsAlreadyDone, "failed to update database stepRecord status, run is already done and no change is possible")
 				}
 				newStatus = api.StepIdle // we want to finish this so it won't be revived.
-				newState = &dao.StepState{}
+				newState = &api.State{}
 			}
 			//otherwise let it finish setting the status.
 			toEnqueue = false
@@ -366,38 +354,47 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 		if newState == nil {
 			updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, nil).StatusOwner
 		} else {
-			var newStateBytes []byte
-			newStateBytes, err = json.Marshal(newState)
-			if err != nil {
-				panic(err)
-			}
-			newStateStr := string(newStateBytes)
-			updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, &newStateStr).StatusOwner
-			updatedStepRecord.State = string(newStateBytes)
+			updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, newState).StatusOwner
+			updatedStepRecord.State = *newState
 		}
 		updatedStepRecord.Status = newStatus
-		cookie, newStatus = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState)
+		if startingStatus != newStatus {
+			// this part should only be triggered by the run condition from in-progress,pending to idle. so nothing should happen.
+			var onErr error
+			cookie, newStatus, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
+			if onErr != nil {
+				log.Error(onErr) // no place for failure here, it should not occur. But let's log this...
+			}
+		}
+		cookie, newStatus, _ = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState)
 		return nil
 	})
+	if tErr == nil {
+		var onErr error
+		_, _, onErr = t.on(nil, BL, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState)
+		if onErr != nil {
+			log.Error(onErr) //there is nothing to be done, it will be recovered.
+		}
+	}
 	if tErr == nil && softError != nil {
 		tErr = softError
 	} else if tErr == nil && toEnqueue {
 		work := doWork(updatedStepRecord.UUID)
 		tErr = BL.Enqueue(&work)
 	}
-	if tErr == nil {
-		_, _ = t.on(nil, BL, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState)
-	}
+
 	return &updatedStepRecord, tErr
 }
 
-func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, onCookie onCookie, runId string, label string, newStatus api.StepStatusType, currentContext api.Context, newState *dao.StepState) (onCookie, api.StepStatusType) {
+func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId string, label string, newStatus api.StepStatusType, currentContext api.Context, newState *api.State) (onCookie, api.StepStatusType, error) {
+	var err error
 	switch phase {
 	case OnPhasePreTransaction:
+		cookie = onCookie{}
 		switch newStatus {
+		case api.StepFailed:
 		case api.StepInProgress:
 		case api.StepDone:
-			var err error
 			step := t.Steps[t.labelsToIndices[label]-1]
 			if step.On.Done != nil {
 			BREAKOUT:
@@ -410,15 +407,15 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, onCookie onCookie, runId s
 								if !ok {
 									panic(fmt.Errorf("label should have an index"))
 								}
-								onCookie.resolvedContexts = append(onCookie.resolvedContexts, onCookieContext{
+								cookie.resolvedContexts = append(cookie.resolvedContexts, onCookieContext{
 									index,
 									thenDo.Context,
 									nil,
 								})
 							}
-							if len(onCookie.resolvedContexts) > 0 {
-								for i := range onCookie.resolvedContexts {
-									onCookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, onCookie.resolvedContexts[i].context, currentContext)
+							if len(cookie.resolvedContexts) > 0 {
+								for i := range cookie.resolvedContexts {
+									cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, cookie.resolvedContexts[i].context, currentContext)
 									if err != nil {
 										break BREAKOUT
 									}
@@ -430,6 +427,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, onCookie onCookie, runId s
 				}
 				if err != nil {
 					newStatus = api.StepFailed
+					cookie = onCookie{}
 					//newState may contain err even if doErr is not nil
 					//goland:noinspection GoNilness
 					if newState.Error == "" {
@@ -439,17 +437,17 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, onCookie onCookie, runId s
 			}
 		}
 	case OnPhaseInTransaction:
-		if len(onCookie.resolvedContexts) > 0 {
-			for _, indexAndContext := range onCookie.resolvedContexts {
+		if len(cookie.resolvedContexts) > 0 {
+			for _, indexAndContext := range cookie.resolvedContexts {
 				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexAndContext.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexAndContext.resolvedContext, nil)
 				if len(uuids) == 1 {
-					onCookie.uuidsToEnqueue = append(onCookie.uuidsToEnqueue, uuids[0])
+					cookie.uuidsToEnqueue = append(cookie.uuidsToEnqueue, uuids[0])
 				}
 			}
 		}
 	case OnPhasePostTransaction:
-		if len(onCookie.uuidsToEnqueue) > 0 {
-			for _, item := range onCookie.uuidsToEnqueue {
+		if len(cookie.uuidsToEnqueue) > 0 {
+			for _, item := range cookie.uuidsToEnqueue {
 				work := doWork(item.UUID)
 				if eErr := BL.Enqueue(&work); eErr != nil {
 					log.Error(eErr)
@@ -459,19 +457,13 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, onCookie onCookie, runId s
 	default:
 		panic(fmt.Errorf("no such on phase, this code bit should never be reached"))
 	}
-	return onCookie, newStatus
+	return cookie, newStatus, err
 }
 
-func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *dao.StepState) (bool, *api.Error) {
+func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *api.State) (bool, *api.Error) {
 	if partialStepRecord.RetriesLeft < 1 {
 		if partialStepRecord.Status != api.StepFailed {
-			var newStateBytes []byte
-			newStateBytes, err := json.Marshal(newState)
-			if err != nil {
-				panic(err)
-			}
-			newStateStr := string(newStateBytes)
-			_ = b.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, newStatusOwner, nil, nil, context, &newStateStr)
+			_ = b.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, newStatusOwner, nil, nil, context, newState)
 		}
 		return true, api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status")
 	}
@@ -495,28 +487,24 @@ func (t *Template) StartDo(BL *BL, runId string, label string, stepUUID string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
-	decoder := json.NewDecoder(bytes.NewBuffer([]byte(updatedPartialStepRecord.State)))
-	decoder.DisallowUnknownFields()
-	var prevState dao.StepState
-	err = decoder.Decode(&prevState)
-	if err != nil {
-		panic(err)
-	}
-	var newState dao.StepState
+	var prevState = updatedPartialStepRecord.State
+	var newState api.State
 	var doErr error
+	var async bool
 	step := t.Steps[updatedPartialStepRecord.Index-1]
-	newState, doErr = BL.do(t, &step, updatedPartialStepRecord, step.doType, step.Do, &prevState, currentContext)
+	newState, async, doErr = BL.do(t, &step, updatedPartialStepRecord, step.doType, step.Do, &prevState, currentContext)
 	var newStepStatus api.StepStatusType
 	if doErr != nil {
 		newStepStatus = api.StepFailed
 	} else {
 		newStepStatus = api.StepDone
+		if async {
+			return updatedPartialStepRecord, nil
+		}
 	}
-	var tErr error
-	updatedPartialStepRecord, tErr = t.TransitionStateAndStatus(BL, runId, label, stepUUID, updatedPartialStepRecord.StatusOwner, newStepStatus, newStatusOwner, currentContext, &newState, false)
-	if tErr != nil {
-		defer log.Error(tErr)
-		err = fmt.Errorf("many errors, first: %s, next: failed to update step status: %w", tErr, err)
+	updatedPartialStepRecord, err = t.TransitionStateAndStatus(BL, runId, label, stepUUID, updatedPartialStepRecord.StatusOwner, newStepStatus, newStatusOwner, currentContext, &newState, false)
+	if err != nil {
+		return nil, err
 	}
 	return updatedPartialStepRecord, err
 }

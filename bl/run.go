@@ -179,7 +179,7 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 				StatusOwner: statusOwner.String(),
 				Label:       step.Label,
 				Name:        step.Name,
-				State:       "{}",
+				State:       api.State{},
 				Context:     emptyContext,
 				RetriesLeft: retriesLeft,
 			}

@@ -19,6 +19,7 @@ package test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
@@ -27,12 +28,16 @@ import (
 	"github.com/fortify500/stepsman/cmd"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/fortify500/stepsman/serve"
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/gobs/args"
 	"github.com/google/uuid"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
 	"github.com/open-policy-agent/opa/types"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"regexp"
 	"sync"
@@ -266,6 +271,21 @@ func TestRemotePostgreSQL(t *testing.T) {
 		{"postgresql", "serve -M -V %s"},
 	}
 	breakOut := false
+	mockContext, mockCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer mockCancel()
+	mockSrv := mockServer()
+	go func() {
+		err := mockSrv.ListenAndServe()
+		if err != nil {
+			log.Warn(err)
+		}
+	}()
+	defer func() {
+		err := mockSrv.Shutdown(mockContext)
+		if err != nil {
+			log.Warn(err)
+		}
+	}()
 BreakOut:
 	for _, tc := range testCases {
 		waitForQueuesToFinish()
@@ -677,6 +697,30 @@ BreakOut:
 		wg.Wait()
 		fmt.Println("end")
 	}
+}
+
+func mockServer() http.Server {
+	// Mock
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+	r.Route("/", func(r chi.Router) {
+		r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Stepsman-Async", "true")
+			w.WriteHeader(200)
+			todos := map[string]interface{}{
+				"test": "test",
+			}
+
+			if err := json.NewEncoder(w).Encode(todos); err != nil {
+				panic(err)
+			}
+		})
+	})
+	return http.Server{Addr: ":3335", Handler: r}
 }
 
 func waitForQueuesToFinish() {

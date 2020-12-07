@@ -57,7 +57,7 @@ func resolveError(err error) *jsonrpc.Error {
 			defer log.WithField("stack", string(stack)).Error(err)
 		}
 		if caller := apiErr.Caller(); caller != nil {
-			log.Errorf("[%s:%d]: %w", caller.File, caller.File, err)
+			log.Error(fmt.Errorf("[%s:%d]: %w", caller.File, caller.Line, err))
 		}
 		return &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCode(apiErr.Code().Code),
