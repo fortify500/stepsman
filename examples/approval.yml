@@ -1,0 +1,27 @@
+title: "HR approvals"
+# optional, but recommended, if in the future we will have breaking changes this allows to migrate on the fly.
+version: 1
+
+steps:
+  - name: "send emails to step path_1_step_1"
+    description: >
+      Send email by given step
+    label: path_1_step_1_email
+    do:
+      type: REST
+      heartbeat-timeout: 180 # seconds. default 10. 
+      options:
+        timeout: 60 #seconds
+        method: GET
+        url: >-
+          {% input.context.url %}/send-emails/path_1_step_1
+        headers:
+          authorization:
+            - >-
+              {% base64.encode(concat("privilegedUser:",  input.context["emails-password"])) %}
+          tenant:
+            - >-
+              {% input.context["tenant"] %}
+          namespace:
+            - >-
+              {% input.context["namespace"] %}
