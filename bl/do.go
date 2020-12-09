@@ -111,15 +111,18 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		var resolvedUrl string
 		resolvedUrl, err = t.EvaluateCurlyPercent(b, doRest.Options.Url, currentContext)
 		if err != nil {
-			return newState, false, fmt.Errorf("failed to evaluate url: %s", doRest.Options.Url)
+			err = fmt.Errorf("failed to evaluate url: %s: %w", doRest.Options.Url, err)
+			newState.Error = err.Error()
+			return newState, false, err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		var request *http.Request
 		request, err = http.NewRequestWithContext(ctx, doRest.Options.Method, resolvedUrl, body)
 		if err != nil {
+			err = api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
 			newState.Error = err.Error()
-			return newState, false, api.NewWrapError(api.ErrInvalidParams, err, "failed to form a request due to: %w", err)
+			return newState, false, err
 		}
 		for k, v := range doRest.Options.Headers {
 			var header []string
@@ -127,7 +130,9 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 				var resolvedHeaderPart string
 				resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, h, currentContext)
 				if err != nil {
-					return newState, false, fmt.Errorf("failed to evaluate header part: %s", h)
+					err = fmt.Errorf("failed to evaluate header part: %s: %w", h, err)
+					newState.Error = err.Error()
+					return newState, false, err
 				}
 				header = append(header, resolvedHeaderPart)
 			}
@@ -138,16 +143,18 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 		request.Header["stepsman-status-owner"] = []string{stepRecord.StatusOwner}
 		response, err = netClient.Do(request)
 		if err != nil {
+			err = api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
 			newState.Error = err.Error()
-			return newState, false, api.NewWrapError(api.ErrExternal, err, "failed to connect to a rest api due to: %w", err)
+			return newState, false, err
 		}
 	}
 	result := StepStateRest{}
 	defer response.Body.Close()
 	bodyBytes, err := ioutil.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes))
 	if err != nil {
+		err = api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
 		newState.Error = err.Error()
-		return newState, false, api.NewWrapError(api.ErrExternal, err, "failed to read from a rest api due to: %w", err)
+		return newState, false, err
 	}
 	result.ContentType = "text/plain"
 	result.ContentType, _, _ = mime.ParseMediaType(response.Header.Get("Content-Type"))
@@ -155,8 +162,9 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 	case "application/json":
 		err = json.Unmarshal(bodyBytes, &result.Body)
 		if err != nil {
+			err = api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
 			newState.Error = err.Error()
-			return newState, false, api.NewWrapError(api.ErrExternal, err, "failed to decode a rest api body into a json due to: %w", err)
+			return newState, false, err
 		}
 	default:
 		result.Body = string(bodyBytes)

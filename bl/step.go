@@ -169,7 +169,7 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
-			_, err = template.TransitionStateAndStatus(b, run.Id, label, stepUUID, statusOwner, newStatus, "", context, newState, force)
+			_, err = template.TransitionStateAndStatus(b, run.Id, label, stepUUID, newStatus, "", context, newState, force)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
@@ -187,7 +187,7 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 	return nil
 }
 
-func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, stepUUID string, prevStatusOwner string, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *api.State, force bool) (*api.StepRecord, error) {
+func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, stepUUID string, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *api.State, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	var softError *api.Error
 	toEnqueue := false
@@ -211,7 +211,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 		step := t.Steps[partialStepRecord.Index-1]
 		partialStepRecord.UUID = stepUUID
 		partialStepRecord.RunId = runId
-
+		prevStatusOwner := partialStepRecord.StatusOwner
 		// don't change done if the status did not change.
 		if newStatus == partialStepRecord.Status {
 			return api.NewError(api.ErrStatusNotChanged, "step status have not changed")
@@ -483,7 +483,7 @@ func (s *Step) GetHeartBeatTimeout() time.Duration {
 	return defaultHeartBeatInterval
 }
 func (t *Template) StartDo(BL *BL, runId string, label string, stepUUID string, newStatusOwner string, currentContext api.Context) (*api.StepRecord, error) {
-	updatedPartialStepRecord, err := t.TransitionStateAndStatus(BL, runId, label, stepUUID, "", api.StepInProgress, newStatusOwner, currentContext, nil, false)
+	updatedPartialStepRecord, err := t.TransitionStateAndStatus(BL, runId, label, stepUUID, api.StepInProgress, newStatusOwner, currentContext, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
@@ -502,7 +502,7 @@ func (t *Template) StartDo(BL *BL, runId string, label string, stepUUID string, 
 			return updatedPartialStepRecord, nil
 		}
 	}
-	updatedPartialStepRecord, err = t.TransitionStateAndStatus(BL, runId, label, stepUUID, updatedPartialStepRecord.StatusOwner, newStepStatus, newStatusOwner, currentContext, &newState, false)
+	updatedPartialStepRecord, err = t.TransitionStateAndStatus(BL, runId, label, stepUUID, newStepStatus, newStatusOwner, currentContext, &newState, false)
 	if err != nil {
 		return nil, err
 	}

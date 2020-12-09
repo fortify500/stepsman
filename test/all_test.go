@@ -830,6 +830,160 @@ BreakOut:
 	}
 }
 
+func TestRemoteApprovalPostgreSQL(t *testing.T) {
+	testCases := []struct {
+		databaseVendor string
+		command        string
+	}{
+		{"postgresql", "serve -M -V %s"},
+	}
+	breakOut := false
+BreakOut:
+	for _, tc := range testCases {
+		waitForQueuesToFinish()
+		cmd.BL = nil
+		command := fmt.Sprintf(tc.command, tc.databaseVendor)
+		cmd.ResetCommandParameters()
+		cmd.RootCmd.SetArgs(args.GetArgs(command))
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := cmd.RootCmd.Execute()
+			if err != nil {
+				t.Error(err)
+			}
+		}()
+
+		time.Sleep(time.Duration(1) * time.Second)
+
+		httpClient := client.New(false, "localhost", 3333)
+		createdRunId := ""
+		{
+			fileName := "examples/approval.yaml"
+			var template bl.Template
+			yamlDocument, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
+				break BreakOut
+			}
+			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
+			if err != nil {
+				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
+				break BreakOut
+			}
+			{
+				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
+					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
+						Key:      "",
+						Template: template,
+					})
+					if err != nil {
+						t.Error(err)
+						breakOut = true
+					}
+				})
+				if breakOut {
+					break BreakOut
+				}
+			}
+		}
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByLabel"), func(t *testing.T) {
+			statusOwner := "allTestOwner"
+			response, err := httpClient.RemoteDoStepByLabel(&api.DoStepByLabelParams{
+				RunId:       createdRunId,
+				Label:       "path_1_step_1_email",
+				StatusOwner: statusOwner,
+				Context: api.Context{
+					"url":                 "http://localhost:3335",
+					"email-authorization": "dXNlcjpwYXNzd29yZA==",
+					"tenant":              "1",
+					"namespace":           "HR",
+				},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if response.StatusOwner != statusOwner {
+				t.Error(fmt.Sprintf("status owner should be: %s, got %s", statusOwner, response.StatusOwner))
+				return
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByLabel emails done"), func(t *testing.T) {
+			currentStatusOwnerMu.Lock()
+			statusOwner := currentStatusOwner
+			currentStatusOwnerMu.Unlock()
+			err := httpClient.RemoteUpdateStepByLabel(&api.UpdateQueryByLabel{
+				RunId:       createdRunId,
+				StatusOwner: statusOwner,
+				Label:       "path_1_step_1_email",
+				Force:       false,
+				Changes: map[string]interface{}{
+					"status": api.StepDone.TranslateStepStatus(),
+					"state": map[string]interface{}{
+						"result": map[string]interface{}{
+							"status": "sent",
+						},
+					},
+				},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		})
+		waitForQueuesToFinish()
+		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepDone)
+		if breakOut {
+			break BreakOut
+		}
+		fmt.Printf("createdRunId: %s\n", createdRunId)
+		serve.InterruptServe <- os.Interrupt
+		wg.Wait()
+		fmt.Println("end approval")
+	}
+}
+
+func remoteCheckStepStatus(t *testing.T, call string, httpClient *client.CLI, createdRunId string, label string, status api.StepStatusType) bool {
+	var breakOut bool
+	t.Run(fmt.Sprintf("%s:%s:%s", call, label, status.TranslateStepStatus()), func(t *testing.T) {
+		steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
+			Range: api.RangeQuery{},
+			Sort:  api.Sort{},
+			Filters: []api.Expression{
+				{
+					AttributeName: dao.RunId,
+					Operator:      "=",
+					Value:         createdRunId,
+				},
+				{
+					AttributeName: dao.Label,
+					Operator:      "=",
+					Value:         label,
+				},
+			},
+			ReturnAttributes: nil,
+		})
+		if err != nil {
+			t.Error(err)
+			breakOut = true
+			return
+		}
+		if len(steps) <= 0 {
+			t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+			return
+		}
+		for _, step := range steps {
+			fmt.Println(fmt.Sprintf("%+v", step))
+			if step.Status != status {
+				t.Errorf("step %s status must be done", step.UUID)
+			}
+		}
+	})
+	return breakOut
+}
+
 var currentStatusOwnerMu sync.Mutex
 var currentStatusOwner string
 
@@ -860,6 +1014,20 @@ func mockServer() http.Server {
 			w.WriteHeader(200)
 			test := map[string]interface{}{
 				"test": "sync",
+			}
+			if err := json.NewEncoder(w).Encode(test); err != nil {
+				panic(err)
+			}
+		})
+		r.Get("/send-emails/{label}", func(w http.ResponseWriter, r *http.Request) {
+			statusOwner := r.Header.Get("Stepsman-Status-Owner")
+			currentStatusOwnerMu.Lock()
+			currentStatusOwner = statusOwner
+			currentStatusOwnerMu.Unlock()
+			w.Header().Set("Stepsman-Async", "true")
+			w.WriteHeader(200)
+			test := map[string]interface{}{
+				"test": "async",
 			}
 			if err := json.NewEncoder(w).Encode(test); err != nil {
 				panic(err)
