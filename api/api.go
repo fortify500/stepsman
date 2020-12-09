@@ -172,6 +172,7 @@ type DeleteQuery struct {
 type RunRecord struct {
 	Id              string        `json:"id,omitempty"`
 	Key             string        `json:"key,omitempty"`
+	Tags            Tags          `db:"tags" json:"tags,omitempty"`
 	CreatedAt       AnyTime       `db:"created_at" json:"created-at,omitempty"`
 	TemplateVersion int64         `db:"template_version" json:"template-version,omitempty"`
 	TemplateTitle   string        `db:"template_title" json:"template-title,omitempty"`
@@ -299,6 +300,21 @@ func (a *AnyTime) UnmarshalJSON(data []byte) error {
 	*a = AnyTime(parsedTime)
 	return nil
 }
+
+func (t Tags) Value() (driver.Value, error) {
+	if marshal, err := json.Marshal(t); err != nil {
+		return nil, err
+	} else {
+		return marshal, nil
+	}
+}
+func (t *Tags) Scan(src interface{}) error {
+	if err := json.Unmarshal(src.([]byte), t); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c Context) Value() (driver.Value, error) {
 	if marshal, err := json.Marshal(c); err != nil {
 		return nil, err
@@ -361,10 +377,11 @@ type State struct {
 	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
-
+type Tags []string
 type StepRecord struct {
 	RunId       string         `db:"run_id" json:"run-id,omitempty"`
 	Index       int64          `db:"index" json:"index,omitempty"`
+	Tags        Tags           `db:"tags" json:"tags,omitempty"`
 	Label       string         `json:"label,omitempty"`
 	UUID        string         `json:"uuid,omitempty"`
 	Name        string         `json:"name,omitempty"`

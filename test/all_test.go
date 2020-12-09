@@ -339,6 +339,40 @@ BreakOut:
 				return
 			}
 		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListRuns"), func(t *testing.T) {
+			runs, _, err := httpClient.RemoteListRuns(&api.ListQuery{
+				Filters: []api.Expression{{
+					AttributeName: dao.Tags,
+					Operator:      "contains",
+					Value:         []string{"31be0615-2659-452a-bce3-5d23fec89dfc", "992dca17-7452-492e-a5bd-fa06a7df9fe6"},
+				}},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(runs) == 0 {
+				t.Error(fmt.Errorf("at least one run should be returned, got: %d", len(runs)))
+				return
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListRuns"), func(t *testing.T) {
+			runs, _, err := httpClient.RemoteListRuns(&api.ListQuery{
+				Filters: []api.Expression{{
+					AttributeName: dao.Tags,
+					Operator:      "exists",
+					Value:         []string{"31be0615-2659-452a-bce3-5d23fec89dfc", "992dca17-7452-492e-a5bd-fa06a7df9fe6"},
+				}},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(runs) == 0 {
+				t.Error(fmt.Errorf("at least one run should be returned, got: %d", len(runs)))
+				return
+			}
+		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateRun done"), func(t *testing.T) {
 			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
@@ -393,6 +427,56 @@ BreakOut:
 			if runs[0].Status != api.RunIdle {
 				t.Error(fmt.Errorf("status should be idle, got: %s", runs[0].Status.TranslateRunStatus()))
 				return
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
+			steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
+				Sort: api.Sort{
+					Fields: []string{"index"},
+					Order:  "asc",
+				},
+				Filters: []api.Expression{{
+					AttributeName: dao.Tags,
+					Operator:      "contains",
+					Value:         []string{"2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c", "ccf295f8-90ff-43ed-87c3-144732d710a8"},
+				}},
+				ReturnAttributes: nil,
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
+			}
+		})
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
+			steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
+				Sort: api.Sort{
+					Fields: []string{"index"},
+					Order:  "asc",
+				},
+				Filters: []api.Expression{{
+					AttributeName: dao.Tags,
+					Operator:      "exists",
+					Value:         []string{"2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c", "ccf295f8-90ff-43ed-87c3-144732d710a8"},
+				}},
+				ReturnAttributes: nil,
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(steps) <= 0 {
+				t.Error(fmt.Errorf("at least one step should be returned, got: %d", len(steps)))
+				return
+			}
+			for _, step := range steps {
+				fmt.Println(fmt.Sprintf("%+v", step))
 			}
 		})
 		var stepUUIDs []string

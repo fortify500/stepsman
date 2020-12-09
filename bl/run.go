@@ -143,9 +143,12 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 			if err != nil {
 				panic(err)
 			}
+
 			runRecord = &api.RunRecord{
 				Id:              uuid4.String(),
 				Key:             key,
+				Tags:            t.Tags,
+				CreatedAt:       api.AnyTime{},
 				TemplateVersion: t.Version,
 				TemplateTitle:   title,
 				Status:          api.RunIdle,
@@ -177,6 +180,7 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 				UUID:        uuid4.String(),
 				Status:      api.StepIdle,
 				StatusOwner: statusOwner.String(),
+				Tags:        step.Tags,
 				Label:       step.Label,
 				Name:        step.Name,
 				State:       api.State{},

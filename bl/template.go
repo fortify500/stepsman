@@ -49,9 +49,10 @@ type Rego struct {
 }
 
 type Template struct {
-	Title           string `json:"title"`
-	Version         int64  `json:"version"`
-	Steps           []Step `json:"steps"`
+	Title           string   `json:"title,omitempty"`
+	Version         int64    `json:"version,omitempty"`
+	Steps           []Step   `json:"steps,omitempty"`
+	Tags            api.Tags `json:"tags,omitempty"`
 	labelsToIndices map[string]int64
 	indicesToLabels map[int64]string
 	rego            *Rego
@@ -77,6 +78,7 @@ type On struct {
 }
 type Step struct {
 	Name        string      `json:"name,omitempty"`
+	Tags        api.Tags    `json:"tags,omitempty"`
 	Label       string      `json:"label,omitempty"`
 	Description string      `json:"description,omitempty"`
 	Do          interface{} `json:"do,omitempty"`

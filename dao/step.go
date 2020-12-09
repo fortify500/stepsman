@@ -17,6 +17,7 @@
 package dao
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
@@ -249,7 +250,9 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 
 	{
 		filterQuery := ""
-		for i, expression := range query.Filters {
+		var i int
+		for _, expression := range query.Filters {
+			i++
 			queryExpression := ""
 			attributeName := expression.AttributeName
 			switch expression.AttributeName {
@@ -262,6 +265,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				attributeName = "status_owner"
 			case Label:
 			case Name:
+			case Tags:
 			case HeartBeat:
 			default:
 				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in filter: %s", expression.AttributeName)
@@ -282,12 +286,12 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
 				queryExpression += expression.Operator
-				queryExpression += fmt.Sprintf("$%d", +i+1)
+				queryExpression += fmt.Sprintf("$%d", i)
 			case "<>":
 				fallthrough
 			case "=":
 				queryExpression += expression.Operator
-				queryExpression += fmt.Sprintf("$%d", +i+1)
+				queryExpression += fmt.Sprintf("$%d", i)
 			case "startsWith":
 				switch expression.AttributeName {
 				case Label:
@@ -295,7 +299,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
-				queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i+1)
+				queryExpression += fmt.Sprintf(" LIKE $%d || '%%'", i)
 			case "endsWith":
 				switch expression.AttributeName {
 				case Label:
@@ -303,19 +307,100 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
-				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i+1)
+				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d", i)
 			case "contains":
 				switch expression.AttributeName {
 				case Label:
 				case Name:
+				case Tags:
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
 				}
-				queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i+1)
+				switch expression.AttributeName {
+				case Tags:
+					var ok bool
+					var tags []string
+					{
+						var tagsInterface []interface{}
+						tagsInterface, ok = expression.Value.([]interface{})
+						if !ok {
+							return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+						}
+						var tag string
+						for _, v := range tagsInterface {
+							tag, ok = v.(string)
+							if !ok {
+								return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+							}
+							tags = append(tags, tag)
+						}
+					}
+					if len(tags) == 0 {
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+					}
+					queryExpression += fmt.Sprintf(" @> $%d::jsonb", i)
+				default:
+					queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i)
+				}
+			case "exists":
+				switch expression.AttributeName {
+				case Tags:
+				default:
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
+				}
+				var ok bool
+				var tags []string
+				{
+					var tagsInterface []interface{}
+					tagsInterface, ok = expression.Value.([]interface{})
+					if !ok {
+						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+					}
+					var tag string
+					for _, v := range tagsInterface {
+						tag, ok = v.(string)
+						if !ok {
+							return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+						}
+						tags = append(tags, tag)
+					}
+				}
+				if len(tags) == 0 {
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+				}
+				var sb strings.Builder
+				sb.WriteString(" ?| array[")
+				for j := range tags {
+					if j > 0 {
+						i++
+						sb.WriteString(fmt.Sprintf(",$%d", i))
+					} else {
+						sb.WriteString(fmt.Sprintf("$%d", i))
+					}
+				}
+				sb.WriteString("]")
+				queryExpression += sb.String()
 			default:
 				return nil, nil, api.NewError(api.ErrInvalidParams, "invalid operator in filter: %s", expression.Operator)
 			}
-			params = append(params, expression.Value)
+			switch expression.AttributeName {
+			case Tags:
+				switch expression.Operator {
+				case "contains":
+					var tagsJson []byte
+					tagsJson, err = json.Marshal(expression.Value)
+					if err != nil {
+						panic(err)
+					}
+					params = append(params, tagsJson)
+				case "exists":
+					params = append(params, expression.Value.([]interface{})...)
+				default:
+					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
+				}
+			default:
+				params = append(params, expression.Value)
+			}
 			if filterQuery != "" {
 				filterQuery += " AND "
 			}

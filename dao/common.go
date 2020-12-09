@@ -52,6 +52,7 @@ const (
 	State           = "state"
 	Label           = "label"
 	Name            = "name"
+	Tags            = "tags"
 )
 
 type DBI interface {

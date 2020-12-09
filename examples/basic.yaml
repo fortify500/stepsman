@@ -1,10 +1,16 @@
 title: "STEPSMAN Hello World"
+tags:
+  - 31be0615-2659-452a-bce3-5d23fec89dfc
+  - 992dca17-7452-492e-a5bd-fa06a7df9fe6
 steps:
   - name: "Starting" # mandatory
     description: > # optional
       example for a rest call
+    tags:
+      - 2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c
+      - 6fded91a-3e09-4538-acef-daf39ab748bc
     label: starting
-    retries: 3  # by default, this means it won't be retried. Technically will become 1 in the database if never executed, once it is in progress it will be 0. e.g. a 2 will become 3 in the database initially.
+    retries: 3 # by default, this means it won't be retried. Technically will become 1 in the database if never executed, once it is in progress it will be 0. e.g. a 2 will become 3 in the database initially.
     do: # optional
       type: REST # heartbeats of set InProgress and finally set Done. However, this doesn't mean events cannot already start for path_1_step_?
       complete-by: 200 # default 3600. This is a hard limit whereby even an async or any error will cause a fail and move to pending.
@@ -24,10 +30,13 @@ steps:
                     {% input.context %}
                 - label: next
                   context: >
-                    { "result": "next", "title": "{% input.template.title %}"}  
+                    { "result": "next", "title": "{% input.template.title %}"}
   - name: "next"
     description: >
       example for a rest call 2
+    tags:
+      - 2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c
+      - 2cdbe5e3-e578-42ae-917a-7271eb51a070
     label: next
     retries: 3
     do:
@@ -50,6 +59,9 @@ steps:
   - name: "Finishing" # mandatory
     description: > # optional
       example for a rest call 3
+    tags:
+      - 2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c
+      - 75093c81-f04a-45e8-b7a3-cc62cd6834f5
     label: finishing
     do:
       type: REST
@@ -62,10 +74,13 @@ steps:
   - name: "send emails we are starting"
     description: >
       Send email by given step. Example for an async rest call
+    tags:
+      - 2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c
+      - ccf295f8-90ff-43ed-87c3-144732d710a8
     label: emails
     do:
       type: REST
-      heartbeat-timeout: 50 # we send the the callee our run-id and step label in the call headers - stepsman-label, stepsman-run-id. 
+      heartbeat-timeout: 50 # we send the the callee our run-id and step label in the call headers - stepsman-label, stepsman-run-id.
       # In an async flow, the callee returns stepsman-complete-by (seconds) which can only be lower than the template complete-by or 0 for template maximum.
       # if the callee does not return stepsman-complete-by it will by a synchronous call.
       # It need to get back to us and update the heartbeat before the timeout if he is going to be late, otherwise it MAY be retried.

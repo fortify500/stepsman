@@ -71,6 +71,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
                                      template_version INTEGER NOT NULL,
 	                                 status INTEGER NOT NULL,
                                      key TEXT NOT NULL,
+                                     tags TEXT NOT NULL,
 	                                 template_title TEXT,
 	                                 template TEXT
                                      )`)
@@ -93,6 +94,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	                                 heartbeat TIMESTAMP NOT NULL,
 									 complete_by TIMESTAMP NULL,
 									 retries_left INTEGER NOT NULL,
+									 tags TEXT NOT NULL,
 									 context TEXT NOT NULL, 
 	                                 state text,
 	                                 PRIMARY KEY (run_id, "index")
@@ -115,7 +117,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state)"
+	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state,:tags)"
 	if _, err := tx.NamedExec(query, stepRecord); err != nil {
 		panic(err)
 	}

@@ -43,6 +43,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"created_at" timestamp with time zone NOT NULL,
 	"key" Text NOT NULL,
 	"template_title" Text NOT NULL ,
+	"tags" jsonb NOT NULL,
 	"template" jsonb,
 	PRIMARY KEY ( "id" ),
 	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
@@ -55,6 +56,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"uuid" uuid NOT NULL,
 	"status" Bigint NOT NULL,
 	"label" Text NOT NULL,
+	"tags" jsonb NOT NULL,
 	"name" Text,
 	"complete_by" timestamp with time zone NULL,
 	"heartbeat" timestamp with time zone NOT NULL,
@@ -81,11 +83,19 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}
+	_, err = tx.Exec(`CREATE INDEX "index_runs_tags" ON "public"."runs" USING gin( "tags" )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_runs_tags: %w", err)
+	}
+	_, err = tx.Exec(`CREATE INDEX "index_steps_tags" ON "public"."steps" USING gin( "tags" )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_steps_tags: %w", err)
+	}
 	return nil
 }
 
 func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,to_timestamp(0),null,:retries_left,:context, :state)", stepRecord); err != nil {
+	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,to_timestamp(0),null,:retries_left,:context, :state, :tags)", stepRecord); err != nil {
 		panic(err)
 	}
 }
