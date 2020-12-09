@@ -100,17 +100,22 @@ func (db *PostgreSQLSqlxDB) Notify(tx *sqlx.Tx, channel string, message string) 
 		panic(err)
 	}
 }
-func (db *PostgreSQLSqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int) []string {
+func (db *PostgreSQLSqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string {
 	var result []string
-	rows, err := tx.Queryx(fmt.Sprintf(`with R as (select run_id, "index" from steps
+	skipLock := "FOR UPDATE SKIP LOCKED"
+	if disableSkipLocks {
+		skipLock = ""
+	}
+	query := fmt.Sprintf(`with R as (select run_id, "index" from steps
 		where  complete_by<(NOW() - interval '10 second')
-		FOR UPDATE SKIP LOCKED LIMIT $1)
+		%s LIMIT $1)
 
 		update steps
 		set status=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
 		FROM R
 		where steps.run_id = R.run_id and steps.index = R.index
-		RETURNING steps.UUID`, DAO.CompleteByPendingInterval), limit, api.StepPending)
+		RETURNING steps.UUID`, skipLock, DAO.CompleteByPendingInterval)
+	rows, err := tx.Queryx(query, limit, api.StepPending)
 	if err != nil {
 		panic(err)
 	}

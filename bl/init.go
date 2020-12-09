@@ -45,6 +45,7 @@ type BL struct {
 	completeByInProgressInterval            int64
 	jobQueueNumberOfWorkers                 int
 	jobQueueMemoryQueueLimit                int
+	recoveryDisableSkipLocks                bool
 	recoveryMaxRecoverItemsPassLimit        int
 	recoveryAllowUnderJobQueueNumberOfItems int
 	recoveryShortIntervalMinimumSeconds     int
@@ -111,6 +112,10 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	}
 	if viper.IsSet("RECOVERY_ALLOW_UNDER_JOB_QUEUE_NUMBER_OF_ITEMS") {
 		newBL.recoveryAllowUnderJobQueueNumberOfItems = viper.GetInt("RECOVERY_ALLOW_UNDER_JOB_QUEUE_NUMBER_OF_ITEMS")
+	}
+
+	if viper.IsSet("RECOVERY_DISABLE_SKIP_LOCKS") {
+		newBL.recoveryDisableSkipLocks = viper.GetBool("RECOVERY_DISABLE_SKIP_LOCKS")
 	}
 
 	if viper.IsSet("TEMPLATE_CACHE_SIZE") {

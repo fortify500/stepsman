@@ -85,7 +85,7 @@ func (b *BL) recoveryScheduler() {
 				log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 			}
 			tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
-				stepsUUIDs = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit)
+				stepsUUIDs = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
 				return nil
 			})
 			if tErr != nil {

@@ -29,7 +29,7 @@ func (db *Sqlite3SqlxDB) Notify(_ *sqlx.Tx, _ string, _ string) {
 	panic("unsupported operation")
 }
 
-func (db *Sqlite3SqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, _ int) []string {
+func (db *Sqlite3SqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []string {
 	result := make([]string, 0)
 	rows, err := tx.Queryx(`select uuid from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds')`)
 	if err != nil {
