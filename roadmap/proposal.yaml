@@ -1,7 +1,9 @@
 title: "HR approvals"
 # optional, but recommended, if in the future we will have breaking changes this allows to migrate on the fly.
 version: 1
-
+context:
+  namespace: 1524533c-9451-463d-be42-a186f3dfe5dd
+  object-id: f845cbf3-0585-46ff-9656-0fce4a0de38e
 on:
   error:
     rules:
@@ -48,7 +50,7 @@ steps:
     label: path_1_step_1
     description: >
       this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
-    tags:
+    context:
       allowed-approval:
         - b2e7ffb8-4d38-4d34-be80-126c532836b0
         - d10ae63f-b85f-4ea0-9e31-8937c3af3450
@@ -129,7 +131,7 @@ steps:
     description: >
       this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
     label: path_1_step_2
-    tags:
+    context:
       allowed-approval:
         - b2e7ffb8-4d38-4d34-be80-126c532836b0
         - d10ae63f-b85f-4ea0-9e31-8937c3af3450
@@ -254,12 +256,12 @@ decisions:
     label: check_access # label must be unique
     rules:
       - if: >
-          allowed-roles{context["roles"][_]==tags["allowed-approval"][_]}
+          allowed-roles{context["roles"][_]==input.step.context["allowed-approval"][_]}
           result{v:=["approve","decline"];input.context["status"]=v[_];not allowed-roles}
         then:
           result: denied
       - if: >
-          allowed-roles{context["roles"][_]==tags["allowed-skipped"][_]}
+          allowed-roles{context["roles"][_]==input.step.context["allowed-skipped"][_]}
           result{input.context["status"]="skipped";not allowed-roles}
         then:
           result: denied

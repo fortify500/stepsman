@@ -398,11 +398,16 @@ BreakOut:
 		var stepUUIDs []string
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
 			steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
+				Sort: api.Sort{
+					Fields: []string{"index"},
+					Order:  "asc",
+				},
 				Filters: []api.Expression{{
 					AttributeName: dao.RunId,
 					Operator:      "=",
 					Value:         createdRunId,
 				}},
+				ReturnAttributes: nil,
 			})
 			if err != nil {
 				t.Error(err)

@@ -77,7 +77,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_complete_by: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "public"."steps" USING btree( "run_id" Asc, "index" Asc, "heartbeat" Asc )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "public"."steps" USING btree( "run_id" Asc, "status" Asc, "heartbeat" Asc )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}
