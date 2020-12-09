@@ -37,7 +37,8 @@ import (
 type DoType string
 
 const (
-	DoTypeREST DoType = "REST"
+	DoTypeREST     DoType = "REST"
+	DoTypeEVALUATE DoType = "EVALUATE"
 )
 
 type Rego struct {
@@ -102,6 +103,11 @@ type StepDoREST struct {
 	StepDo  `yaml:",inline" mapstructure:",squash"`
 	Options StepDoRESTOptions `json:"options,omitempty"`
 }
+type StepDoEvaluate struct {
+	StepDo  `yaml:",inline" mapstructure:",squash"`
+	Options StepDoEvaluateOptions `json:"options,omitempty"`
+}
+
 type StepDoRESTOptions struct {
 	Timeout              int64       `json:"timeout,omitempty"`
 	Method               string      `json:"method,omitempty"`
@@ -109,6 +115,9 @@ type StepDoRESTOptions struct {
 	Headers              http.Header `json:"headers,omitempty"`
 	MaxResponseBodyBytes int64       `json:"max-response-body-bytes,omitempty" mapstructure:"max-response-body-bytes" yaml:"max-response-body-bytes,omitempty"`
 	Body                 string      `json:"body,omitempty"`
+}
+type StepDoEvaluateOptions struct {
+	Result string `json:"result,omitempty"`
 }
 
 func (do StepDoREST) Describe() string {
@@ -343,6 +352,26 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 			}
 			s.stepDo = doRest.StepDo
 			s.Do = doRest
+		case DoTypeEVALUATE:
+			doEvaluate := StepDoEvaluate{}
+			var md mapstructure.Metadata
+			decoder, err := mapstructure.NewDecoder(
+				&mapstructure.DecoderConfig{
+					Metadata: &md,
+					Result:   &doEvaluate,
+				})
+			if err != nil {
+				return api.NewWrapError(api.ErrInvalidParams, err, "failed to adjust step do evaluate: %w", err)
+			}
+			err = decoder.Decode(s.Do)
+			if err != nil {
+				return api.NewWrapError(api.ErrInvalidParams, err, "failed to adjust step do evaluate: %w", err)
+			}
+			if len(md.Unused) > 0 {
+				return api.NewError(api.ErrInvalidParams, "unsupported attributes provided in do options: %s", strings.Join(md.Unused, ","))
+			}
+			s.stepDo = doEvaluate.StepDo
+			s.Do = doEvaluate
 		default:
 			return api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 		}

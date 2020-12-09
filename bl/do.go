@@ -74,6 +74,22 @@ func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoTy
 			if err != nil {
 				return newState, false, err
 			}
+		case DoTypeEVALUATE:
+			doEvaluate := doInterface.(StepDoEvaluate)
+			var resolvedResult string
+			resolvedResult, err = t.EvaluateCurlyPercent(b, doEvaluate.Options.Result, currentContext)
+			if err != nil {
+				err = fmt.Errorf("failed to evaluate: %s: %w", doEvaluate.Options.Result, err)
+				newState.Error = err.Error()
+				return newState, false, err
+			}
+			err = json.Unmarshal([]byte(resolvedResult), &(newState.Result))
+			if err != nil {
+				err = fmt.Errorf("failed to evaluate: %s: %w", doEvaluate.Options.Result, err)
+				newState.Result = emptyMap
+				newState.Error = err.Error()
+				return newState, false, err
+			}
 		default:
 			err = api.NewError(api.ErrInvalidParams, "unsupported do type: %s", doType)
 			newState.Error = err.Error()

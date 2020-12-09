@@ -935,6 +935,27 @@ BreakOut:
 		})
 		waitForQueuesToFinish()
 		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepDone)
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByLabel"), func(t *testing.T) {
+			statusOwner := "allTestOwner"
+			response, err := httpClient.RemoteDoStepByLabel(&api.DoStepByLabelParams{
+				RunId:       createdRunId,
+				Label:       "path_1_step_1",
+				StatusOwner: statusOwner,
+				Context: api.Context{
+					"status": "approved",
+				},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if response.StatusOwner != statusOwner {
+				t.Error(fmt.Sprintf("status owner should be: %s, got %s", statusOwner, response.StatusOwner))
+				return
+			}
+		})
+		waitForQueuesToFinish()
+		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1", api.StepDone)
 		if breakOut {
 			break BreakOut
 		}

@@ -9,7 +9,7 @@ steps:
     label: path_1_step_1_email
     do:
       type: REST
-      heartbeat-timeout: 180 # seconds. default 10. 
+      heartbeat-timeout: 180 # seconds. default 10.
       options:
         timeout: 60 #seconds
         method: GET
@@ -18,7 +18,7 @@ steps:
         headers:
           authorization:
             - >-
-              {% base64.encode(concat("privilegedUser:",  input.context["emails-password"])) %}
+              {% input.context["email-authorization"] %}
           tenant:
             - >-
               {% input.context["tenant"] %}
@@ -30,8 +30,7 @@ steps:
     description: >
       this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
     do:
-      type: evaluate
+      type: EVALUATE
       options:
-        - then:
-            set-result: >
-              {"status":{% input.context["status"] %}}
+        result: >-
+          {"status": "{% input.context["status"] %}" }
