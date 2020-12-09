@@ -850,9 +850,17 @@ func mockServer() http.Server {
 			w.Header().Set("Stepsman-Async", "true")
 			w.WriteHeader(200)
 			test := map[string]interface{}{
-				"test": "test",
+				"test": "async",
 			}
-
+			if err := json.NewEncoder(w).Encode(test); err != nil {
+				panic(err)
+			}
+		})
+		r.Get("/sync/{id}", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			test := map[string]interface{}{
+				"test": "sync",
+			}
 			if err := json.NewEncoder(w).Encode(test); err != nil {
 				panic(err)
 			}

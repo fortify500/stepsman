@@ -69,7 +69,7 @@ steps:
           - label: check_access
           - label: check_valid_input
             input: >
-              step_input:=request["data"]["status"]
+              { "step_input": "{% input.request["data"]["status"] %}" }
         rules:
           - if: >
               result{input.decision["check_access"]["result"]=="denied"}
@@ -150,7 +150,7 @@ steps:
           - label: check_access
           - label: check_valid_input
             input: >
-              step_input:=request["data"]["status"]
+              { "step_input": "{% input.request["data"]["status"] %}" }
         rules:
           - if: >
               result{input.decision["check_access"]["result"]=="denied"}

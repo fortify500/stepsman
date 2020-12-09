@@ -19,7 +19,7 @@ steps:
         timeout: 40 #overall timeout make sense timeout would be less than the heartbeat-timeout
         max-response-body-bytes: 524288
         method: GET
-        url: https://jsonplaceholder.typicode.com/todos/1
+        url: http://localhost:3335/sync/1
     on:
       done:
         rules:
@@ -47,7 +47,7 @@ steps:
         timeout: 40
         max-response-body-bytes: 524288
         method: GET
-        url: https://jsonplaceholder.typicode.com/todos/2
+        url: http://localhost:3335/sync/2
     on:
       done:
         rules:
@@ -70,7 +70,7 @@ steps:
         timeout: 40
         max-response-body-bytes: 524288
         method: GET
-        url: https://jsonplaceholder.typicode.com/todos/3
+        url: http://localhost:3335/sync/3
   - name: "send emails we are starting"
     description: >
       Send email by given step. Example for an async rest call
