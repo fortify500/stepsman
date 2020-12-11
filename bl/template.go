@@ -74,6 +74,7 @@ type Event struct {
 }
 type On struct {
 	InProgress *Event `json:"in-progress,omitempty" mapstructure:"in-progress" yaml:"in-progress,omitempty"`
+	Pending    *Event `json:"pending,omitempty" mapstructure:"pending" yaml:"pending,omitempty"`
 	Done       *Event `json:"done,omitempty" mapstructure:"done" yaml:"done,omitempty"`
 	Failed     *Event `json:"failed,omitempty" mapstructure:"failed" yaml:"failed,omitempty"`
 }

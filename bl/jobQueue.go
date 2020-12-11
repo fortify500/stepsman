@@ -88,9 +88,9 @@ func (b *BL) processMsg(msg *doWork) {
 		log.Tracef("processing msg: %#v", msg)
 	}
 	recoverable(func() error {
-		_, _, err := b.doStepSynchronous(nil, &api.DoStepByUUIDParams{
+		_, _, err := b.doStep(nil, &api.DoStepByUUIDParams{
 			UUID: string(*msg),
-		})
+		}, true)
 		return err
 	})
 }

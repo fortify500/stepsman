@@ -180,11 +180,13 @@ func TestLocal(t *testing.T) {
 		{"get -V %[1]s step %[3]s", false, false},
 		{"describe -V %[1]s run %[2]s", false, false},
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
+		{"list -V %[1]s steps -r %[2]s", false, true},
 		{`delete -V %[1]s run %[2]s`, false, false},
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
 		{`update -V %[1]s run %[2]s -s "In Progress"`, false, false},
 		{`delete -V %[1]s run %[2]s -f`, false, false},
 		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
+		{"list -V %[1]s steps -r %[2]s", false, true},
 		{"do -V %[1]s step %[2]s --label starting --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
 	}
 
@@ -601,22 +603,6 @@ BreakOut:
 				return
 			}
 		})
-		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByUUID"), func(t *testing.T) {
-			statusOwner := "allTestOwner"
-			response, err := httpClient.RemoteDoStepByUUID(&api.DoStepByUUIDParams{
-				UUID:        stepUUIDs[0],
-				StatusOwner: statusOwner,
-				Context:     api.Context{"email-authorization": "dXNlcjpwYXNzd29yZA=="},
-			})
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if response.StatusOwner != statusOwner {
-				t.Error(fmt.Sprintf("status owner should be: %s, got %s", statusOwner, response.StatusOwner))
-				return
-			}
-		})
 		waitForQueuesToFinish()
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
@@ -855,7 +841,7 @@ BreakOut:
 			}
 		}()
 
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(time.Duration(1100) * time.Millisecond)
 
 		httpClient := client.New(false, "localhost", 3333)
 		createdRunId := ""

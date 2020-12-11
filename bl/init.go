@@ -19,6 +19,7 @@ package bl
 import (
 	"context"
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/go-chi/valve"
@@ -124,7 +125,7 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 
 	cache, err := lru.New(newBL.templateCacheSize)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to initialize template cache: %w", err))
 	}
 	newBL.templateCache = cache
 	newBL.DAO, err = dao.New(daoParameters)

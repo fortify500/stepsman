@@ -539,10 +539,20 @@ type Error struct {
 	stack  []byte //only available if debug is enabled.
 }
 
+func NewLocalizedError(msg string, args ...interface{}) error {
+	_, file, line, ok := runtime.Caller(1)
+	if ok {
+		return fmt.Errorf(fmt.Sprintf("[%s:%d]: %s", file, line, msg), args...)
+	}
+	return fmt.Errorf(msg, args...)
+}
 func NewError(code *ErrorCode, msg string, args ...interface{}) *Error {
-	return NewWrapError(code, nil, msg, args...)
+	return NewWrapErrorInternal(code, nil, msg, args...)
 }
 func NewWrapError(code *ErrorCode, wrapErr error, msg string, args ...interface{}) *Error {
+	return NewWrapErrorInternal(code, wrapErr, msg, args...)
+}
+func NewWrapErrorInternal(code *ErrorCode, wrapErr error, msg string, args ...interface{}) *Error {
 	newErr := &Error{
 		msg:  fmt.Errorf(msg, args...).Error(),
 		code: code,
@@ -552,7 +562,7 @@ func NewWrapError(code *ErrorCode, wrapErr error, msg string, args ...interface{
 		newErr.stack = debug.Stack()
 	}
 	if log.IsLevelEnabled(log.ErrorLevel) {
-		_, file, line, ok := runtime.Caller(1)
+		_, file, line, ok := runtime.Caller(2)
 		if ok {
 			newErr.caller = &ErrorCaller{
 				File: file,

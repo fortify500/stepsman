@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/InVisionApp/go-health/v2"
 	"github.com/chi-middleware/logrus-logger"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -146,8 +147,11 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 
 	go func() {
 		errHealth := srvHealth.ListenAndServe()
+		if errHealth == http.ErrServerClosed {
+			errHealth = nil
+		}
 		if errHealth != nil {
-			log.Fatal(errHealth)
+			log.Fatal(api.NewLocalizedError("failed to start serving health checks: %w", errHealth))
 		}
 	}()
 
@@ -160,6 +164,14 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 		go func() {
 			InterruptServe <- syscall.SIGINT
 		}()
+	}
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
+		go cancel()
+		err = srvHealth.Shutdown(ctx)
+		if err != nil {
+			log.Error(fmt.Errorf("failed to shutdown health check service: %w", err))
+		}
 	}
 	<-exit
 }

@@ -200,12 +200,10 @@ func InitConfig() {
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(StoreDir, 0700)
 			if err != nil {
-				err = fmt.Errorf("failed to create the .stepsman diretory: %w", err)
-				log.Fatal(err)
+				log.Fatal(api.NewLocalizedError("failed to create the .stepsman directory: %w", err))
 			}
 		} else if err != nil {
-			err = fmt.Errorf("failed to determine existance of .stepsman directory: %w", err)
-			log.Fatal(err)
+			log.Fatal(api.NewLocalizedError("failed to determine existance of .stepsman directory: %w", err))
 		}
 		LumberJack = &lumberjack.Logger{
 			Filename:   path.Join(StoreDir, "stepsman.log"),

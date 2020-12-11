@@ -256,7 +256,7 @@ decisions:
     label: check_access # label must be unique
     rules:
       - if: >
-          allowed-roles{context["roles"][_]==input.step.context["allowed-approval"][_]}
+          allowed-roles{input.context["roles"][_]==input.step.context["allowed-approval"][_]}
           result{v:=["approve","decline"];input.context["status"]=v[_];not allowed-roles}
         then:
           result: denied

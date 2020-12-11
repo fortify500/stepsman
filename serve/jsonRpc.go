@@ -87,44 +87,44 @@ func GetJsonRpcHandler() *jsonrpc.MethodRepository {
 	mr := jsonrpc.NewMethodRepository()
 
 	if err := mr.RegisterMethod(api.RPCListRuns, ListRunsHandler{}, api.ListParams{}, api.ListRunsResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 	if err := mr.RegisterMethod(api.RPCGetRuns, GetRunsHandler{}, api.GetRunsParams{}, api.GetRunsResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCUpdateRun, UpdateRunHandler{}, api.UpdateRunParams{}, api.UpdateRunResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCCreateRun, CreateRunHandler{}, api.CreateRunParams{}, api.CreateRunsResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 	if err := mr.RegisterMethod(api.RPCDeleteRun, DeleteRunsHandler{}, api.DeleteRunsParams{}, api.DeleteRunsResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCListSteps, ListStepsHandler{}, api.ListParams{}, api.ListStepsResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCGetSteps, GetStepsHandler{}, api.GetStepsParams{}, api.GetStepsResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCUpdateStepByUUID, UpdateStepByUUIDHandler{}, api.UpdateStepByUUIDParams{}, api.UpdateStepByUUIDResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCUpdateStepByLabel, UpdateStepByLabelHandler{}, api.UpdateStepByLabelParams{}, api.UpdateStepByLabelResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 
 	if err := mr.RegisterMethod(api.RPCDoStepByUUID, DoStepByUUIDHandler{}, api.DoStepByUUIDParams{}, api.DoStepByUUIDResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 	if err := mr.RegisterMethod(api.RPCDoStepByLabel, DoStepByLabelHandler{}, api.DoStepByLabelParams{}, api.DoStepByLabelResult{}); err != nil {
-		log.Fatal(err)
+		log.Fatal(api.NewLocalizedError("failed to start serving json rpc: %w", err))
 	}
 	return mr
 }

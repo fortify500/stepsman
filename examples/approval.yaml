@@ -34,3 +34,28 @@ steps:
       options:
         result: >-
           {"status": "{% input.context["status"] %}" }
+
+decisions:
+  - name: check access
+    label: check_access # label must be unique in all template labels
+    input: # only these inputs are allowed. Possibly, if not supplied, an error will be raised. 
+      - label: request_status
+        concept: flow_status #optional, see below at concepts.
+      - label: roles
+      - label: allowed-approval
+      - label: allowed-skipped
+    result: >
+      default result="approved"
+      allowed-approval{input["roles"][_]==input["allowed-approval"][_]}
+      allowed-skip{input["roles"][_]==input["allowed-skipped"][_]}
+      denied-approval{v:=["approve","decline"];request_status=v[_];not allowed-approval}
+      denied-skip{request_status="skipped";not allowed-skip}
+      result="denied"{denied-approval}else{denied-skip}
+concepts:
+  - name: flow_status
+    label: flow_status #unique name
+    type: string
+    validations:
+      - >
+        default result=false
+        result{input.flow_status=="skipped"}else{input.flow_status=="approved"}else{input.flow_status=="declined"}
