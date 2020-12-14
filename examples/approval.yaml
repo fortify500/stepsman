@@ -29,9 +29,48 @@ steps:
     label: path_1_step_1
     description: >
       this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
+    parameters:
+      allowed-approval:
+        - b2e7ffb8-4d38-4d34-be80-126c532836b0
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+      allowed-skip:
+        - b2e7ffb8-4d38-4d34-be80-126c532836b0
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
     do:
       type: EVALUATE
       options:
         result: >-
           {"status": "{% input.context["status"] %}" }
-
+    on:
+      pending:
+        decisions:
+          - label: check_access
+            input: >
+              {
+                "flow_status": "{% input.context["status"] %}",
+                "roles": {% input.context["roles"] %},
+                "allowed-approval": {% input.parameters["allowed-approval"] %},
+                "allowed-skip": {% input.parameters["allowed-skip"] %}
+              }
+        rules:
+          - if: >
+              result{input.decisions["check_access"]!="approved"}
+            then:
+              error:
+                message: 'access was not approved for: {% input.context["status"] %} due to access_check: {% input.decisions["check_access"] %}'
+                data: '{"code":403}'
+decisions:
+  - name: check access
+    label: check_access # label must be unique in all template labels
+    # return result, fill up errors and they will be thrown automatically
+    result: >
+      default result="denied"
+      validation1{input.flow_status=="skip"}else{input.flow_status=="approve"}else{input.flow_status=="decline"}
+      errors["flow_status"]{not validation1}
+      allowed_approval_roles{input["roles"][_]==input["allowed-approval"][_]}
+      allowed_skip_roles{input["roles"][_]==input["allowed-skip"][_]}
+      allowed_approval{v:=["approve","decline"];input.flow_status=v[_];allowed_approval_roles}
+      allowed_skip{input.flow_status=="skip";allowed_skip_roles}
+      result="approved"{allowed_approval}
+      result="approved"{allowed_skip}
+      

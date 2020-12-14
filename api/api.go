@@ -372,7 +372,9 @@ const (
 )
 
 type AnyTime time.Time
+type Parameters map[string]interface{}
 type Context map[string]interface{}
+type Input map[string]interface{}
 type State struct {
 	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
@@ -509,6 +511,10 @@ var ErrCannotDeleteRunIsInProgress = &ErrorCode{
 	Code:    1012,
 	Message: "a run cannot be deleted if in progress, unless force is specified",
 }
+var ErrCustomTemplateErrorThrown = &ErrorCode{
+	Code:    1013,
+	Message: "an intentional logical error was thrown by the specified template",
+}
 
 var ErrorCodes = map[int64]*ErrorCode{
 	int64(ErrStatusNotChanged.Code):            ErrStatusNotChanged,
@@ -525,6 +531,7 @@ var ErrorCodes = map[int64]*ErrorCode{
 	int64(ErrTemplateEvaluationFailed.Code):    ErrTemplateEvaluationFailed,
 	int64(ErrStepDoneCannotBeChanged.Code):     ErrStepDoneCannotBeChanged,
 	int64(ErrCannotDeleteRunIsInProgress.Code): ErrCannotDeleteRunIsInProgress,
+	int64(ErrCustomTemplateErrorThrown.Code):   ErrCustomTemplateErrorThrown,
 }
 
 type ErrorCaller struct {
@@ -535,6 +542,7 @@ type Error struct {
 	msg    string
 	code   *ErrorCode
 	err    error
+	data   interface{}
 	caller *ErrorCaller
 	stack  []byte //only available if debug is enabled.
 }
@@ -547,16 +555,20 @@ func NewLocalizedError(msg string, args ...interface{}) error {
 	return fmt.Errorf(msg, args...)
 }
 func NewError(code *ErrorCode, msg string, args ...interface{}) *Error {
-	return NewWrapErrorInternal(code, nil, msg, args...)
+	return NewWrapErrorInternal(code, nil, nil, msg, args...)
+}
+func NewErrorWithData(code *ErrorCode, data interface{}, msg string, args ...interface{}) *Error {
+	return NewWrapErrorInternal(code, nil, data, msg, args...)
 }
 func NewWrapError(code *ErrorCode, wrapErr error, msg string, args ...interface{}) *Error {
-	return NewWrapErrorInternal(code, wrapErr, msg, args...)
+	return NewWrapErrorInternal(code, wrapErr, nil, msg, args...)
 }
-func NewWrapErrorInternal(code *ErrorCode, wrapErr error, msg string, args ...interface{}) *Error {
+func NewWrapErrorInternal(code *ErrorCode, wrapErr error, data interface{}, msg string, args ...interface{}) *Error {
 	newErr := &Error{
 		msg:  fmt.Errorf(msg, args...).Error(),
 		code: code,
 		err:  wrapErr,
+		data: data,
 	}
 	if log.IsLevelEnabled(log.DebugLevel) {
 		newErr.stack = debug.Stack()
@@ -581,6 +593,9 @@ func (e *Error) Caller() *ErrorCaller {
 }
 func (e *Error) Stack() []byte {
 	return e.stack
+}
+func (e *Error) Data() interface{} {
+	return e.data
 }
 func (e *Error) Code() *ErrorCode {
 	return e.code

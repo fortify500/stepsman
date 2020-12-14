@@ -62,6 +62,7 @@ func resolveError(err error) *jsonrpc.Error {
 		return &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCode(apiErr.Code().Code),
 			Message: apiErr.Error(),
+			Data:    apiErr.Data(),
 		}
 	}
 	return &jsonrpc.Error{

@@ -203,7 +203,7 @@ func InitConfig() {
 				log.Fatal(api.NewLocalizedError("failed to create the .stepsman directory: %w", err))
 			}
 		} else if err != nil {
-			log.Fatal(api.NewLocalizedError("failed to determine existance of .stepsman directory: %w", err))
+			log.Fatal(api.NewLocalizedError("failed to determine existence of .stepsman directory: %w", err))
 		}
 		LumberJack = &lumberjack.Logger{
 			Filename:   path.Join(StoreDir, "stepsman.log"),

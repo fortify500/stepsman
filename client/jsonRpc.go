@@ -99,7 +99,7 @@ func (c *CLI) remoteJRPCCall(request []byte, decodeResponse func(body *io.ReadCl
 }
 
 type (
-	ErrorCode int64
+	ErrorCode int
 
 	JSONRPCError struct {
 		Code    ErrorCode   `json:"code"`
@@ -112,7 +112,7 @@ func getJSONRPCError(jsonRpcError *JSONRPCError) error {
 	if jsonRpcError.Code != 0 {
 		code, ok := api.ErrorCodes[int64(jsonRpcError.Code)]
 		if ok {
-			return api.NewError(code, jsonRpcError.Message)
+			return api.NewErrorWithData(code, jsonRpcError.Data, jsonRpcError.Message)
 		}
 		return fmt.Errorf("failed to perform operation, remote server responded with code: %d, and message: %s", jsonRpcError.Code, jsonRpcError.Message)
 	}

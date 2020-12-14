@@ -928,7 +928,8 @@ BreakOut:
 				Label:       "path_1_step_1",
 				StatusOwner: statusOwner,
 				Context: api.Context{
-					"status": "approved",
+					"status": "approve",
+					"roles":  []string{"4e0bccb6-cf8e-4b1c-b102-c657b01be3bf", "b2e7ffb8-4d38-4d34-be80-126c532836b0"},
 				},
 			})
 			if err != nil {

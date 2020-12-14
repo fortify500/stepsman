@@ -64,7 +64,7 @@ steps:
             set-result: >
               {"status":{% input.context["status"] %}}
     on:
-      in-progress: #important to note that in-progress is decided before locking the step into one execution of DO (i.e. in-progress status)
+      pending:
         decisions:
           - label: check_access
           - label: check_valid_input
@@ -145,7 +145,7 @@ steps:
             set-result: >
               {"status":{% input.context["status"] %}}
     on:
-      in-progress:
+      pending:
         decisions:
           - label: check_access
           - label: check_valid_input
@@ -189,7 +189,7 @@ steps:
   - name: Check Resolution
     label: check_resolution
     on:
-      in-progress:
+      pending:
         decisions:
           - label: decision_resolution
             input: >
