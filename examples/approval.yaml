@@ -54,6 +54,7 @@ steps:
               }
         rules:
           - if: >
+              default result=false
               result{input.decisions["check_access"]!="approved"}
             then:
               error:

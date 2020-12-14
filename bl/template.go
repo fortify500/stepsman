@@ -277,7 +277,7 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 			if rule.If != "" {
 				var parsedModule *ast.Module
 				moduleName := regoModuleNameForIf(iStep, jRule)
-				module := fmt.Sprintf("package %s\ndefault result=false\n%s", moduleName, rule.If)
+				module := fmt.Sprintf("package %s\n%s", moduleName, rule.If)
 				parsedModule, err = ast.ParseModule(moduleName, module)
 				if err != nil {
 					return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to load rego step components: %w", err)
