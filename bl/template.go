@@ -52,11 +52,12 @@ type Rego struct {
 }
 
 type Template struct {
-	Title           string     `json:"title,omitempty"`
-	Version         int64      `json:"version,omitempty"`
-	Steps           []Step     `json:"steps,omitempty"`
-	Tags            api.Tags   `json:"tags,omitempty"`
-	Decisions       []Decision `json:"decisions,omitempty"`
+	Title           string         `json:"title,omitempty"`
+	Version         int64          `json:"version,omitempty"`
+	Steps           []Step         `json:"steps,omitempty"`
+	Tags            api.Tags       `json:"tags,omitempty"`
+	Decisions       []Decision     `json:"decisions,omitempty"`
+	Parameters      api.Parameters `json:"parameters,omitempty"`
 	labelsToIndices map[string]int64
 	indicesToLabels map[int64]string
 	rego            *Rego
@@ -342,6 +343,11 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 			"title":   t.Title,
 			"version": t.Version,
 		},
+	}
+	if t.Parameters != nil {
+		t.rego.input["template"] = map[string]interface{}{
+			"parameters": t.Parameters,
+		}
 	}
 	labels := map[string]interface{}{}
 	inputSteps := map[string]interface{}{}

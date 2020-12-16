@@ -881,7 +881,6 @@ BreakOut:
 				Label:       "path_1_step_1_email",
 				StatusOwner: statusOwner,
 				Context: api.Context{
-					"url":                 "http://localhost:3335",
 					"email-authorization": "dXNlcjpwYXNzd29yZA==",
 					"tenant":              "1",
 					"namespace":           "HR",
@@ -896,6 +895,11 @@ BreakOut:
 				return
 			}
 		})
+		waitForQueuesToFinish()
+		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepInProgress)
+		if breakOut {
+			break BreakOut
+		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteUpdateStepByLabel emails done"), func(t *testing.T) {
 			currentStatusOwnerMu.Lock()
 			statusOwner := currentStatusOwner
@@ -921,6 +925,9 @@ BreakOut:
 		})
 		waitForQueuesToFinish()
 		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepDone)
+		if breakOut {
+			break BreakOut
+		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDoStepByLabel"), func(t *testing.T) {
 			statusOwner := "allTestOwner"
 			response, err := httpClient.RemoteDoStepByLabel(&api.DoStepByLabelParams{
@@ -985,6 +992,7 @@ func remoteCheckStepStatus(t *testing.T, call string, httpClient *client.CLI, cr
 		for _, step := range steps {
 			fmt.Println(fmt.Sprintf("%+v", step))
 			if step.Status != status {
+				breakOut = true
 				t.Errorf("step %s status must be done", step.UUID)
 			}
 		}

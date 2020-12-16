@@ -1,7 +1,8 @@
 title: "HR approvals"
 # optional, but recommended, if in the future we will have breaking changes this allows to migrate on the fly.
 version: 1
-
+parameters:
+  base-url: http://localhost:3335
 steps:
   - name: "send emails to step path_1_step_1"
     description: >
@@ -14,7 +15,7 @@ steps:
         timeout: 60 #seconds
         method: GET
         url: >-
-          {% input.context.url %}/send-emails/path_1_step_1
+          {% input.template.parameters["base-url"] %}/send-emails/path_1_step_1
         headers:
           authorization:
             - >-
