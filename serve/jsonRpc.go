@@ -19,7 +19,6 @@ package serve
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/osamingo/jsonrpc"
@@ -52,22 +51,15 @@ func recoverable(recoverableFunction func() *jsonrpc.Error) (err *jsonrpc.Error)
 
 func resolveError(err error) *jsonrpc.Error {
 	var apiErr *api.Error
-	if errors.As(err, &apiErr) {
-		if stack := apiErr.Stack(); stack != nil && len(stack) > 0 {
-			defer log.WithField("stack", string(stack)).Error(err)
-		}
-		if caller := apiErr.Caller(); caller != nil {
-			log.Error(fmt.Errorf("[%s:%d]: %w", caller.File, caller.Line, err))
-		}
+	apiErr = api.ResolveErrorAndLog(err, true)
+	if apiErr != nil {
 		return &jsonrpc.Error{
 			Code:    jsonrpc.ErrorCode(apiErr.Code().Code),
 			Message: apiErr.Error(),
 			Data:    apiErr.Data(),
 		}
-	}
-	return &jsonrpc.Error{
-		Code:    jsonrpc.ErrorCodeInternal,
-		Message: err.Error(),
+	} else {
+		panic(err) // there shouldn't be any error of another type.
 	}
 }
 

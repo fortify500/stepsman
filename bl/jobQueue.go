@@ -76,7 +76,7 @@ func recoverable(recoverableFunction func() error) {
 				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to process: %v", p))
 			}
 		} else if err != nil {
-			defer log.Debug(fmt.Errorf("failed to serve: %w", err))
+			_ = api.ResolveErrorAndLog(err, true)
 		}
 	}()
 	err = recoverableFunction()

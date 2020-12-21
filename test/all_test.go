@@ -880,11 +880,7 @@ BreakOut:
 				RunId:       createdRunId,
 				Label:       "path_1_step_1_email",
 				StatusOwner: statusOwner,
-				Context: api.Context{
-					"email-authorization": "dXNlcjpwYXNzd29yZA==",
-					"tenant":              "1",
-					"namespace":           "HR",
-				},
+				Context:     api.Context{},
 			})
 			if err != nil {
 				t.Error(err)
@@ -935,7 +931,7 @@ BreakOut:
 				Label:       "path_1_step_1",
 				StatusOwner: statusOwner,
 				Context: api.Context{
-					"status": "approve",
+					"status": "approved",
 					"roles":  []string{"4e0bccb6-cf8e-4b1c-b102-c657b01be3bf", "b2e7ffb8-4d38-4d34-be80-126c532836b0"},
 				},
 			})
@@ -1017,6 +1013,7 @@ func mockServer() http.Server {
 			currentStatusOwnerMu.Lock()
 			currentStatusOwner = statusOwner
 			currentStatusOwnerMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Stepsman-Async", "true")
 			w.WriteHeader(200)
 			test := map[string]interface{}{
@@ -1027,9 +1024,22 @@ func mockServer() http.Server {
 			}
 		})
 		r.Get("/sync/{id}", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
 			test := map[string]interface{}{
-				"test": "sync",
+				"test":   "sync",
+				"status": "approved",
+			}
+			if err := json.NewEncoder(w).Encode(test); err != nil {
+				panic(err)
+			}
+		})
+		r.Post("/sync/{id}", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(200)
+			test := map[string]interface{}{
+				"test":   "sync",
+				"status": "approved",
 			}
 			if err := json.NewEncoder(w).Encode(test); err != nil {
 				panic(err)
@@ -1040,6 +1050,7 @@ func mockServer() http.Server {
 			currentStatusOwnerMu.Lock()
 			currentStatusOwner = statusOwner
 			currentStatusOwnerMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Stepsman-Async", "true")
 			w.WriteHeader(200)
 			test := map[string]interface{}{

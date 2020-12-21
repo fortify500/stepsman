@@ -77,7 +77,7 @@ func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoTy
 		case DoTypeEVALUATE:
 			doEvaluate := doInterface.(StepDoEvaluate)
 			var resolvedResult string
-			resolvedResult, err = t.EvaluateCurlyPercent(b, step, doEvaluate.Options.Result, currentContext, nil)
+			resolvedResult, err = t.EvaluateCurlyPercent(b, step, doEvaluate.Options.Result, currentContext, nil, nil)
 			if err != nil {
 				err = fmt.Errorf("failed to evaluate: %s: %w", doEvaluate.Options.Result, err)
 				newState.Error = err.Error()
@@ -125,7 +125,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 			Timeout:   timeout,
 		}
 		var resolvedUrl string
-		resolvedUrl, err = t.EvaluateCurlyPercent(b, step, doRest.Options.Url, currentContext, nil)
+		resolvedUrl, err = t.EvaluateCurlyPercent(b, step, doRest.Options.Url, currentContext, nil, nil)
 		if err != nil {
 			err = fmt.Errorf("failed to evaluate url: %s: %w", doRest.Options.Url, err)
 			newState.Error = err.Error()
@@ -144,7 +144,7 @@ func (b *BL) doRest(t *Template, step *Step, stepRecord *api.StepRecord, doInter
 			var header []string
 			for _, h := range v {
 				var resolvedHeaderPart string
-				resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, step, h, currentContext, nil)
+				resolvedHeaderPart, err = t.EvaluateCurlyPercent(b, step, h, currentContext, nil, nil)
 				if err != nil {
 					err = fmt.Errorf("failed to evaluate header part: %s: %w", h, err)
 					newState.Error = err.Error()

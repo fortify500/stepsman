@@ -198,10 +198,23 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 	toEnqueue := false
 	checkRetries := false
 	var cookie onCookie
+	var uncommitted *uncommittedResult
 	if newStatus != api.StepDone && newStatus != api.StepFailed {
 		newState = &api.State{}
 	}
-	cookie, newStatus, softError = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
+	if newStatus == api.StepDone {
+		if newState == nil {
+			panic(fmt.Errorf("newState must not be nil at this point"))
+		}
+		uncommitted = &uncommittedResult{
+			label: label,
+			state: *newState,
+		}
+	}
+	cookie, newStatus, _, softError = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+	if newStatus != api.StepDone {
+		uncommitted = nil
+	}
 	if softError == nil {
 		tErr = BL.DAO.Transactional(func(tx *sqlx.Tx) error {
 			var err error
@@ -310,15 +323,21 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				if partialStepRecord.Status != api.StepFailed {
 					var onErr error
 					if startingStatus != newStatus {
-						cookie, _, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
+						cookie, newStatus, _, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 						if onErr != nil {
 							newState.Error = fmt.Sprintf("%s: %s", onErr.Error(), newState.Error)
 						}
+						if newStatus != api.StepDone {
+							uncommitted = nil
+						}
 					}
 					if onErr == nil {
-						cookie, _, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState)
+						cookie, _, _, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 						if onErr != nil {
 							newState.Error = fmt.Sprintf("%s: %s", onErr.Error(), newState.Error)
+						}
+						if newStatus != api.StepDone {
+							uncommitted = nil
 						}
 					}
 					_ = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, statusOwner, nil, nil, stepContext, newState)
@@ -340,6 +359,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 					}
 					newStatus = api.StepIdle // we want to finish this so it won't be revived.
 					newState = &api.State{}
+					uncommitted = nil
 				}
 				//otherwise let it finish setting the status.
 				toEnqueue = false
@@ -370,16 +390,21 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			if startingStatus != newStatus {
 				// this part should only be triggered by the run condition from in-progress,pending to idle. so nothing should happen.
 				var onErr error
-				cookie, newStatus, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState)
+				cookie, newStatus, _, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 				if onErr != nil {
-					log.Error(onErr) // no place for failure here, it should not occur. But let's log this...
+					panic(onErr) // no place for failure here, it should not occur.
+				}
+				if newStatus != api.StepDone {
+					uncommitted = nil
 				}
 			}
 			var onErr error
-			// There may be errors but we don't want to handle them, they may be perfectly fine.
-			cookie, newStatus, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState)
+			cookie, newStatus, _, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 			if onErr != nil {
-				panic(onErr)
+				return fmt.Errorf("failed in transaction: %w", onErr)
+			}
+			if newStatus != api.StepDone {
+				uncommitted = nil
 			}
 			return nil
 		})
@@ -392,16 +417,18 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 	}
 	if tErr == nil {
 		var onErr error
-		_, _, onErr = t.on(nil, BL, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState)
+		_, _, _, onErr = t.on(nil, BL, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 		if onErr != nil {
-			log.Error(onErr) //there is nothing we can do that haven't been tried, it will be recovered later.
+			//there is nothing we can do that haven't been tried, it will be recovered later.
+			_ = api.ResolveErrorAndLog(onErr, true)
 		}
 	}
 	return &updatedStepRecord, tErr
 }
 
-func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId string, label string, newStatus api.StepStatusType, currentContext api.Context, newState *api.State) (onCookie, api.StepStatusType, error) {
+func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId string, label string, newStatus api.StepStatusType, currentContext api.Context, newState *api.State, uncommitted *uncommittedResult) (onCookie, api.StepStatusType, bool, error) {
 	var err error
+	var errPropagation = true
 	switch phase {
 	case OnPhasePreTransaction:
 		safetyDepth := cookie.safetyDepth
@@ -427,7 +454,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 			for _, decision := range event.Decisions {
 				var resolvedInput api.Input
 				decisionModule := regoModuleNameForDecision(decision.Label)
-				resolvedInput, err = t.ResolveInput(BL, &step, decision.Input, currentContext)
+				resolvedInput, err = t.ResolveInput(BL, &step, decision.Input, currentContext, uncommitted)
 				if err != nil {
 					err = fmt.Errorf("failed to resolve input for decision %s: %w", decision.Label, err)
 					break BREAKOUT1
@@ -483,96 +510,91 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 		if err == nil {
 		BREAKOUT2:
 			for r, rule := range event.Rules {
-				if rule.Then != nil {
-					var input map[string]interface{}
-					if rule.If != "" {
-						ifModule := regoModuleNameForIf(zeroIndex, r)
-						ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
-						var eval rego.ResultSet
-						input = t.fillInput(currentContext, &step, decisionsInput)
-						eval, err = t.rego.preparedModuleQueries[ifModule].Eval(ctx, rego.EvalInput(input))
-						if err != nil {
-							cancel()
-							err = fmt.Errorf("failed to evaluate rule %s: %w", rule.If, err)
-							break BREAKOUT2
-						}
+				if rule.Then == nil {
+					continue
+				}
+				var input map[string]interface{}
+				if rule.If != "" {
+					ifModule := regoModuleNameForIf(zeroIndex, r)
+					var eval rego.ResultSet
+					input = t.fillInput(currentContext, &step, decisionsInput, uncommitted)
+					ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
+					eval, err = t.rego.preparedModuleQueries[ifModule].Eval(ctx, rego.EvalInput(input))
+					if err != nil {
 						cancel()
-						if len(eval) > 0 &&
-							len(eval[0].Expressions) > 0 &&
-							eval[0].Expressions[0].Value != nil {
-							switch eval[0].Expressions[0].Value.(type) {
-							case bool:
-								if !eval[0].Expressions[0].Value.(bool) {
-									continue
-								}
-							default:
-								err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate rule %s, result must be a boolean, given: %v", rule.If, eval[0].Expressions[0].Value)
-								break BREAKOUT2
-							}
-						} else {
-							err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate rule %s, no result given", rule.If)
-							break BREAKOUT2
-						}
-					}
-					if rule.Then.Error != nil {
-						var resolvedMessage string
-						var resolvedData string
-						resolvedMessage, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Message, currentContext, decisionsInput)
-						if err != nil {
-							err = fmt.Errorf("failed to evaluate rule->then->error->message %s->%s: %w", rule.If, rule.Then.Error.Message, err)
-							break BREAKOUT2
-						}
-						if rule.Then.Error.Data != "" {
-							resolvedData, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Data, currentContext, decisionsInput)
-							if err != nil {
-								err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
-								break BREAKOUT2
-							}
-							var data interface{}
-							err = json.Unmarshal([]byte(resolvedData), &data)
-							if err != nil {
-								err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
-								break BREAKOUT2
-							}
-							err = api.NewErrorWithData(api.ErrCustomTemplateErrorThrown, data, resolvedMessage)
-						} else {
-							err = api.NewError(api.ErrCustomTemplateErrorThrown, resolvedMessage)
-						}
+						err = fmt.Errorf("failed to evaluate rule %s: %w", rule.If, err)
 						break BREAKOUT2
 					}
-					if len(rule.Then.Do) > 0 {
-						for _, thenDo := range rule.Then.Do {
-							index, ok := t.labelsToIndices[thenDo.Label]
-							if !ok {
-								panic(fmt.Errorf("label should have an index"))
+					cancel()
+					if len(eval) > 0 &&
+						len(eval[0].Expressions) > 0 &&
+						eval[0].Expressions[0].Value != nil {
+						switch eval[0].Expressions[0].Value.(type) {
+						case bool:
+							if !eval[0].Expressions[0].Value.(bool) {
+								continue
 							}
-							cookie.resolvedContexts = append(cookie.resolvedContexts, onCookieContext{
-								index:           index,
-								context:         thenDo.Context,
-								label:           thenDo.Label,
-								resolvedContext: nil,
-							})
+						default:
+							err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate rule %s, result must be a boolean, given: %v", rule.If, eval[0].Expressions[0].Value)
+							break BREAKOUT2
 						}
-						if len(cookie.resolvedContexts) > 0 {
-							for i := range cookie.resolvedContexts {
-								cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, &step, cookie.resolvedContexts[i].context, currentContext)
-								if err != nil {
-									break BREAKOUT2
-								}
-							}
-						}
+					} else {
+						err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate rule %s, no result given", rule.If)
 						break BREAKOUT2
 					}
 				}
-			}
-		}
-		if err != nil {
-			newStatus = api.StepFailed
-			cookie = onCookie{}
-			//newState may contain err even if doErr is not nil
-			//goland:noinspection GoNilness
-			if newState.Error == "" {
-				newState.Error = err.Error()
+				if rule.Then.Error != nil {
+					if rule.Then.Error.Propagate != nil {
+						errPropagation = *rule.Then.Error.Propagate
+					}
+					var resolvedMessage string
+					var resolvedData string
+					resolvedMessage, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Message, currentContext, decisionsInput, uncommitted)
+					if err != nil {
+						err = fmt.Errorf("failed to evaluate rule->then->error->message %s->%s: %w", rule.If, rule.Then.Error.Message, err)
+						break BREAKOUT2
+					}
+					if rule.Then.Error.Data != "" {
+						resolvedData, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Data, currentContext, decisionsInput, uncommitted)
+						if err != nil {
+							err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
+							break BREAKOUT2
+						}
+						var data interface{}
+						err = json.Unmarshal([]byte(resolvedData), &data)
+						if err != nil {
+							err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
+							break BREAKOUT2
+						}
+						err = api.NewErrorWithData(api.ErrCustomTemplateErrorThrown, data, resolvedMessage)
+					} else {
+						err = api.NewError(api.ErrCustomTemplateErrorThrown, resolvedMessage)
+					}
+					break BREAKOUT2
+				}
+				if len(rule.Then.Do) > 0 {
+					for _, thenDo := range rule.Then.Do {
+						index, ok := t.labelsToIndices[thenDo.Label]
+						if !ok {
+							panic(fmt.Errorf("label should have an index"))
+						}
+						cookie.resolvedContexts = append(cookie.resolvedContexts, onCookieContext{
+							index:           index,
+							context:         thenDo.Context,
+							label:           thenDo.Label,
+							resolvedContext: nil,
+						})
+					}
+					if len(cookie.resolvedContexts) > 0 {
+						for i := range cookie.resolvedContexts {
+							cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, &step, cookie.resolvedContexts[i].context, currentContext, uncommitted)
+							if err != nil {
+								break BREAKOUT2
+							}
+						}
+					}
+					break BREAKOUT2
+				}
 			}
 		}
 	case OnPhaseInTransaction:
@@ -581,23 +603,27 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 		}
 		cookie.safetyDepth++
 		if len(cookie.resolvedContexts) > 0 {
+		BREAKOUT:
 			for _, indexContextAndLabel := range cookie.resolvedContexts {
 				var innerCookie onCookie
 				var emptyState api.State
-				var onErr error
+				var propagate bool
 				innerCookie.safetyDepth = cookie.safetyDepth
-				innerCookie, _, onErr = t.on(tx, BL, OnPhasePreTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState)
-				if onErr != nil {
-					log.Warn("failed to evaluate a then do but this could be perfectly fine: %w", onErr)
-					continue
+				innerCookie, newStatus, propagate, err = t.on(tx, BL, OnPhasePreTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
+				if err != nil {
+					if !propagate {
+						_ = api.ResolveErrorAndLog(err, propagate)
+						err = nil
+						continue
+					}
+					break BREAKOUT
 				}
 				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexContextAndLabel.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexContextAndLabel.resolvedContext, nil)
 				if len(uuids) == 1 {
 					cookie.uuidsToEnqueue = append(cookie.uuidsToEnqueue, uuids[0])
-					innerCookie, _, onErr = t.on(tx, BL, OnPhaseInTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState)
-					if onErr != nil {
-						log.Warn("failed to evaluate a then do but this could be perfectly fine: %w", onErr)
-						continue
+					innerCookie, newStatus, _, err = t.on(tx, BL, OnPhaseInTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
+					if err != nil {
+						break BREAKOUT
 					}
 					cookie.uuidsToEnqueue = append(cookie.uuidsToEnqueue, innerCookie.uuidsToEnqueue...)
 				}
@@ -615,7 +641,15 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 	default:
 		panic(fmt.Errorf("no such on phase, this code bit should never be reached"))
 	}
-	return cookie, newStatus, err
+	if err != nil {
+		newStatus = api.StepFailed
+		cookie = onCookie{}
+		//goland:noinspection GoNilness
+		if newState.Error == "" {
+			newState.Error = err.Error()
+		}
+	}
+	return cookie, newStatus, errPropagation, err
 }
 
 func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *api.State) (bool, *api.Error) {
@@ -654,6 +688,7 @@ func (t *Template) StartDo(BL *BL, runId string, label string, stepUUID string, 
 	var newStepStatus api.StepStatusType
 	if doErr != nil {
 		newStepStatus = api.StepFailed
+		_ = api.ResolveErrorAndLog(fmt.Errorf("failed to perform do: %w", doErr), true)
 	} else {
 		newStepStatus = api.StepDone
 		if async {
@@ -715,11 +750,6 @@ func (b *BL) doStep(byLabelParams *api.DoStepByLabelParams, byUUIDParams *api.Do
 			}
 			label = byLabelParams.Label
 			statusOwner = byLabelParams.StatusOwner
-			//context always comes from either the caller or internally with uuid so this will not be reached.
-			if byLabelParams.Context == nil {
-				panic(fmt.Errorf("context cannot be nil in this code position"))
-			}
-			currentContext = byLabelParams.Context
 		} else {
 			panic(fmt.Errorf("one of label or uuid params must not be nil"))
 		}

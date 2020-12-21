@@ -3,6 +3,10 @@ title: "HR approvals"
 version: 1
 parameters:
   base-url: http://localhost:3335
+  auth-header: >-
+    dXNlcjpwYXNzd29yZA==
+  tenant: 1
+  namespace: HR
 steps:
   - name: "send emails to step path_1_step_1"
     description: >
@@ -19,13 +23,13 @@ steps:
         headers:
           authorization:
             - >-
-              {% input.context["email-authorization"] %}
+              {% input.template.parameters["auth-header"] %}
           tenant:
             - >-
-              {% input.context["tenant"] %}
+              {% input.template.parameters["tenant"] %}
           namespace:
             - >-
-              {% input.context["namespace"] %}
+              {% input.template.parameters["namespace"] %}
   - name: "Path 1 Step 1: role A"
     label: path_1_step_1
     description: >
@@ -61,18 +65,88 @@ steps:
               error:
                 message: 'access was not approved for: {% input.context["status"] %} due to access_check: {% input.decisions["check_access"] %}'
                 data: '{"code":403}'
+      done:
+        rules:
+          - then:
+              do:
+                - label: check_resolution
+  - name: Check Resolution
+    label: check_resolution
+    on:
+      pending:
+        decisions:
+          - label: decision_resolution
+            input: >
+              {"statuses": ["{% input.labels["path_1_step_1"]["result"]["status"] %}"]}
+        rules:
+          - if: >
+              default result=false
+              result{v:=["approved", "declined"];input.decisions["decision_resolution"]==v[_]}
+            then:
+              do:
+                - label: report_run_result
+                  context: >
+                    { "result": "{% input.decisions["decision_resolution"] %}" }
+          - then:
+              error:
+                propagate: false # don't fail the calling do/transaction, log only. Allowing this step to be called multiple times until it passes to in-progress
+                message: "probably missing information for: {% input.step.label %}"
+                data: '{"code":400}'
+  - name: Report Run Result
+    label: report_run_result
+    do:
+      type: REST
+      options:
+        method: POST
+        url: >-
+          {% input.template.parameters["base-url"] %}/sync/re_notification
+        body: >
+          { "result": {% input.context["result"] %} }
+        headers:
+          authorization:
+            - >-
+              {% input.template.parameters["auth-header"] %}
+          tenant:
+            - >-
+              {% input.template.parameters["tenant"] %}
+          namespace:
+            - >-
+              {% input.template.parameters["namespace"] %}
+    on:
+      done:
+        rules:
+          - if: >
+              default result=false
+              result{input.labels["report_run_result"]["result"]["status-code"]!=200}
+            then:
+              error:
+                message: "failed to report result"
+                data: >
+                  {"status": "{% input.labels["report_run_result"]["result"]["body"]["status"] %}", "code":500, "got-http-code": {% input.labels["report_run_result"]["result"]["status-code"] %}}
+              # - then:
+              # set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are discarded.
 decisions:
   - name: check access
     label: check_access # label must be unique in all template labels
     # return result, fill up errors and they will be thrown automatically
     result: >
       default result="denied"
-      validation1{input.flow_status=="skip"}else{input.flow_status=="approve"}else{input.flow_status=="decline"}
-      errors["flow_status"]{not validation1}
+      valid{input.flow_status=="skipped"}else{input.flow_status=="approved"}else{input.flow_status=="declined"}
+      errors["flow_status"]{not valid}
       allowed_approval_roles{input["roles"][_]==input["allowed-approval"][_]}
       allowed_skip_roles{input["roles"][_]==input["allowed-skip"][_]}
-      allowed_approval{v:=["approve","decline"];input.flow_status=v[_];allowed_approval_roles}
-      allowed_skip{input.flow_status=="skip";allowed_skip_roles}
+      allowed_approval{v:=["approved","declined"];input.flow_status=v[_];allowed_approval_roles}
+      allowed_skip{input.flow_status=="skipped";allowed_skip_roles}
       result="approved"{allowed_approval}
       result="approved"{allowed_skip}
-      
+  - name: check a step has resolution
+    label: decision_step
+    result: >
+      default result = "declined"
+      result="approved"{v:=["skipped","approved"];input.status==v[_]}
+  - name: check run has resolution
+    label: decision_resolution
+    result: >
+      default result="unresolved"
+      result="approved"{count({x|some i;x:=input.statuses[i];x==["skipped","approved"][_]})==count(input.statuses)}
+      result="declined"{input.statuses[_]=="declined"}

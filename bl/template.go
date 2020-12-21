@@ -73,8 +73,9 @@ type ThenDo struct {
 	Context string `json:"context,omitempty"`
 }
 type ThenError struct {
-	Message string `json:"message,omitempty"`
-	Data    string `json:"data,omitempty"`
+	Propagate *bool  `json:"propagate,omitempty"`
+	Message   string `json:"message,omitempty"`
+	Data      string `json:"data,omitempty"`
 }
 type Then struct {
 	Error *ThenError `json:"error,omitempty"`
@@ -195,6 +196,8 @@ func (t *Template) LoadFromBytes(BL *BL, runId string, isYaml bool, yamlDocument
 }
 
 func (t *Template) validate(runId string) error {
+	stepLabelsExist := make(map[string]int)
+	decisionsLabelsExist := make(map[string]int)
 	for i, step := range t.Steps {
 		if step.Label == "" {
 			return api.NewError(api.ErrInvalidParams, "step label must be specified for run id:index: %s:%d", runId, i+1)
@@ -202,6 +205,11 @@ func (t *Template) validate(runId string) error {
 		if !LabelFormat.MatchString(step.Label) {
 			return api.NewError(api.ErrInvalidParams, "step label specification must conform to: %s, given:%s", LabelFormat.String(), step.Label)
 		}
+		index, ok := stepLabelsExist[step.Label]
+		if ok {
+			return api.NewError(api.ErrInvalidParams, "label for step: %d, already exists in step %d for label:%s", i+1, index, step.Label)
+		}
+		stepLabelsExist[step.Label] = i + 1
 	}
 	for i, decision := range t.Decisions {
 		if decision.Label == "" {
@@ -210,7 +218,35 @@ func (t *Template) validate(runId string) error {
 		if !LabelFormat.MatchString(decision.Label) {
 			return api.NewError(api.ErrInvalidParams, "decision label specification must conform to: %s, given:%s", LabelFormat.String(), decision.Label)
 		}
+		index, ok := decisionsLabelsExist[decision.Label]
+		if ok {
+			return api.NewError(api.ErrInvalidParams, "label for step: %d, already exists in step %d for label:%s", i+1, index, decision.Label)
+		}
+		decisionsLabelsExist[decision.Label] = i + 1
 	}
+	for _, step := range t.Steps {
+		events := []Event{step.On.InProgress, step.On.Failed, step.On.Done, step.On.Pending}
+		for _, event := range events {
+			for _, rule := range event.Rules {
+				if rule.Then == nil {
+					continue
+				}
+				for _, do := range rule.Then.Do {
+					_, ok := stepLabelsExist[do.Label]
+					if !ok {
+						return api.NewError(api.ErrInvalidParams, "do label %s in rule does not exist", do.Label)
+					}
+				}
+			}
+			for _, decision := range event.Decisions {
+				_, ok := decisionsLabelsExist[decision.Label]
+				if !ok {
+					return api.NewError(api.ErrInvalidParams, "decision label %s in rule does not exist", decision.Label)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -273,17 +309,19 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 	var err error
 	modules := make(map[string]*ast.Module)
 	for iStep, step := range t.Steps {
-		event := step.On.Pending
-		for jRule, rule := range event.Rules {
-			if rule.If != "" {
-				var parsedModule *ast.Module
-				moduleName := regoModuleNameForIf(iStep, jRule)
-				module := fmt.Sprintf("package %s\n%s", moduleName, rule.If)
-				parsedModule, err = ast.ParseModule(moduleName, module)
-				if err != nil {
-					return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to load rego step components: %w", err)
+		events := []Event{step.On.InProgress, step.On.Failed, step.On.Done, step.On.Pending}
+		for _, event := range events {
+			for jRule, rule := range event.Rules {
+				if rule.If != "" {
+					var parsedModule *ast.Module
+					moduleName := regoModuleNameForIf(iStep, jRule)
+					module := fmt.Sprintf("package %s\n%s", moduleName, rule.If)
+					parsedModule, err = ast.ParseModule(moduleName, module)
+					if err != nil {
+						return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to load rego step components: %w", err)
+					}
+					modules[moduleName] = parsedModule
 				}
-				modules[moduleName] = parsedModule
 			}
 		}
 	}
@@ -311,17 +349,19 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 	t.rego.compiler = compiler
 	t.rego.preparedModuleQueries = make(map[string]rego.PreparedEvalQuery)
 	for iStep, step := range t.Steps {
-		event := step.On.Pending
-		for jRule, rule := range event.Rules {
-			if rule.If != "" {
-				moduleName := regoModuleNameForIf(iStep, jRule)
-				results := fmt.Sprintf("data.%s.result", moduleName)
-				t.rego.preparedModuleQueries[moduleName], err = rego.New(
-					rego.Query(results),
-					rego.Compiler(compiler),
-				).PrepareForEval(BL.ValveCtx)
-				if err != nil {
-					return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to compile rego components: %s", results)
+		events := []Event{step.On.InProgress, step.On.Failed, step.On.Done, step.On.Pending}
+		for _, event := range events {
+			for jRule, rule := range event.Rules {
+				if rule.If != "" {
+					moduleName := regoModuleNameForIf(iStep, jRule)
+					results := fmt.Sprintf("data.%s.result", moduleName)
+					t.rego.preparedModuleQueries[moduleName], err = rego.New(
+						rego.Query(results),
+						rego.Compiler(compiler),
+					).PrepareForEval(BL.ValveCtx)
+					if err != nil {
+						return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to compile rego components: %s", results)
+					}
 				}
 			}
 		}
@@ -352,9 +392,9 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 	labels := map[string]interface{}{}
 	inputSteps := map[string]interface{}{}
 	for _, step := range t.Steps {
-		labels = map[string]interface{}{}
 		inputSteps[step.Label] = map[string]interface{}{
 			"name":    step.Name,
+			"label":   step.Label,
 			"retries": step.Retries,
 			"do": map[string]interface{}{
 				"type": step.doType,
@@ -491,7 +531,7 @@ func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
 	}
 	return nil
 }
-func (t *Template) EvaluateCurlyPercent(BL *BL, step *Step, str string, currentContext api.Context, decisions api.Input) (string, error) {
+func (t *Template) EvaluateCurlyPercent(BL *BL, step *Step, str string, currentContext api.Context, decisions api.Input, uncommitted *uncommittedResult) (string, error) {
 	var buffer bytes.Buffer
 	tokens, escapedStr := TokenizeCurlyPercent(str)
 	if len(tokens) == 0 {
@@ -514,7 +554,7 @@ func (t *Template) EvaluateCurlyPercent(BL *BL, step *Step, str string, currentC
 			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to parse curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		var eval rego.ResultSet
-		eval, err = t.evaluateCurlyPercent(BL, step, query, currentContext, decisions)
+		eval, err = t.evaluateCurlyPercent(BL, step, query, currentContext, decisions, uncommitted)
 		if err != nil {
 			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to evaluate curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
@@ -524,41 +564,52 @@ func (t *Template) EvaluateCurlyPercent(BL *BL, step *Step, str string, currentC
 			var marshaledValue []byte
 			marshaledValue, err = json.Marshal(eval[0].Expressions[0].Value)
 			if err != nil {
-				return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to extract result from rego for a curly percent for: %s", escapedStr[token.Start:token.End])
+				return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to extract result from rego for a curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 			}
 			s := string(marshaledValue)
 			if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") {
 				s = strings.TrimSuffix(strings.TrimPrefix(s, "\""), "\"")
 			}
 			buffer.WriteString(s)
-		} else {
-			return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate curly percent, rego did not return a result for: %s", escapedStr[token.Start:token.End])
 		}
+		// this would return an error on evaluation, but currently the decision is not to fail on missing values. (in the future maybe we will use something like curly percent that does).
+		//else {
+		//	return "", api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate curly percent, rego did not return a result for: %s", escapedStr[token.Start:token.End])
+		//}
 	}
 	buffer.WriteString(escapedStr[tokenEnd:])
 	return buffer.String(), nil
 }
 
-func (t *Template) evaluateCurlyPercent(BL *BL, step *Step, query rego.PreparedEvalQuery, currentContext api.Context, decisions api.Input) (rego.ResultSet, error) {
-	newInput := t.fillInput(currentContext, step, decisions)
+func (t *Template) evaluateCurlyPercent(BL *BL, step *Step, query rego.PreparedEvalQuery, currentContext api.Context, decisions api.Input, uncommitted *uncommittedResult) (rego.ResultSet, error) {
+	newInput := t.fillInput(currentContext, step, decisions, uncommitted)
 	ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
 	defer cancel()
 
 	return query.Eval(ctx, rego.EvalInput(newInput))
 }
 
-func (t *Template) fillInput(currentContext api.Context, step *Step, decisionsResult api.Input) map[string]interface{} {
+type uncommittedResult struct {
+	label string
+	state api.State
+}
+
+func (t *Template) fillInput(currentContext api.Context, step *Step, decisionsResult api.Input, uncommitted *uncommittedResult) map[string]interface{} {
 	var newInput map[string]interface{}
 	newInput = t.duplicateInput()
 	newInput["context"] = currentContext
 	if step.Parameters != nil {
 		newInput["parameters"] = step.Parameters
 	}
+	newInput["step"] = newInput["steps"].(map[string]interface{})[step.Label]
 	if step.Tags != nil {
 		newInput["tags"] = step.Tags
 	}
 	if decisionsResult != nil && len(decisionsResult) > 0 {
 		newInput["decisions"] = decisionsResult
+	}
+	if uncommitted != nil {
+		newInput["labels"].(map[string]interface{})[uncommitted.label] = uncommitted.state
 	}
 	return newInput
 }
@@ -583,9 +634,12 @@ func (t *Template) duplicateInput() map[string]interface{} {
 
 	return newInput
 }
-func (t *Template) ResolveContext(BL *BL, step *Step, jsonStr string, currentContext api.Context) (api.Context, error) {
+func (t *Template) ResolveContext(BL *BL, step *Step, jsonStr string, currentContext api.Context, uncommitted *uncommittedResult) (api.Context, error) {
 	var result api.Context
-	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, step, jsonStr, currentContext, nil)
+	if jsonStr == "" {
+		jsonStr = "{}"
+	}
+	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, step, jsonStr, currentContext, nil, uncommitted)
 	if err != nil {
 		return nil, err
 	}
@@ -595,9 +649,12 @@ func (t *Template) ResolveContext(BL *BL, step *Step, jsonStr string, currentCon
 	}
 	return result, nil
 }
-func (t *Template) ResolveInput(BL *BL, step *Step, jsonStr string, currentContext api.Context) (api.Input, error) {
+func (t *Template) ResolveInput(BL *BL, step *Step, jsonStr string, currentContext api.Context, uncommitted *uncommittedResult) (api.Input, error) {
 	var result api.Input
-	resolvedInputStr, err := t.EvaluateCurlyPercent(BL, step, jsonStr, currentContext, nil)
+	if jsonStr == "" {
+		jsonStr = "{}"
+	}
+	resolvedInputStr, err := t.EvaluateCurlyPercent(BL, step, jsonStr, currentContext, nil, uncommitted)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,7 @@ import (
 	"io"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 )
 
@@ -575,6 +577,12 @@ func NewWrapErrorInternal(code *ErrorCode, wrapErr error, data interface{}, msg 
 	}
 	if log.IsLevelEnabled(log.ErrorLevel) {
 		_, file, line, ok := runtime.Caller(2)
+		index := strings.Index(file, "github.com")
+		if index > 0 {
+			file = file[index:]
+		} else {
+			file = ""
+		}
 		if ok {
 			newErr.caller = &ErrorCaller{
 				File: file,
@@ -602,4 +610,44 @@ func (e *Error) Code() *ErrorCode {
 }
 func (e *Error) Unwrap() error {
 	return e.err
+}
+
+func ResolveErrorAndLog(err error, propagate bool) *Error {
+	var apiErr *Error
+	if errors.As(err, &apiErr) {
+		var dataJson string
+		if apiErr.Data() != nil {
+			var mErr error
+			var data []byte
+			data, mErr = json.Marshal(apiErr.Data())
+			if mErr != nil {
+				panic(fmt.Errorf("marshal for data should always succeed: %w", err))
+			}
+			dataJson = string(data)
+		}
+		if stack := apiErr.Stack(); stack != nil && len(stack) > 0 {
+			caller := apiErr.Caller()
+			defer log.
+				WithField("propagate", propagate).
+				WithField("code", apiErr.Code().Code).
+				WithField("code-msg", apiErr.Code().Message).
+				WithField("data", dataJson).
+				WithField("file", caller.File).
+				WithField("line", caller.Line).
+				WithField("stack", string(stack)).
+				Error(err)
+		} else if caller := apiErr.Caller(); caller != nil {
+			log.
+				WithField("propagate", propagate).
+				WithField("code", apiErr.Code().Code).
+				WithField("code-msg", apiErr.Code().Message).
+				WithField("data", dataJson).
+				WithField("file", caller.File).
+				WithField("line", caller.Line).
+				Error(err)
+		} else {
+			log.Error(err)
+		}
+	}
+	return apiErr
 }

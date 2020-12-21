@@ -89,7 +89,7 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	if ok {
 		log.WithField("build-info", bi).Info()
 	}
-	newBL.maxRegoEvaluationTimeoutSeconds = 10
+	newBL.maxRegoEvaluationTimeoutSeconds = 3
 	newBL.completeByInProgressInterval = 3600
 	newBL.jobQueueNumberOfWorkers = 5000
 	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
