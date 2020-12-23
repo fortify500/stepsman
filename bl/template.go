@@ -78,8 +78,9 @@ type ThenError struct {
 	Data      string `json:"data,omitempty"`
 }
 type Then struct {
-	Error *ThenError `json:"error,omitempty"`
-	Do    []ThenDo   `json:"do,omitempty"`
+	SetRunStatus *api.RunStatusType `json:"set-run-status,omitempty" mapstructure:"set-run-status,omitempty" yaml:"set-run-status,omitempty"`
+	Error        *ThenError         `json:"error,omitempty"`
+	Do           []ThenDo           `json:"do,omitempty"`
 }
 type Rule struct {
 	If   string `json:"if,omitempty"`
@@ -235,6 +236,13 @@ func (t *Template) validate(runId string) error {
 					_, ok := stepLabelsExist[do.Label]
 					if !ok {
 						return api.NewError(api.ErrInvalidParams, "do label %s in rule does not exist", do.Label)
+					}
+				}
+				if rule.Then.SetRunStatus != nil {
+					switch *rule.Then.SetRunStatus {
+					case api.RunDone:
+					default:
+						return api.NewError(api.ErrInvalidParams, "unsupported set run status: %s", rule.Then.SetRunStatus.TranslateRunStatus())
 					}
 				}
 			}
@@ -420,24 +428,27 @@ func (t *Template) LoadAndCreateRun(BL *BL, key string, fileName string, fileTyp
 		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
 	isYaml := true
+	yamlStr := "yaml"
 	if strings.EqualFold(fileType, "json") {
 		isYaml = false
-	}
-	err = t.LoadFromBytes(BL, "", isYaml, yamlDocument)
-	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
+		yamlStr = "json"
 	}
 	if dao.IsRemote {
 		var runId string
 		runId, _, _, err = BL.Client.RemoteCreateRun(&api.CreateRunParams{
-			Key:      key,
-			Template: t,
+			Key:          key,
+			Template:     api.TemplateContents(yamlDocument),
+			TemplateType: yamlStr,
 		})
 		if err != nil {
 			return "", fmt.Errorf("failed to create run remotely for file %s: %w", fileName, err)
 		}
 		return runId, err
 	} else {
+		err = t.LoadFromBytes(BL, "", isYaml, yamlDocument)
+		if err != nil {
+			return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
+		}
 		var runRow *api.RunRecord
 		runRow, err = t.CreateRun(BL, key)
 		if err != nil {
@@ -554,9 +565,11 @@ func (t *Template) EvaluateCurlyPercent(BL *BL, step *Step, str string, currentC
 			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to parse curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
 		}
 		var eval rego.ResultSet
-		eval, err = t.evaluateCurlyPercent(BL, step, query, currentContext, decisions, uncommitted)
+		var newInput api.Input
+		eval, newInput, err = t.evaluateCurlyPercent(BL, step, query, currentContext, decisions, uncommitted)
 		if err != nil {
-			return "", api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "rego failed to evaluate curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
+			err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, newInput, "rego failed to evaluate curly percent for: %s, %w", escapedStr[token.Start:token.End], err)
+			return "", err
 		}
 		if len(eval) > 0 &&
 			len(eval[0].Expressions) > 0 &&
@@ -581,12 +594,13 @@ func (t *Template) EvaluateCurlyPercent(BL *BL, step *Step, str string, currentC
 	return buffer.String(), nil
 }
 
-func (t *Template) evaluateCurlyPercent(BL *BL, step *Step, query rego.PreparedEvalQuery, currentContext api.Context, decisions api.Input, uncommitted *uncommittedResult) (rego.ResultSet, error) {
+func (t *Template) evaluateCurlyPercent(BL *BL, step *Step, query rego.PreparedEvalQuery, currentContext api.Context, decisions api.Input, uncommitted *uncommittedResult) (rego.ResultSet, api.Input, error) {
 	newInput := t.fillInput(currentContext, step, decisions, uncommitted)
 	ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
 	defer cancel()
 
-	return query.Eval(ctx, rego.EvalInput(newInput))
+	eval, err := query.Eval(ctx, rego.EvalInput(newInput))
+	return eval, newInput, err
 }
 
 type uncommittedResult struct {
@@ -594,8 +608,8 @@ type uncommittedResult struct {
 	state api.State
 }
 
-func (t *Template) fillInput(currentContext api.Context, step *Step, decisionsResult api.Input, uncommitted *uncommittedResult) map[string]interface{} {
-	var newInput map[string]interface{}
+func (t *Template) fillInput(currentContext api.Context, step *Step, decisionsResult api.Input, uncommitted *uncommittedResult) api.Input {
+	var newInput api.Input
 	newInput = t.duplicateInput()
 	newInput["context"] = currentContext
 	if step.Parameters != nil {
@@ -614,8 +628,8 @@ func (t *Template) fillInput(currentContext api.Context, step *Step, decisionsRe
 	return newInput
 }
 
-func (t *Template) duplicateInput() map[string]interface{} {
-	newInput := make(map[string]interface{})
+func (t *Template) duplicateInput() api.Input {
+	newInput := make(api.Input)
 	t.rego.inputMutex.RLock()
 	defer t.rego.inputMutex.RUnlock()
 	// two levels deep copy should be enough to avoid race conditions at this time. But keep an eye on this.
@@ -634,18 +648,18 @@ func (t *Template) duplicateInput() map[string]interface{} {
 
 	return newInput
 }
-func (t *Template) ResolveContext(BL *BL, step *Step, jsonStr string, currentContext api.Context, uncommitted *uncommittedResult) (api.Context, error) {
+func (t *Template) ResolveContext(BL *BL, step *Step, jsonStr string, currentContext api.Context, decisions api.Input, uncommitted *uncommittedResult) (api.Context, error) {
 	var result api.Context
 	if jsonStr == "" {
 		jsonStr = "{}"
 	}
-	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, step, jsonStr, currentContext, nil, uncommitted)
+	resolvedContextStr, err := t.EvaluateCurlyPercent(BL, step, jsonStr, currentContext, decisions, uncommitted)
 	if err != nil {
 		return nil, err
 	}
 	err = json.Unmarshal([]byte(resolvedContextStr), &result)
 	if err != nil {
-		return nil, api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve context for: %s", resolvedContextStr)
+		return nil, api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to resolve context for: %s", resolvedContextStr)
 	}
 	return result, nil
 }
@@ -660,7 +674,7 @@ func (t *Template) ResolveInput(BL *BL, step *Step, jsonStr string, currentConte
 	}
 	err = json.Unmarshal([]byte(resolvedInputStr), &result)
 	if err != nil {
-		return nil, api.NewError(api.ErrTemplateEvaluationFailed, "failed to resolve input for: %s", resolvedInputStr)
+		return nil, api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to resolve input for: %s", resolvedInputStr)
 	}
 	return result, nil
 }

@@ -18,13 +18,11 @@ package serve
 
 import (
 	"context"
-	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
-	"github.com/mitchellh/mapstructure"
 	"github.com/osamingo/jsonrpc"
 	"strings"
 )
@@ -175,7 +173,7 @@ func (h CreateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 			key = random.String()
 		}
 		var template bl.Template
-		var isString bool
+		//var isString bool
 		isYaml := false
 		if strings.EqualFold(p.TemplateType, "yaml") {
 			isYaml = true
@@ -185,47 +183,43 @@ func (h CreateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 				Message: "template-type must be either empty (=json), json or yaml",
 			}
 		}
-		switch p.Template.(type) {
-		case string:
-			isString = true
+
+		err := template.LoadFromBytes(BL, "", isYaml, []byte(p.Template))
+		if err != nil {
+			return resolveError(err)
 		}
-		if isString {
-			err := template.LoadFromBytes(BL, "", isYaml, []byte(p.Template.(string)))
-			if err != nil {
-				return resolveError(err)
-			}
-		} else if isYaml {
-			return &jsonrpc.Error{
-				Code:    jsonrpc.ErrorCodeInvalidParams,
-				Message: "specified template-type is yaml but template type is not string",
-			}
-		} else {
-			var md mapstructure.Metadata
-			decoder, err := mapstructure.NewDecoder(
-				&mapstructure.DecoderConfig{
-					Metadata: &md,
-					Result:   &template,
-				})
-			if err != nil {
-				return &jsonrpc.Error{
-					Code:    jsonrpc.ErrorCodeInternal,
-					Message: err.Error(),
-				}
-			}
-			err = decoder.Decode(p.Template)
-			if err != nil {
-				return &jsonrpc.Error{
-					Code:    jsonrpc.ErrorCodeInvalidParams,
-					Message: err.Error(),
-				}
-			}
-			if len(md.Unused) > 0 {
-				return &jsonrpc.Error{
-					Code:    jsonrpc.ErrorCodeInvalidParams,
-					Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
-				}
-			}
-		}
+		//} else if isYaml {
+		//	return &jsonrpc.Error{
+		//		Code:    jsonrpc.ErrorCodeInvalidParams,
+		//		Message: "specified template-type is yaml but template type is not string",
+		//	}
+		//} else {
+		//	var md mapstructure.Metadata
+		//	decoder, err := mapstructure.NewDecoder(
+		//		&mapstructure.DecoderConfig{
+		//			Metadata: &md,
+		//			Result:   &template,
+		//		})
+		//	if err != nil {
+		//		return &jsonrpc.Error{
+		//			Code:    jsonrpc.ErrorCodeInternal,
+		//			Message: err.Error(),
+		//		}
+		//	}
+		//	err = decoder.Decode(p.Template)
+		//	if err != nil {
+		//		return &jsonrpc.Error{
+		//			Code:    jsonrpc.ErrorCodeInvalidParams,
+		//			Message: err.Error(),
+		//		}
+		//	}
+		//	if len(md.Unused) > 0 {
+		//		return &jsonrpc.Error{
+		//			Code:    jsonrpc.ErrorCodeInvalidParams,
+		//			Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
+		//		}
+		//	}
+		//}
 		run, err := template.CreateRun(BL, key)
 		if err != nil {
 			return resolveError(err)

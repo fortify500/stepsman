@@ -72,6 +72,11 @@ steps:
                 - label: check_resolution
   - name: Check Resolution
     label: check_resolution
+    do:
+      type: EVALUATE
+      options:
+        result: >-
+          "checked"
     on:
       pending:
         decisions:
@@ -123,8 +128,8 @@ steps:
                 message: "failed to report result"
                 data: >
                   {"status": "{% input.labels["report_run_result"]["result"]["body"]["status"] %}", "code":500, "got-http-code": {% input.labels["report_run_result"]["result"]["status-code"] %}}
-              # - then:
-              # set-run-status: done #once run-status is "done" then no other processes can be executed in the run, and all existing are discarded.
+          - then:
+              set-run-status: Done #once run-status is "done" then no other processes can be executed in the run, and all existing are discarded.
 decisions:
   - name: check access
     label: check_access # label must be unique in all template labels

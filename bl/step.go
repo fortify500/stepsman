@@ -44,6 +44,7 @@ type onCookieContext struct {
 	resolvedContext api.Context
 }
 type onCookie struct {
+	newRunStatus     *api.RunStatusType
 	safetyDepth      int
 	resolvedContexts []onCookieContext
 	uuidsToEnqueue   []dao.UUIDAndStatusOwner
@@ -351,7 +352,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
 			if run.Status == api.RunIdle {
-				dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress)
+				dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress, nil)
 			} else if run.Status == api.RunDone {
 				if newStatus == api.StepInProgress || newStatus == api.StepPending {
 					if partialStepRecord.Status == api.StepIdle || partialStepRecord.Status == api.StepDone || partialStepRecord.Status == api.StepFailed {
@@ -463,7 +464,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 				var eval rego.ResultSet
 				eval, err = t.rego.preparedModuleQueries[decisionModule].Eval(ctx, rego.EvalInput(resolvedInput))
 				if err != nil {
-					err = fmt.Errorf("failed to evaluate decision %s: %w", decision.Label, err)
+					err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, resolvedInput, "failed to evaluate decision %s: %w", decisionModule, err)
 					cancel()
 					break BREAKOUT1
 				}
@@ -484,17 +485,17 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 							var errorsStr []byte
 							errorsStr, err = json.Marshal(errors)
 							if err != nil {
-								err = fmt.Errorf("failed to evaluate decision %s: %w", decision.Label, err)
+								err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, resolvedInput, "failed to evaluate decision %s: %w", decisionModule, err)
 								break BREAKOUT1
 							}
 							if len(string(errorsStr)) > 0 && string(errorsStr) != "[]" && string(errorsStr) != "{}" {
-								err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate decision %s, due to errors: %s", decisionModule, errorsStr)
+								err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision %s, due to errors: %s", decisionModule, errorsStr)
 								break BREAKOUT1
 							}
 						}
 						result, ok = results["result"]
 						if !ok {
-							err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate decision %s, no result given", decisionModule)
+							err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision %s, no result given", decisionModule)
 							break BREAKOUT1
 						}
 						decisionsInput[decision.Label] = result
@@ -502,7 +503,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 						panic(fmt.Sprintf("expected results are in a fixed map when evaluating decisions"))
 					}
 				} else {
-					err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate decision: %s", decisionModule)
+					err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision: %s", decisionModule)
 					break BREAKOUT1
 				}
 			}
@@ -522,7 +523,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 					eval, err = t.rego.preparedModuleQueries[ifModule].Eval(ctx, rego.EvalInput(input))
 					if err != nil {
 						cancel()
-						err = fmt.Errorf("failed to evaluate rule %s: %w", rule.If, err)
+						err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, input, "failed to evaluate rule %s: %w", rule.If, err)
 						break BREAKOUT2
 					}
 					cancel()
@@ -535,11 +536,11 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 								continue
 							}
 						default:
-							err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate rule %s, result must be a boolean, given: %v", rule.If, eval[0].Expressions[0].Value)
+							err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, input, "failed to evaluate rule %s, result must be a boolean, given: %v", rule.If, eval[0].Expressions[0].Value)
 							break BREAKOUT2
 						}
 					} else {
-						err = api.NewError(api.ErrTemplateEvaluationFailed, "failed to evaluate rule %s, no result given", rule.If)
+						err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, input, "failed to evaluate rule %s, no result given", rule.If)
 						break BREAKOUT2
 					}
 				}
@@ -563,7 +564,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 						var data interface{}
 						err = json.Unmarshal([]byte(resolvedData), &data)
 						if err != nil {
-							err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
+							err = api.NewWrapError(api.ErrCustomTemplateErrorThrown, err, "failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
 							break BREAKOUT2
 						}
 						err = api.NewErrorWithData(api.ErrCustomTemplateErrorThrown, data, resolvedMessage)
@@ -571,6 +572,15 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 						err = api.NewError(api.ErrCustomTemplateErrorThrown, resolvedMessage)
 					}
 					break BREAKOUT2
+				}
+				if rule.Then.SetRunStatus != nil {
+					switch *rule.Then.SetRunStatus {
+					case api.RunDone:
+						s := api.RunDone
+						cookie.newRunStatus = &s
+					default:
+						panic(fmt.Errorf("unsupported type: %s", rule.Then.SetRunStatus.TranslateRunStatus()))
+					}
 				}
 				if len(rule.Then.Do) > 0 {
 					for _, thenDo := range rule.Then.Do {
@@ -587,7 +597,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 					}
 					if len(cookie.resolvedContexts) > 0 {
 						for i := range cookie.resolvedContexts {
-							cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, &step, cookie.resolvedContexts[i].context, currentContext, uncommitted)
+							cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, &step, cookie.resolvedContexts[i].context, currentContext, decisionsInput, uncommitted)
 							if err != nil {
 								break BREAKOUT2
 							}
@@ -602,6 +612,15 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 			panic(fmt.Errorf("seems the then do recursion is out of control and reached a depth of:%d", cookie.safetyDepth))
 		}
 		cookie.safetyDepth++
+		if cookie.newRunStatus != nil {
+			switch *cookie.newRunStatus {
+			case api.RunDone:
+				prev := api.RunInProgress
+				dao.UpdateRunStatusTx(tx, runId, api.RunDone, &prev)
+			default:
+				panic(fmt.Errorf("unsupported cookie status type: %s", (*cookie.newRunStatus).TranslateRunStatus()))
+			}
+		}
 		if len(cookie.resolvedContexts) > 0 {
 		BREAKOUT:
 			for _, indexContextAndLabel := range cookie.resolvedContexts {

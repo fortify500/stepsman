@@ -485,8 +485,14 @@ func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
 	return nil
 }
 
-func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType) {
-	if _, err := tx.Exec("update runs set status=$1 where id=$2", newStatus, id); err != nil {
-		panic(err)
+func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType, prevStatus *api.RunStatusType) {
+	if prevStatus != nil {
+		if _, err := tx.Exec("update runs set status=$1 where id=$2 and status=$3", newStatus, id, *prevStatus); err != nil {
+			panic(err)
+		}
+	} else {
+		if _, err := tx.Exec("update runs set status=$1 where id=$2", newStatus, id); err != nil {
+			panic(err)
+		}
 	}
 }

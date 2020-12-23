@@ -297,22 +297,17 @@ BreakOut:
 		createdRunId := ""
 		{
 			fileName := "examples/basic.yaml"
-			var template bl.Template
 			yamlDocument, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
 				break BreakOut
 			}
-			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
-			if err != nil {
-				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
-				break BreakOut
-			}
 			{
 				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
 					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
-						Key:      "",
-						Template: template,
+						Key:          "",
+						Template:     api.TemplateContents(yamlDocument),
+						TemplateType: "yaml",
 					})
 					if err != nil {
 						t.Error(err)
@@ -645,22 +640,17 @@ BreakOut:
 
 		{
 			fileName := "examples/basic.yaml"
-			var template bl.Template
 			yamlDocument, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
 				break BreakOut
 			}
-			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
-			if err != nil {
-				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
-				break BreakOut
-			}
 			{
 				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
 					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
-						Key:      "",
-						Template: template,
+						Key:          "",
+						Template:     api.TemplateContents(yamlDocument),
+						TemplateType: "yaml",
 					})
 					if err != nil {
 						t.Error(err)
@@ -709,22 +699,17 @@ BreakOut:
 		})
 		{
 			fileName := "examples/basic.yaml"
-			var template bl.Template
 			yamlDocument, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
 				break BreakOut
 			}
-			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
-			if err != nil {
-				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
-				break BreakOut
-			}
 			{
 				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
 					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
-						Key:      "",
-						Template: template,
+						Key:          "",
+						Template:     api.TemplateContents(yamlDocument),
+						TemplateType: "yaml",
 					})
 					if err != nil {
 						t.Error(err)
@@ -847,22 +832,17 @@ BreakOut:
 		createdRunId := ""
 		{
 			fileName := "examples/approval.yaml"
-			var template bl.Template
 			yamlDocument, err := ioutil.ReadFile(fileName)
 			if err != nil {
 				t.Error(fmt.Errorf("failed to read file %s: %w", fileName, err))
 				break BreakOut
 			}
-			err = template.LoadFromBytes(cmd.BL, "", true, yamlDocument)
-			if err != nil {
-				t.Error(fmt.Errorf("failed to unmarshal file %s: %w", fileName, err))
-				break BreakOut
-			}
 			{
 				t.Run(fmt.Sprintf("%s - %s", command, "RemoteCreateRun"), func(t *testing.T) {
 					createdRunId, _, _, err = httpClient.RemoteCreateRun(&api.CreateRunParams{
-						Key:      "",
-						Template: template,
+						Key:          "",
+						Template:     api.TemplateContents(yamlDocument),
+						TemplateType: "yaml",
 					})
 					if err != nil {
 						t.Error(err)
@@ -949,6 +929,24 @@ BreakOut:
 		if breakOut {
 			break BreakOut
 		}
+		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
+			runs, err := httpClient.RemoteGetRuns(&api.GetRunsQuery{
+				Ids:              []string{createdRunId},
+				ReturnAttributes: []string{"id", "status"},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if len(runs) != 1 {
+				t.Error(fmt.Errorf("only one run should be returned, got: %d", len(runs)))
+				return
+			}
+			if runs[0].Status != api.RunDone {
+				t.Error(fmt.Errorf("status should be done, got: %s", runs[0].Status.TranslateRunStatus()))
+				return
+			}
+		})
 		fmt.Printf("createdRunId: %s\n", createdRunId)
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()

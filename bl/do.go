@@ -85,7 +85,7 @@ func (b *BL) do(t *Template, step *Step, stepRecord *api.StepRecord, doType DoTy
 			}
 			err = json.Unmarshal([]byte(resolvedResult), &(newState.Result))
 			if err != nil {
-				err = fmt.Errorf("failed to evaluate: %s: %w", doEvaluate.Options.Result, err)
+				err = api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to evaluate: %s: %w", doEvaluate.Options.Result, err)
 				newState.Result = emptyMap
 				newState.Error = err.Error()
 				return newState, false, err

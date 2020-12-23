@@ -119,7 +119,7 @@ func (b *BL) updateRunStatusLocal(runId string, newStatus api.RunStatusType) err
 		if newStatus == runRecord.Status {
 			return api.NewError(api.ErrStatusNotChanged, "update run status have not changed")
 		}
-		dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus)
+		dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus, nil)
 		return nil
 	})
 	return tErr

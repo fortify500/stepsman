@@ -28,6 +28,7 @@ import (
 	"io"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -122,7 +123,14 @@ type DeleteRunsParams DeleteQuery
 type DeleteRunsResult struct{}
 
 type CreateRunsResult RunRecord
+type TemplateContents string
 type CreateRunParams struct {
+	Key          string           `json:"key,omitempty"`
+	Template     TemplateContents `json:"template,omitempty"`
+	TemplateType string           `json:"template-type,omitempty"`
+}
+
+type CreateRunParamsWithTemplateInterface struct {
 	Key          string      `json:"key,omitempty"`
 	Template     interface{} `json:"template,omitempty"`
 	TemplateType string      `json:"template-type,omitempty"`
@@ -202,11 +210,44 @@ func (r *RunStatusType) UnmarshalJSON(data []byte) error {
 	*r = status
 	return nil
 }
+func (t *TemplateContents) UnmarshalJSON(data []byte) error {
+	s := string(data)
+	if strings.HasPrefix(s, "\"") {
+		var err error
+		s, err = strconv.Unquote(s)
+		if err != nil {
+			return err
+		}
+	}
+	*t = TemplateContents(s)
+	return nil
+}
+func (r RunStatusType) MarshalYAML() (interface{}, error) {
+	buffer := bytes.NewBufferString(`"`)
+	buffer.WriteString(r.TranslateRunStatus())
+	buffer.WriteString(`"`)
+	return buffer.Bytes(), nil
+}
+func (r *RunStatusType) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+	var err error
+	var status RunStatusType
+	err = unmarshal(&s)
+	if err != nil {
+		return err
+	}
+	status, err = TranslateToRunStatus(s)
+	if err != nil {
+		return err
+	}
+	*r = status
+	return nil
+}
 
 const (
-	RunIdle       RunStatusType = 10
-	RunInProgress RunStatusType = 12
-	RunDone       RunStatusType = 15
+	RunIdle       RunStatusType = 100
+	RunInProgress RunStatusType = 200
+	RunDone       RunStatusType = 300
 )
 
 func (r *RunRecord) PrettyJSONTemplate() string {
@@ -545,6 +586,7 @@ type Error struct {
 	code   *ErrorCode
 	err    error
 	data   interface{}
+	input  Input
 	caller *ErrorCaller
 	stack  []byte //only available if debug is enabled.
 }
@@ -557,15 +599,21 @@ func NewLocalizedError(msg string, args ...interface{}) error {
 	return fmt.Errorf(msg, args...)
 }
 func NewError(code *ErrorCode, msg string, args ...interface{}) *Error {
-	return NewWrapErrorInternal(code, nil, nil, msg, args...)
+	return NewWrapErrorInternal(code, nil, nil, nil, msg, args...)
+}
+func NewErrorWithInput(code *ErrorCode, input Input, msg string, args ...interface{}) *Error {
+	return NewWrapErrorInternal(code, nil, nil, input, msg, args...)
 }
 func NewErrorWithData(code *ErrorCode, data interface{}, msg string, args ...interface{}) *Error {
-	return NewWrapErrorInternal(code, nil, data, msg, args...)
+	return NewWrapErrorInternal(code, nil, data, nil, msg, args...)
+}
+func NewWrapErrorWithInput(code *ErrorCode, wrapErr error, input Input, msg string, args ...interface{}) *Error {
+	return NewWrapErrorInternal(code, wrapErr, nil, input, msg, args...)
 }
 func NewWrapError(code *ErrorCode, wrapErr error, msg string, args ...interface{}) *Error {
-	return NewWrapErrorInternal(code, wrapErr, nil, msg, args...)
+	return NewWrapErrorInternal(code, wrapErr, nil, nil, msg, args...)
 }
-func NewWrapErrorInternal(code *ErrorCode, wrapErr error, data interface{}, msg string, args ...interface{}) *Error {
+func NewWrapErrorInternal(code *ErrorCode, wrapErr error, data interface{}, input Input, msg string, args ...interface{}) *Error {
 	newErr := &Error{
 		msg:  fmt.Errorf(msg, args...).Error(),
 		code: code,
@@ -574,6 +622,7 @@ func NewWrapErrorInternal(code *ErrorCode, wrapErr error, data interface{}, msg 
 	}
 	if log.IsLevelEnabled(log.DebugLevel) {
 		newErr.stack = debug.Stack()
+		newErr.input = input
 	}
 	if log.IsLevelEnabled(log.ErrorLevel) {
 		_, file, line, ok := runtime.Caller(2)
@@ -605,6 +654,9 @@ func (e *Error) Stack() []byte {
 func (e *Error) Data() interface{} {
 	return e.data
 }
+func (e *Error) Input() Input {
+	return e.input
+}
 func (e *Error) Code() *ErrorCode {
 	return e.code
 }
@@ -616,18 +668,29 @@ func ResolveErrorAndLog(err error, propagate bool) *Error {
 	var apiErr *Error
 	if errors.As(err, &apiErr) {
 		var dataJson string
+		var inputJson string
 		if apiErr.Data() != nil {
 			var mErr error
 			var data []byte
 			data, mErr = json.Marshal(apiErr.Data())
 			if mErr != nil {
-				panic(fmt.Errorf("marshal for data should always succeed: %w", err))
+				panic(fmt.Errorf("marshal for data in error should always succeed: %w", err))
 			}
 			dataJson = string(data)
+		}
+		if apiErr.Input() != nil {
+			var mErr error
+			var input []byte
+			input, mErr = json.Marshal(apiErr.Input())
+			if mErr != nil {
+				panic(fmt.Errorf("marshal for input in error should always succeed: %w", err))
+			}
+			inputJson = string(input)
 		}
 		if stack := apiErr.Stack(); stack != nil && len(stack) > 0 {
 			caller := apiErr.Caller()
 			defer log.
+				WithField("input", inputJson).
 				WithField("propagate", propagate).
 				WithField("code", apiErr.Code().Code).
 				WithField("code-msg", apiErr.Code().Message).
@@ -638,6 +701,7 @@ func ResolveErrorAndLog(err error, propagate bool) *Error {
 				Error(err)
 		} else if caller := apiErr.Caller(); caller != nil {
 			log.
+				WithField("input", inputJson).
 				WithField("propagate", propagate).
 				WithField("code", apiErr.Code().Code).
 				WithField("code-msg", apiErr.Code().Message).
