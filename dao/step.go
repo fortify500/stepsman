@@ -260,6 +260,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				attributeName = "run_id"
 			case Index:
 			case UUID:
+			case CreatedAt:
 			case Status:
 			case StatusOwner:
 				attributeName = "status_owner"
@@ -281,6 +282,7 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 			case ">=":
 				switch expression.AttributeName {
 				case Index:
+				case CreatedAt:
 				case HeartBeat:
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name and operator combination in filter: %s - %s", expression.AttributeName, expression.Operator)
@@ -418,17 +420,17 @@ func ListStepsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.StepRecord, *api.Rang
 				fieldDB := field
 				switch field {
 				case RunId:
-					fieldDB = "run_id"
 				case Index:
+				case CreatedAt:
 				case UUID:
 				case Status:
 				case StatusOwner:
-					fieldDB = "status_owner"
 				case Label:
 				case Name:
 				default:
 					return nil, nil, api.NewError(api.ErrInvalidParams, "invalid attribute name in sort fields: %s", field)
 				}
+				fieldDB = strings.ReplaceAll(fieldDB, "-", "_")
 				if sort != orderBy {
 					sort += ","
 				}

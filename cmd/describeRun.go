@@ -150,6 +150,7 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 	checked := "[ ]"
 	heartBeat := "N/A"
 	completeBy := "N/A"
+	createdAt := fmt.Sprintf("%s", time.Time(stepRecord.CreatedAt).Format(time.RFC3339))
 	switch stepRecord.Status {
 	case api.StepDone:
 		checked = "True"
@@ -173,6 +174,7 @@ func RenderStep(stepRecord *api.StepRecord, script *bl.Template) (table.Writer, 
 		{"Status Owner:", stepRecord.StatusOwner},
 		{"Heartbeat:", heartBeat},
 		{"Complete By:", completeBy},
+		{"Created At:", createdAt},
 		{"Done:", checked},
 		{"Description:", strings.TrimSpace(text.WrapText(step.Description, TableWrapLen))},
 	})

@@ -66,24 +66,26 @@ func (db *Sqlite3SqlxDB) SQL() *sqlx.DB {
 }
 func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE runs (
-                                     id varchar(128) PRIMARY KEY NOT NULL,
-                                     created_at TIMESTAMP NOT NULL,
+    							     created_at TIMESTAMP NOT NULL,
+                                     id varchar(128) NOT NULL,
                                      template_version INTEGER NOT NULL,
 	                                 status INTEGER NOT NULL,
                                      key TEXT NOT NULL,
                                      tags TEXT NOT NULL,
 	                                 template_title TEXT,
-	                                 template TEXT
+	                                 template TEXT,
+	                                 PRIMARY KEY (created_at, id)
                                      )`)
 	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_key ON runs (key)`)
 	if err != nil {
-		return fmt.Errorf("failed to create index idx_runs_title_status: %w", err)
+		return fmt.Errorf("failed to create index idx_runs_key: %w", err)
 	}
 	_, err = tx.Exec(`CREATE INDEX idx_runs_status ON runs (status)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_status: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE steps (
+    								 created_at TIMESTAMP NOT NULL,
                                      run_id varchar(128) NOT NULL,
                                      "index" INTEGER NOT NULL,
                                      uuid varchar(128) NOT NULL,
@@ -97,7 +99,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 									 tags TEXT NOT NULL,
 									 context TEXT NOT NULL, 
 	                                 state text,
-	                                 PRIMARY KEY (run_id, "index")
+	                                 PRIMARY KEY (created_at, run_id, "index")
                                      )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
@@ -117,7 +119,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	query := "INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state,:tags)"
+	query := "INSERT INTO steps(created_at, run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(CURRENT_TIMESTAMP,:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state,:tags)"
 	if _, err := tx.NamedExec(query, stepRecord); err != nil {
 		panic(err)
 	}

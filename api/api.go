@@ -424,6 +424,7 @@ type State struct {
 }
 type Tags []string
 type StepRecord struct {
+	CreatedAt   AnyTime        `db:"created_at" json:"created-at,omitempty"`
 	RunId       string         `db:"run_id" json:"run-id,omitempty"`
 	Index       int64          `db:"index" json:"index,omitempty"`
 	Tags        Tags           `db:"tags" json:"tags,omitempty"`

@@ -45,12 +45,13 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"template_title" Text NOT NULL ,
 	"tags" jsonb NOT NULL,
 	"template" jsonb,
-	PRIMARY KEY ( "id" ),
+	PRIMARY KEY ( "created_at", "id" ),
 	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
 	}
-	_, err = tx.Exec(`CREATE TABLE "public"."steps" ( 
+	_, err = tx.Exec(`CREATE TABLE "public"."steps" (
+    "created_at" timestamp with time zone NOT NULL,
 	"run_id" uuid NOT NULL,
 	"index" Bigint NOT NULL,
 	"uuid" uuid NOT NULL,
@@ -64,8 +65,8 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"status_owner" Text NOT NULL,
 	"context" jsonb NOT NULL, 
 	"state" jsonb,
-	PRIMARY KEY ( "run_id", "index" ),
-	CONSTRAINT "foreign_key_runs" FOREIGN KEY(run_id) REFERENCES runs(id),
+	PRIMARY KEY ("created_at", "run_id", "index" ),
+	CONSTRAINT "foreign_key_runs" FOREIGN KEY("created_at","run_id") REFERENCES runs("created_at","id"),
     CONSTRAINT "unique_steps_uuid" UNIQUE( "uuid" ),
     CONSTRAINT "unique_steps_label" UNIQUE( "run_id", "label" ) )`)
 	if err != nil {
@@ -95,7 +96,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 }
 
 func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	if _, err := tx.NamedExec("INSERT INTO steps(run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(:run_id,:index,:label,:uuid,:name,:status,:status_owner,to_timestamp(0),null,:retries_left,:context, :state, :tags)", stepRecord); err != nil {
+	if _, err := tx.NamedExec("INSERT INTO steps(created_at, run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(CURRENT_TIMESTAMP,:run_id,:index,:label,:uuid,:name,:status,:status_owner,to_timestamp(0),null,:retries_left,:context, :state, :tags)", stepRecord); err != nil {
 		panic(err)
 	}
 }

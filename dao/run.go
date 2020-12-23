@@ -347,7 +347,7 @@ func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runRetu
 	if err != nil {
 		return api.RunRecord{}, "", nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s, steps.uuid as step_uuid, steps.context FROM runs inner join steps on runs.id=steps.run_id where runs.id=$1 AND steps.label = $2", attributesStr)
+	query := fmt.Sprintf("SELECT %s, steps.uuid as step_uuid, steps.context FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where runs.id=$1 AND steps.label = $2", attributesStr)
 	rows, err = tx.Queryx(query, runId, label)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
@@ -380,7 +380,7 @@ func GetRunLabelAndContextByStepUUIDTx(tx *sqlx.Tx, stepUUID string, runReturnAt
 	if err != nil {
 		return api.RunRecord{}, nil, "", fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s, steps.context, steps.label FROM runs inner join steps on runs.id=steps.run_id where steps.uuid=$1", attributesStr)
+	query := fmt.Sprintf("SELECT %s, steps.context, steps.label FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where steps.uuid=$1", attributesStr)
 	rows, err = tx.Queryx(query, stepUUID)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
