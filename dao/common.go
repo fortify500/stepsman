@@ -29,6 +29,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"time"
 )
 
 var GitCommit string
@@ -96,24 +97,42 @@ func (d *DAO) openDatabase(databaseVendor string, dataSourceName string) error {
 		switch internalDriverName {
 		case "sqlite3":
 			d.DB = (*Sqlite3SqlxDB)(dbOpen)
+			if strings.Contains(strings.ToLower(dataSourceName), ":memory:") {
+				d.DB.SQL().SetMaxOpenConns(1)
+			} else {
+				d.setConnectionConfiguration(dbOpen)
+			}
 			_, err = d.DB.SQL().Exec("PRAGMA journal_mode = WAL")
 			if err != nil {
 				panic(fmt.Errorf("failed to set journal mode: %w", err))
-			}
-			if strings.Contains(strings.ToLower(dataSourceName), ":memory:") {
-				d.DB.SQL().SetMaxOpenConns(1)
 			}
 			_, err = d.DB.SQL().Exec("PRAGMA synchronous = NORMAL")
 			if err != nil {
 				panic(fmt.Errorf("failed to set synchronous mode: %w", err))
 			}
 		case "pgx":
+			d.setConnectionConfiguration(dbOpen)
 			d.DB = (*PostgreSQLSqlxDB)(dbOpen)
 		default:
 			panic(fmt.Errorf("unsupported internal database driver name: %s", internalDriverName))
 		}
 	}
 	return err
+}
+
+func (d *DAO) setConnectionConfiguration(dbOpen *sqlx.DB) {
+	if d.MaxOpenConnections > 0 {
+		dbOpen.SetMaxOpenConns(d.MaxOpenConnections)
+	}
+	if d.MaxIdleConnections > 0 {
+		dbOpen.SetMaxIdleConns(d.MaxIdleConnections)
+	}
+	if d.ConnectionMaxIdleTimeSeconds > 0 {
+		dbOpen.SetConnMaxIdleTime(time.Duration(d.ConnectionMaxIdleTimeSeconds) * time.Second)
+	}
+	if d.ConnectionMaxLifeTimeSeconds > 0 {
+		dbOpen.SetConnMaxLifetime(time.Duration(d.ConnectionMaxLifeTimeSeconds) * time.Second)
+	}
 }
 
 var IsRemote = false
@@ -132,17 +151,35 @@ type ParametersType struct {
 }
 
 type DAO struct {
-	Parameters                ParametersType
-	CompleteByPendingInterval int64
-	DB                        DBI
+	Parameters                   ParametersType
+	CompleteByPendingInterval    int64
+	MaxOpenConnections           int
+	MaxIdleConnections           int
+	ConnectionMaxIdleTimeSeconds int64
+	ConnectionMaxLifeTimeSeconds int64
+	DB                           DBI
 }
 
 func New(parameters *ParametersType) (*DAO, error) {
 	var newDAO DAO
 	newDAO.CompleteByPendingInterval = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
+	newDAO.MaxOpenConnections = 700
 	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
 		newDAO.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
 	}
+	if viper.IsSet("MAX_OPEN_CONNECTIONS") {
+		newDAO.MaxOpenConnections = viper.GetInt("MAX_OPEN_CONNECTIONS")
+	}
+	if viper.IsSet("MAX_IDLE_CONNECTIONS") {
+		newDAO.MaxIdleConnections = viper.GetInt("MAX_IDLE_CONNECTIONS")
+	}
+	if viper.IsSet("CONNECTION_MAX_IDLE_TIME_SECS") {
+		newDAO.ConnectionMaxIdleTimeSeconds = viper.GetInt64("CONNECTION_MAX_IDLE_TIME_SECS")
+	}
+	if viper.IsSet("CONNECTION_MAX_LIFE_TIME_SECS") {
+		newDAO.ConnectionMaxLifeTimeSeconds = viper.GetInt64("CONNECTION_MAX_LIFE_TIME_SECS")
+	}
+
 	newDAO.Parameters = *parameters
 	switch strings.TrimSpace(newDAO.Parameters.DatabaseVendor) {
 	//goland:noinspection SpellCheckingInspection
