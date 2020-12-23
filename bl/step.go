@@ -608,8 +608,9 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 			}
 		}
 	case OnPhaseInTransaction:
-		if cookie.safetyDepth > 10000 {
-			panic(fmt.Errorf("seems the then do recursion is out of control and reached a depth of:%d", cookie.safetyDepth))
+		if cookie.safetyDepth > BL.PendingRecursionDepthLimit { //minimum is 0 for no recursion.
+			err = api.NewError(api.ErrTemplateEvaluationFailed, "seems the then do recursion is out of control and reached a depth of:%d while configured limit is: %d", cookie.safetyDepth, BL.PendingRecursionDepthLimit)
+			break
 		}
 		cookie.safetyDepth++
 		if cookie.newRunStatus != nil {

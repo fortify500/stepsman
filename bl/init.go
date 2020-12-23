@@ -46,6 +46,7 @@ type BL struct {
 	completeByInProgressInterval            int64
 	jobQueueNumberOfWorkers                 int
 	jobQueueMemoryQueueLimit                int
+	PendingRecursionDepthLimit              int
 	recoveryDisableSkipLocks                bool
 	recoveryMaxRecoverItemsPassLimit        int
 	recoveryAllowUnderJobQueueNumberOfItems int
@@ -93,6 +94,7 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	newBL.completeByInProgressInterval = 3600
 	newBL.jobQueueNumberOfWorkers = 5000
 	newBL.jobQueueMemoryQueueLimit = 1 * 1000 * 1000
+	newBL.PendingRecursionDepthLimit = 100
 	newBL.templateCacheSize = 1000
 	newBL.recoveryLongIntervalMinimumSeconds = 10 * 60
 	newBL.recoveryLongIntervalRandomizedSeconds = 10 * 60
@@ -104,6 +106,9 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	}
 	if viper.IsSet("JOB_QUEUE_MEMORY_QUEUE_LIMIT") {
 		newBL.jobQueueMemoryQueueLimit = viper.GetInt("JOB_QUEUE_MEMORY_QUEUE_LIMIT")
+	}
+	if viper.IsSet("PENDING_RECURSION_DEPTH_LIMIT") {
+		newBL.PendingRecursionDepthLimit = viper.GetInt("PENDING_RECURSION_DEPTH_LIMIT")
 	}
 	if viper.IsSet("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS") {
 		newBL.completeByInProgressInterval = viper.GetInt64("COMPLETE_BY_IN_PROGRESS_INTERVAL_SECS")
