@@ -184,6 +184,8 @@ type RunRecord struct {
 	Key             string        `json:"key,omitempty"`
 	Tags            Tags          `db:"tags" json:"tags,omitempty"`
 	CreatedAt       AnyTime       `db:"created_at" json:"created-at,omitempty"`
+	CompleteBy      *AnyTime      `db:"complete_by" json:"complete-by,omitempty"`
+	Now             AnyTime       `db:"now" json:"now,omitempty"`
 	TemplateVersion int64         `db:"template_version" json:"template-version,omitempty"`
 	TemplateTitle   string        `db:"template_title" json:"template-title,omitempty"`
 	Status          RunStatusType `json:"status,omitempty"`

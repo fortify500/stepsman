@@ -42,6 +42,10 @@ const (
 	DoTypeEVALUATE DoType = "EVALUATE"
 )
 
+const (
+	ExpirationStepIndex = -1
+)
+
 type Rego struct {
 	compiler                  *ast.Compiler
 	preparedModuleQueries     map[string]rego.PreparedEvalQuery
@@ -54,6 +58,7 @@ type Rego struct {
 type Template struct {
 	Title           string         `json:"title,omitempty"`
 	Version         int64          `json:"version,omitempty"`
+	Expiration      Expiration     `json:"expiration,omitempty"`
 	Steps           []Step         `json:"steps,omitempty"`
 	Tags            api.Tags       `json:"tags,omitempty"`
 	Decisions       []Decision     `json:"decisions,omitempty"`
@@ -61,6 +66,11 @@ type Template struct {
 	labelsToIndices map[string]int64
 	indicesToLabels map[int64]string
 	rego            *Rego
+}
+type Expiration struct {
+	CompleteBy int64           `json:"complete-by,omitempty" mapstructure:"complete-by" yaml:"complete-by,omitempty"`
+	Decisions  []RulesDecision `json:"decisions,omitempty"`
+	Rules      []Rule          `json:"rules,omitempty"`
 }
 type Decision struct {
 	Name   string `json:"name,omitempty"`
@@ -86,12 +96,12 @@ type Rule struct {
 	If   string `json:"if,omitempty"`
 	Then *Then  `json:"then,omitempty"`
 }
-type EventDecision struct {
+type RulesDecision struct {
 	Label string `json:"label"`
 	Input string `json:"input,omitempty"`
 }
 type Event struct {
-	Decisions []EventDecision `json:"decisions,omitempty"`
+	Decisions []RulesDecision `json:"decisions,omitempty"`
 	Rules     []Rule          `json:"rules,omitempty"`
 }
 type On struct {
@@ -316,19 +326,19 @@ func (t *Template) RefreshInput(BL *BL, runId string) {
 func (t *Template) initRegoAndInput(BL *BL) error {
 	var err error
 	modules := make(map[string]*ast.Module)
+	for jRule, rule := range t.Expiration.Rules {
+		err = t.addIfModule(rule, ExpirationStepIndex, jRule, &modules)
+		if err != nil {
+			return err
+		}
+	}
 	for iStep, step := range t.Steps {
 		events := []Event{step.On.InProgress, step.On.Failed, step.On.Done, step.On.Pending}
 		for _, event := range events {
 			for jRule, rule := range event.Rules {
-				if rule.If != "" {
-					var parsedModule *ast.Module
-					moduleName := regoModuleNameForIf(iStep, jRule)
-					module := fmt.Sprintf("package %s\n%s", moduleName, rule.If)
-					parsedModule, err = ast.ParseModule(moduleName, module)
-					if err != nil {
-						return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to load rego step components: %w", err)
-					}
-					modules[moduleName] = parsedModule
+				err = t.addIfModule(rule, iStep, jRule, &modules)
+				if err != nil {
+					return err
 				}
 			}
 		}
@@ -360,21 +370,19 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 		events := []Event{step.On.InProgress, step.On.Failed, step.On.Done, step.On.Pending}
 		for _, event := range events {
 			for jRule, rule := range event.Rules {
-				if rule.If != "" {
-					moduleName := regoModuleNameForIf(iStep, jRule)
-					results := fmt.Sprintf("data.%s.result", moduleName)
-					t.rego.preparedModuleQueries[moduleName], err = rego.New(
-						rego.Query(results),
-						rego.Compiler(compiler),
-					).PrepareForEval(BL.ValveCtx)
-					if err != nil {
-						return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to compile rego components: %s", results)
-					}
+				err = t.compileIfModule(BL, compiler, rule, iStep, jRule)
+				if err != nil {
+					return err
 				}
 			}
 		}
 	}
-
+	for jRule, rule := range t.Expiration.Rules {
+		err = t.compileIfModule(BL, compiler, rule, ExpirationStepIndex, jRule)
+		if err != nil {
+			return err
+		}
+	}
 	for _, decision := range t.Decisions {
 		moduleName := regoModuleNameForDecision(decision.Label)
 		results := fmt.Sprintf("data.%s", moduleName)
@@ -411,6 +419,37 @@ func (t *Template) initRegoAndInput(BL *BL) error {
 	}
 	t.rego.input["labels"] = labels
 	t.rego.input["steps"] = inputSteps
+	return nil
+}
+
+func (t *Template) addIfModule(rule Rule, iStep int, jRule int, modules *map[string]*ast.Module) error {
+	if rule.If != "" {
+		var err error
+		var parsedModule *ast.Module
+		moduleName := regoModuleNameForIf(iStep, jRule)
+		module := fmt.Sprintf("package %s\n%s", moduleName, rule.If)
+		parsedModule, err = ast.ParseModule(moduleName, module)
+		if err != nil {
+			return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to load rego step components: %w", err)
+		}
+		(*modules)[moduleName] = parsedModule
+	}
+	return nil
+}
+
+func (t *Template) compileIfModule(BL *BL, compiler *ast.Compiler, rule Rule, iStep int, jRule int) error {
+	if rule.If != "" {
+		var err error
+		moduleName := regoModuleNameForIf(iStep, jRule)
+		results := fmt.Sprintf("data.%s.result", moduleName)
+		t.rego.preparedModuleQueries[moduleName], err = rego.New(
+			rego.Query(results),
+			rego.Compiler(compiler),
+		).PrepareForEval(BL.ValveCtx)
+		if err != nil {
+			return api.NewWrapError(api.ErrTemplateEvaluationFailed, err, "failed to compile rego components: %s", results)
+		}
+	}
 	return nil
 }
 

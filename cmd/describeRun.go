@@ -107,12 +107,17 @@ You can also describe a single step by adding --step <Index>.`,
 				//t.SetOutputMirror(os.Stdout)
 				//t.SetTitle( checked + " " + text.WrapText(stepRecord.Name, 120))
 				t.SetStyle(NoBordersStyle)
+				completeBy := ""
+				if run.CompleteBy != nil {
+					completeBy = time.Time(*run.CompleteBy).Format(time.RFC3339)
+				}
 				t.AppendRows([]table.Row{
 					//{ checked, stepRecord.index, stepRecord.UUID, stepRecord.Name, status, heartBeat},
 					{"Id:", run.Id},
 					{"Key:", run.Key},
 					{"Template Title:", strings.TrimSpace(text.WrapText(run.TemplateTitle, 120))},
 					{"Status:", runStatus},
+					{"Complete By:", completeBy},
 					{"Created At:", time.Time(run.CreatedAt).Format(time.RFC3339)},
 				})
 				mainT.AppendRow(table.Row{t.Render()})

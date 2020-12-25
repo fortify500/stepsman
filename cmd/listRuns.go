@@ -47,7 +47,7 @@ func listRunsInternal(runId string) {
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status", "Created At:"})
+	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status", "Created At", "Complete By"})
 	var runs []api.RunRecord
 	var runRange *api.RangeResult
 	if runId != "" {
@@ -98,8 +98,12 @@ func listRunsInternal(runId string) {
 	}
 	for _, run := range runs {
 		status := run.Status.TranslateRunStatus()
+		completeBy := ""
+		if run.CompleteBy != nil {
+			completeBy = time.Time(*run.CompleteBy).Format(time.RFC3339)
+		}
 		t.AppendRows([]table.Row{
-			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 120)), status, time.Time(run.CreatedAt).Format(time.RFC3339)},
+			{run.Id, run.Key, strings.TrimSpace(text.WrapText(run.TemplateTitle, 120)), status, time.Time(run.CreatedAt).Format(time.RFC3339), completeBy},
 		})
 	}
 	if runRange != nil && runRange.Total > 0 {

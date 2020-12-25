@@ -37,10 +37,11 @@ func (db *PostgreSQLSqlxDB) SQL() *sqlx.DB {
 }
 func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE "public"."runs" ( 
-	"id" uuid NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+    "id" uuid NOT NULL,
 	"status" Bigint NOT NULL,
 	"template_version" BIGINT NOT NULL,
-	"created_at" timestamp with time zone NOT NULL,
+	"complete_by" timestamp with time zone NULL,
 	"key" Text NOT NULL,
 	"template_title" Text NOT NULL ,
 	"tags" jsonb NOT NULL,
@@ -49,6 +50,10 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
+	}
+	_, err = tx.Exec(`CREATE INDEX "index_runs_complete_by" ON "public"."runs" USING btree( "complete_by" Asc NULLS Last )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_runs_complete_by: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE "public"."steps" (
     "created_at" timestamp with time zone NOT NULL,
@@ -101,6 +106,17 @@ func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord
 	}
 }
 
+func (db *PostgreSQLSqlxDB) CreateRunTx(tx *sqlx.Tx, runRecord interface{}, completeBy int64) {
+	completeByStr := "NULL"
+	if completeBy > 0 {
+		completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", completeBy)
+	}
+	query := fmt.Sprintf("INSERT INTO runs(id, key, template_version, template_title, status, created_at, complete_by, tags, template) values(:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,%s,:tags,:template)", completeByStr)
+	if _, err := tx.NamedExec(query, runRecord); err != nil {
+		panic(err)
+	}
+}
+
 func (db *PostgreSQLSqlxDB) completeByUpdateStatement(completeBy *int64) string {
 	return fmt.Sprintf(",complete_by=CURRENT_TIMESTAMP + INTERVAL '%d seconds'", *completeBy)
 }
@@ -113,18 +129,18 @@ func (db *PostgreSQLSqlxDB) Notify(tx *sqlx.Tx, channel string, message string) 
 }
 func (db *PostgreSQLSqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string {
 	var result []string
-	skipLock := "FOR UPDATE SKIP LOCKED"
+	skipLock := "SKIP LOCKED"
 	if disableSkipLocks {
 		skipLock = ""
 	}
-	query := fmt.Sprintf(`with R as (select run_id, "index" from steps
+	query := fmt.Sprintf(`with R as (select created_at, run_id, "index" from steps
 		where  complete_by<(NOW() - interval '10 second')
-		%s LIMIT $1)
+		FOR UPDATE %s LIMIT $1)
 
 		update steps
 		set status=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
 		FROM R
-		where steps.run_id = R.run_id and steps.index = R.index
+		where steps.created_at = R.created_at and steps.run_id = R.run_id and steps.index = R.index
 		RETURNING steps.UUID`, skipLock, DAO.CompleteByPendingInterval)
 	rows, err := tx.Queryx(query, limit, api.StepPending)
 	if err != nil {
@@ -135,9 +151,40 @@ func (db *PostgreSQLSqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disab
 		var stepUUID string
 		err = rows.Scan(&stepUUID)
 		if err != nil {
-			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
+			panic(fmt.Errorf("failed to parse database steps row - RecoverSteps: %w", err))
 		}
 		result = append(result, stepUUID)
+	}
+	return result
+}
+
+func (db *PostgreSQLSqlxDB) GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string {
+	var result []string
+	skipLock := "SKIP LOCKED"
+	if disableSkipLocks {
+		skipLock = ""
+	}
+	query := fmt.Sprintf(`with R as (select created_at, id from runs
+		where  complete_by<(NOW() - interval '10 second')
+		FOR UPDATE %s LIMIT $1)
+
+		update runs
+		set complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
+		FROM R
+		where runs.created_at = R.created_at and runs.id = R.id
+		RETURNING runs.id`, skipLock, DAO.CompleteByPendingInterval)
+	rows, err := tx.Queryx(query, limit)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var runId string
+		err = rows.Scan(&runId)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database runs row - GetAndUpdateExpiredRuns: %w", err))
+		}
+		result = append(result, runId)
 	}
 	return result
 }

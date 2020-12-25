@@ -188,38 +188,6 @@ func (h CreateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 		if err != nil {
 			return resolveError(err)
 		}
-		//} else if isYaml {
-		//	return &jsonrpc.Error{
-		//		Code:    jsonrpc.ErrorCodeInvalidParams,
-		//		Message: "specified template-type is yaml but template type is not string",
-		//	}
-		//} else {
-		//	var md mapstructure.Metadata
-		//	decoder, err := mapstructure.NewDecoder(
-		//		&mapstructure.DecoderConfig{
-		//			Metadata: &md,
-		//			Result:   &template,
-		//		})
-		//	if err != nil {
-		//		return &jsonrpc.Error{
-		//			Code:    jsonrpc.ErrorCodeInternal,
-		//			Message: err.Error(),
-		//		}
-		//	}
-		//	err = decoder.Decode(p.Template)
-		//	if err != nil {
-		//		return &jsonrpc.Error{
-		//			Code:    jsonrpc.ErrorCodeInvalidParams,
-		//			Message: err.Error(),
-		//		}
-		//	}
-		//	if len(md.Unused) > 0 {
-		//		return &jsonrpc.Error{
-		//			Code:    jsonrpc.ErrorCodeInvalidParams,
-		//			Message: fmt.Sprintf("unsupported attributes provided in do options: %s", strings.Join(md.Unused, ",")),
-		//		}
-		//	}
-		//}
 		run, err := template.CreateRun(BL, key)
 		if err != nil {
 			return resolveError(err)

@@ -143,7 +143,6 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 			if err != nil {
 				panic(err)
 			}
-
 			runRecord = &api.RunRecord{
 				Id:              uuid4.String(),
 				Key:             key,
@@ -155,7 +154,7 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 				Template:        string(jsonBytes),
 			}
 		}
-		dao.CreateRunTx(tx, runRecord)
+		BL.DAO.DB.CreateRunTx(tx, runRecord, t.Expiration.CompleteBy)
 
 		for i, step := range t.Steps {
 			var uuid4 uuid.UUID

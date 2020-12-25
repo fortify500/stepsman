@@ -60,9 +60,11 @@ type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation(tx *sqlx.Tx) error
 	CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord)
+	CreateRunTx(tx *sqlx.Tx, runRecord interface{}, completeBy int64)
 	Migrate0(tx *sqlx.Tx) error
 	completeByUpdateStatement(completeBy *int64) string
 	RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string
+	GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
 

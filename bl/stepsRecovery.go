@@ -34,7 +34,7 @@ type RecoveryMessage struct {
 	ReachedLimit bool
 }
 
-func (b *BL) recoveryScheduler() {
+func (b *BL) recoveryAndExpirationScheduler() {
 	var shortInterval = true
 	timer := time.NewTimer(1 * time.Second)
 	defer timer.Stop()
@@ -65,6 +65,7 @@ func (b *BL) recoveryScheduler() {
 			}
 		case <-timer.C:
 			var stepsUUIDs []string
+			var runsIds []string
 			if b.IsPostgreSQL() && len(b.memoryQueue) >= b.recoveryAllowUnderJobQueueNumberOfItems {
 				shortInterval = true
 				continue
@@ -86,12 +87,13 @@ func (b *BL) recoveryScheduler() {
 			}
 			tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
 				stepsUUIDs = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
+				runsIds = b.DAO.DB.GetAndUpdateExpiredRuns(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
 				return nil
 			})
 			if tErr != nil {
 				log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 			}
-			if tErr != nil || (b.IsPostgreSQL() && len(stepsUUIDs) >= b.recoveryMaxRecoverItemsPassLimit) {
+			if tErr != nil || (b.IsPostgreSQL() && (len(stepsUUIDs)+len(runsIds)) >= b.recoveryMaxRecoverItemsPassLimit) {
 				tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
 					if b.IsPostgreSQL() {
 						shortInterval = true
@@ -111,9 +113,21 @@ func (b *BL) recoveryScheduler() {
 				}
 			}
 			for _, item := range stepsUUIDs {
-				work := doWork(item)
+				work := doWork{
+					item:     item,
+					itemType: StepWorkType,
+				}
 				if err := b.Enqueue(&work); err != nil {
 					log.Error(fmt.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr))
+				}
+			}
+			for _, item := range runsIds {
+				work := doWork{
+					item:     item,
+					itemType: RunWorkType,
+				}
+				if err := b.Enqueue(&work); err != nil {
+					log.Error(fmt.Errorf("in runs expiration, failed to enqueue item:%s, with err %w", item, tErr))
 				}
 			}
 		}

@@ -196,6 +196,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 	var updatedStepRecord api.StepRecord
 	var softError error
 	var tErr error
+	var run *api.RunRecord
 	toEnqueue := false
 	checkRetries := false
 	var cookie onCookie
@@ -346,7 +347,6 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				softError = api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status")
 				return nil
 			}
-			var run *api.RunRecord
 			run, err = GetRunByIdTx(tx, runId)
 			if err != nil {
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
@@ -365,7 +365,6 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				//otherwise let it finish setting the status.
 				toEnqueue = false
 			}
-
 			updatedStepRecord = partialStepRecord
 			var retriesLeft *int
 			var retriesLeftVar int
@@ -413,7 +412,10 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 	if tErr == nil && softError != nil {
 		tErr = softError
 	} else if tErr == nil && toEnqueue {
-		work := doWork(updatedStepRecord.UUID)
+		work := doWork{
+			item:     updatedStepRecord.UUID,
+			itemType: StepWorkType,
+		}
 		tErr = BL.Enqueue(&work)
 	}
 	if tErr == nil {
@@ -423,6 +425,13 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			//there is nothing we can do that haven't been tried, it will be recovered later.
 			_ = api.ResolveErrorAndLog(onErr, true)
 		}
+	}
+	if run != nil && run.CompleteBy != nil && time.Time(run.CreatedAt).
+		Add(time.Duration(t.Expiration.CompleteBy)*time.Second).
+		Before(time.Time(run.Now)) {
+		recoverable(func() error {
+			return BL.doRun(run.Id)
+		})
 	}
 	return &updatedStepRecord, tErr
 }
@@ -451,161 +460,10 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 		}
 		var decisionsInput = make(api.Input)
 		if len(event.Rules) > 0 {
-		BREAKOUT1:
-			for _, decision := range event.Decisions {
-				var resolvedInput api.Input
-				decisionModule := regoModuleNameForDecision(decision.Label)
-				resolvedInput, err = t.ResolveInput(BL, &step, decision.Input, currentContext, uncommitted)
-				if err != nil {
-					err = fmt.Errorf("failed to resolve input for decision %s: %w", decision.Label, err)
-					break BREAKOUT1
-				}
-				ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
-				var eval rego.ResultSet
-				eval, err = t.rego.preparedModuleQueries[decisionModule].Eval(ctx, rego.EvalInput(resolvedInput))
-				if err != nil {
-					err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, resolvedInput, "failed to evaluate decision %s: %w", decisionModule, err)
-					cancel()
-					break BREAKOUT1
-				}
-				cancel()
-				log.Tracef("decision evaluation - %s: %v\n", decisionModule, eval)
-				if len(eval) > 0 &&
-					len(eval[0].Expressions) > 0 &&
-					eval[0].Expressions[0].Value != nil {
-					value := eval[0].Expressions[0].Value
-					switch value.(type) {
-					case map[string]interface{}:
-						var ok bool
-						var result interface{}
-						var errors interface{}
-						results := value.(map[string]interface{})
-						errors, ok = results["errors"]
-						if ok {
-							var errorsStr []byte
-							errorsStr, err = json.Marshal(errors)
-							if err != nil {
-								err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, resolvedInput, "failed to evaluate decision %s: %w", decisionModule, err)
-								break BREAKOUT1
-							}
-							if len(string(errorsStr)) > 0 && string(errorsStr) != "[]" && string(errorsStr) != "{}" {
-								err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision %s, due to errors: %s", decisionModule, errorsStr)
-								break BREAKOUT1
-							}
-						}
-						result, ok = results["result"]
-						if !ok {
-							err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision %s, no result given", decisionModule)
-							break BREAKOUT1
-						}
-						decisionsInput[decision.Label] = result
-					default:
-						panic(fmt.Sprintf("expected results are in a fixed map when evaluating decisions"))
-					}
-				} else {
-					err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision: %s", decisionModule)
-					break BREAKOUT1
-				}
-			}
+			decisionsInput, err = t.evaluateDecisions(BL, event.Decisions, step, currentContext, uncommitted, decisionsInput)
 		}
 		if err == nil {
-		BREAKOUT2:
-			for r, rule := range event.Rules {
-				if rule.Then == nil {
-					continue
-				}
-				var input map[string]interface{}
-				if rule.If != "" {
-					ifModule := regoModuleNameForIf(zeroIndex, r)
-					var eval rego.ResultSet
-					input = t.fillInput(currentContext, &step, decisionsInput, uncommitted)
-					ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
-					eval, err = t.rego.preparedModuleQueries[ifModule].Eval(ctx, rego.EvalInput(input))
-					if err != nil {
-						cancel()
-						err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, input, "failed to evaluate rule %s: %w", rule.If, err)
-						break BREAKOUT2
-					}
-					cancel()
-					if len(eval) > 0 &&
-						len(eval[0].Expressions) > 0 &&
-						eval[0].Expressions[0].Value != nil {
-						switch eval[0].Expressions[0].Value.(type) {
-						case bool:
-							if !eval[0].Expressions[0].Value.(bool) {
-								continue
-							}
-						default:
-							err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, input, "failed to evaluate rule %s, result must be a boolean, given: %v", rule.If, eval[0].Expressions[0].Value)
-							break BREAKOUT2
-						}
-					} else {
-						err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, input, "failed to evaluate rule %s, no result given", rule.If)
-						break BREAKOUT2
-					}
-				}
-				if rule.Then.Error != nil {
-					if rule.Then.Error.Propagate != nil {
-						errPropagation = *rule.Then.Error.Propagate
-					}
-					var resolvedMessage string
-					var resolvedData string
-					resolvedMessage, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Message, currentContext, decisionsInput, uncommitted)
-					if err != nil {
-						err = fmt.Errorf("failed to evaluate rule->then->error->message %s->%s: %w", rule.If, rule.Then.Error.Message, err)
-						break BREAKOUT2
-					}
-					if rule.Then.Error.Data != "" {
-						resolvedData, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Data, currentContext, decisionsInput, uncommitted)
-						if err != nil {
-							err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
-							break BREAKOUT2
-						}
-						var data interface{}
-						err = json.Unmarshal([]byte(resolvedData), &data)
-						if err != nil {
-							err = api.NewWrapError(api.ErrCustomTemplateErrorThrown, err, "failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
-							break BREAKOUT2
-						}
-						err = api.NewErrorWithData(api.ErrCustomTemplateErrorThrown, data, resolvedMessage)
-					} else {
-						err = api.NewError(api.ErrCustomTemplateErrorThrown, resolvedMessage)
-					}
-					break BREAKOUT2
-				}
-				if rule.Then.SetRunStatus != nil {
-					switch *rule.Then.SetRunStatus {
-					case api.RunDone:
-						s := api.RunDone
-						cookie.newRunStatus = &s
-					default:
-						panic(fmt.Errorf("unsupported type: %s", rule.Then.SetRunStatus.TranslateRunStatus()))
-					}
-				}
-				if len(rule.Then.Do) > 0 {
-					for _, thenDo := range rule.Then.Do {
-						index, ok := t.labelsToIndices[thenDo.Label]
-						if !ok {
-							panic(fmt.Errorf("label should have an index"))
-						}
-						cookie.resolvedContexts = append(cookie.resolvedContexts, onCookieContext{
-							index:           index,
-							context:         thenDo.Context,
-							label:           thenDo.Label,
-							resolvedContext: nil,
-						})
-					}
-					if len(cookie.resolvedContexts) > 0 {
-						for i := range cookie.resolvedContexts {
-							cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, &step, cookie.resolvedContexts[i].context, currentContext, decisionsInput, uncommitted)
-							if err != nil {
-								break BREAKOUT2
-							}
-						}
-					}
-					break BREAKOUT2
-				}
-			}
+			err, errPropagation, cookie = t.evaluateRules(BL, event.Rules, zeroIndex, currentContext, step, decisionsInput, uncommitted, errPropagation, cookie)
 		}
 	case OnPhaseInTransaction:
 		if cookie.safetyDepth > BL.PendingRecursionDepthLimit { //minimum is 0 for no recursion.
@@ -652,7 +510,10 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 	case OnPhasePostTransaction:
 		if len(cookie.uuidsToEnqueue) > 0 {
 			for _, item := range cookie.uuidsToEnqueue {
-				work := doWork(item.UUID)
+				work := doWork{
+					item:     item.UUID,
+					itemType: StepWorkType,
+				}
 				if eErr := BL.Enqueue(&work); eErr != nil {
 					log.Error(eErr)
 				}
@@ -670,6 +531,169 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 		}
 	}
 	return cookie, newStatus, errPropagation, err
+}
+
+func (t *Template) evaluateDecisions(BL *BL, decisions []RulesDecision, step Step, currentContext api.Context, uncommitted *uncommittedResult, decisionsInput api.Input) (api.Input, error) {
+	var err error
+BREAKOUT1:
+	for _, decision := range decisions {
+		var resolvedInput api.Input
+		decisionModule := regoModuleNameForDecision(decision.Label)
+		resolvedInput, err = t.ResolveInput(BL, &step, decision.Input, currentContext, uncommitted)
+		if err != nil {
+			err = fmt.Errorf("failed to resolve input for decision %s: %w", decision.Label, err)
+			break BREAKOUT1
+		}
+		ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
+		var eval rego.ResultSet
+		eval, err = t.rego.preparedModuleQueries[decisionModule].Eval(ctx, rego.EvalInput(resolvedInput))
+		if err != nil {
+			err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, resolvedInput, "failed to evaluate decision %s: %w", decisionModule, err)
+			cancel()
+			break BREAKOUT1
+		}
+		cancel()
+		log.Tracef("decision evaluation - %s: %v\n", decisionModule, eval)
+		if len(eval) > 0 &&
+			len(eval[0].Expressions) > 0 &&
+			eval[0].Expressions[0].Value != nil {
+			value := eval[0].Expressions[0].Value
+			switch value.(type) {
+			case map[string]interface{}:
+				var ok bool
+				var result interface{}
+				var errors interface{}
+				results := value.(map[string]interface{})
+				errors, ok = results["errors"]
+				if ok {
+					var errorsStr []byte
+					errorsStr, err = json.Marshal(errors)
+					if err != nil {
+						err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, resolvedInput, "failed to evaluate decision %s: %w", decisionModule, err)
+						break BREAKOUT1
+					}
+					if len(string(errorsStr)) > 0 && string(errorsStr) != "[]" && string(errorsStr) != "{}" {
+						err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision %s, due to errors: %s", decisionModule, errorsStr)
+						break BREAKOUT1
+					}
+				}
+				result, ok = results["result"]
+				if !ok {
+					err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision %s, no result given", decisionModule)
+					break BREAKOUT1
+				}
+				decisionsInput[decision.Label] = result
+			default:
+				panic(fmt.Sprintf("expected results are in a fixed map when evaluating decisions"))
+			}
+		} else {
+			err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, resolvedInput, "failed to evaluate decision: %s", decisionModule)
+			break BREAKOUT1
+		}
+	}
+	return decisionsInput, err
+}
+
+func (t *Template) evaluateRules(BL *BL, rules []Rule, stepIndex int, currentContext api.Context, step Step, decisionsInput api.Input, uncommitted *uncommittedResult, errPropagation bool, cookie onCookie) (error, bool, onCookie) {
+	var err error
+BREAKOUT2:
+	for r, rule := range rules {
+		if rule.Then == nil {
+			continue
+		}
+		var input map[string]interface{}
+		if rule.If != "" {
+			ifModule := regoModuleNameForIf(stepIndex, r)
+			var eval rego.ResultSet
+			input = t.fillInput(currentContext, &step, decisionsInput, uncommitted)
+			ctx, cancel := context.WithTimeout(BL.ValveCtx, time.Duration(BL.maxRegoEvaluationTimeoutSeconds)*time.Second)
+			eval, err = t.rego.preparedModuleQueries[ifModule].Eval(ctx, rego.EvalInput(input))
+			if err != nil {
+				cancel()
+				err = api.NewWrapErrorWithInput(api.ErrTemplateEvaluationFailed, err, input, "failed to evaluate rule %s: %w", rule.If, err)
+				break BREAKOUT2
+			}
+			cancel()
+			if len(eval) > 0 &&
+				len(eval[0].Expressions) > 0 &&
+				eval[0].Expressions[0].Value != nil {
+				switch eval[0].Expressions[0].Value.(type) {
+				case bool:
+					if !eval[0].Expressions[0].Value.(bool) {
+						continue
+					}
+				default:
+					err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, input, "failed to evaluate rule %s, result must be a boolean, given: %v", rule.If, eval[0].Expressions[0].Value)
+					break BREAKOUT2
+				}
+			} else {
+				err = api.NewErrorWithInput(api.ErrTemplateEvaluationFailed, input, "failed to evaluate rule %s, no result given", rule.If)
+				break BREAKOUT2
+			}
+		}
+		if rule.Then.Error != nil {
+			if rule.Then.Error.Propagate != nil {
+				errPropagation = *rule.Then.Error.Propagate
+			}
+			var resolvedMessage string
+			var resolvedData string
+			resolvedMessage, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Message, currentContext, decisionsInput, uncommitted)
+			if err != nil {
+				err = fmt.Errorf("failed to evaluate rule->then->error->message %s->%s: %w", rule.If, rule.Then.Error.Message, err)
+				break BREAKOUT2
+			}
+			if rule.Then.Error.Data != "" {
+				resolvedData, err = t.EvaluateCurlyPercent(BL, &step, rule.Then.Error.Data, currentContext, decisionsInput, uncommitted)
+				if err != nil {
+					err = fmt.Errorf("failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
+					break BREAKOUT2
+				}
+				var data interface{}
+				err = json.Unmarshal([]byte(resolvedData), &data)
+				if err != nil {
+					err = api.NewWrapError(api.ErrCustomTemplateErrorThrown, err, "failed to evaluate rule->then->error->data %s->%s: %w", rule.If, rule.Then.Error.Data, err)
+					break BREAKOUT2
+				}
+				err = api.NewErrorWithData(api.ErrCustomTemplateErrorThrown, data, resolvedMessage)
+			} else {
+				err = api.NewError(api.ErrCustomTemplateErrorThrown, resolvedMessage)
+			}
+			break BREAKOUT2
+		}
+		if rule.Then.SetRunStatus != nil {
+			switch *rule.Then.SetRunStatus {
+			case api.RunDone:
+				s := api.RunDone
+				cookie.newRunStatus = &s
+			default:
+				panic(fmt.Errorf("unsupported type: %s", rule.Then.SetRunStatus.TranslateRunStatus()))
+			}
+		}
+		if len(rule.Then.Do) > 0 {
+			for _, thenDo := range rule.Then.Do {
+				index, ok := t.labelsToIndices[thenDo.Label]
+				if !ok {
+					panic(fmt.Errorf("label should have an index"))
+				}
+				cookie.resolvedContexts = append(cookie.resolvedContexts, onCookieContext{
+					index:           index,
+					context:         thenDo.Context,
+					label:           thenDo.Label,
+					resolvedContext: nil,
+				})
+			}
+			if len(cookie.resolvedContexts) > 0 {
+				for i := range cookie.resolvedContexts {
+					cookie.resolvedContexts[i].resolvedContext, err = t.ResolveContext(BL, &step, cookie.resolvedContexts[i].context, currentContext, decisionsInput, uncommitted)
+					if err != nil {
+						break BREAKOUT2
+					}
+				}
+			}
+			break BREAKOUT2
+		}
+	}
+	return err, errPropagation, cookie
 }
 
 func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *api.State) (bool, *api.Error) {
@@ -739,7 +763,47 @@ func (b *BL) DoStepByLabel(params *api.DoStepByLabelParams, synchronous bool) (a
 		return result, err
 	}
 }
-
+func (b *BL) doRun(runId string) error {
+	run, err := b.GetRun(runId)
+	if err != nil {
+		return fmt.Errorf("failed to do run - failed to get run: %w", err)
+	}
+	if run.CompleteBy == nil {
+		return nil
+	}
+	template := Template{}
+	err = template.LoadFromBytes(b, run.Id, false, []byte(run.Template))
+	if err != nil {
+		return fmt.Errorf("failed to do run - failed to load template: %w", err)
+	}
+	template.RefreshInput(b, run.Id)
+	if time.Time(run.CreatedAt).
+		Add(time.Duration(template.Expiration.CompleteBy) * time.Second).
+		Before(time.Time(run.Now)) {
+		var cookie onCookie
+		recoverable(func() error {
+			var decisionsInput = make(api.Input)
+			decisionsInput, err = template.evaluateDecisions(b, template.Expiration.Decisions, Step{}, api.Context{}, nil, decisionsInput)
+			if err == nil {
+				err, _, cookie = template.evaluateRules(b, template.Expiration.Rules, ExpirationStepIndex, api.Context{}, Step{}, decisionsInput, nil, true, cookie)
+			}
+			return err
+		})
+		tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
+			dao.ResetRunCompleteByTx(tx, runId)
+			cookie, _, _, err = template.on(tx, b, OnPhaseInTransaction, cookie, runId, "", api.StepPending, api.Context{}, nil, nil)
+			return err
+		})
+		if tErr != nil {
+			return fmt.Errorf("failed to do run - failed to finish expiration: %w", err)
+		}
+		recoverable(func() error {
+			_, _, _, err = template.on(nil, b, OnPhasePostTransaction, cookie, runId, "", api.StepPending, api.Context{}, nil, nil)
+			return err
+		})
+	}
+	return nil
+}
 func (b *BL) doStep(byLabelParams *api.DoStepByLabelParams, byUUIDParams *api.DoStepByUUIDParams, synchronous bool) (api.DoStepByUUIDResult, api.DoStepByLabelResult, error) {
 	var run api.RunRecord
 	var stepUUID string

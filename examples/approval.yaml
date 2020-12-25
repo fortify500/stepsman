@@ -1,12 +1,27 @@
 title: "HR approvals"
 # optional, but recommended, if in the future we will have breaking changes this allows to migrate on the fly.
 version: 1
+tags:
+  - 31be0615-2659-452a-bce3-5d23fec89dfc
+  - 992dca17-7452-492e-a5bd-fa06a7df9fe6
 parameters:
   base-url: http://localhost:3335
   auth-header: >-
     dXNlcjpwYXNzd29yZA==
   tenant: 1
   namespace: HR
+expiration:
+  complete-by: 3600
+  decisions:
+    - label: decision_resolution
+      input: >
+        {"statuses": ["{% input.labels["path_1_step_1"]["result"]["status"] %}"]}
+  rules:
+    - then:
+        do:
+          - label: report_run_result
+            context: >-
+              { "result": "expired", "decision_resolution": "{% input.decisions["decision_resolution"] %}" }
 steps:
   - name: "send emails to step path_1_step_1"
     description: >
@@ -34,13 +49,17 @@ steps:
     label: path_1_step_1
     description: >
       this will be called as an event. I.e. we are awaiting for an external call (rest,command line etc...).
+    tags:
+      - b2e7ffb8-4d38-4d34-be80-126c532836b0
+      - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+      - d10ae63f-b85f-4ea0-9e31-8937c3af3452
     parameters:
       allowed-approval:
         - b2e7ffb8-4d38-4d34-be80-126c532836b0
         - d10ae63f-b85f-4ea0-9e31-8937c3af3450
       allowed-skip:
         - b2e7ffb8-4d38-4d34-be80-126c532836b0
-        - d10ae63f-b85f-4ea0-9e31-8937c3af3450
+        - d10ae63f-b85f-4ea0-9e31-8937c3af3452
     do:
       type: EVALUATE
       options:

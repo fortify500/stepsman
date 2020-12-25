@@ -33,17 +33,17 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 	sqlNoRange := ""
 	params := make([]interface{}, 0)
 	if query == nil {
-		sqlNoRange = "SELECT * FROM runs ORDER BY id DESC"
+		sqlNoRange = "SELECT *,CURRENT_TIMESTAMP as now FROM runs ORDER BY id DESC"
 		sqlQuery = sqlNoRange + " LIMIT 20"
 	} else {
-		sqlQuery = "SELECT * FROM runs"
+		sqlQuery = "SELECT *,CURRENT_TIMESTAMP as now FROM runs"
 		if query.ReturnAttributes != nil && len(query.ReturnAttributes) > 0 {
 			var attributesStr string
 			attributesStr, err = buildRunsReturnAttributesStrAndVet(false, query.ReturnAttributes)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to list runs: %w", err)
 			}
-			sqlQuery = fmt.Sprintf("SELECT %s FROM runs", attributesStr)
+			sqlQuery = fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM runs", attributesStr)
 		}
 
 		{
@@ -334,11 +334,6 @@ func buildRunsReturnAttributesStrAndVet(addPrefix bool, attributes []string) (st
 	return sb.String(), nil
 }
 
-func CreateRunTx(tx *sqlx.Tx, runRecord interface{}) {
-	if _, err := tx.NamedExec("INSERT INTO runs(id, key, template_version, template_title, status, created_at, tags, template) values(:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,:tags,:template)", runRecord); err != nil {
-		panic(err)
-	}
-}
 func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runReturnAttributes []string) (api.RunRecord, string, api.Context, error) {
 	var result []api.RunRecord
 	var rows *sqlx.Rows
@@ -347,7 +342,7 @@ func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runRetu
 	if err != nil {
 		return api.RunRecord{}, "", nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s, steps.uuid as step_uuid, steps.context FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where runs.id=$1 AND steps.label = $2", attributesStr)
+	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now, steps.uuid as step_uuid, steps.context FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where runs.id=$1 AND steps.label = $2", attributesStr)
 	rows, err = tx.Queryx(query, runId, label)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
@@ -380,7 +375,7 @@ func GetRunLabelAndContextByStepUUIDTx(tx *sqlx.Tx, stepUUID string, runReturnAt
 	if err != nil {
 		return api.RunRecord{}, nil, "", fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s, steps.context, steps.label FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where steps.uuid=$1", attributesStr)
+	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now, steps.context, steps.label FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where steps.uuid=$1", attributesStr)
 	rows, err = tx.Queryx(query, stepUUID)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
@@ -414,7 +409,7 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	queryStr := fmt.Sprintf("SELECT %s FROM runs where id IN (?)", attributesStr)
+	queryStr := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM runs where id IN (?)", attributesStr)
 	var query string
 	var args []interface{}
 	query, args, err = sqlx.In(queryStr, getQuery.Ids)
@@ -494,5 +489,11 @@ func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType, prev
 		if _, err := tx.Exec("update runs set status=$1 where id=$2", newStatus, id); err != nil {
 			panic(err)
 		}
+	}
+}
+
+func ResetRunCompleteByTx(tx *sqlx.Tx, id string) {
+	if _, err := tx.Exec("update runs set complete_by=NULL where id=$1", id); err != nil {
+		panic(err)
 	}
 }

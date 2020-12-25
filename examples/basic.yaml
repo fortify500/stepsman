@@ -71,7 +71,7 @@ steps:
         max-response-body-bytes: 524288
         method: GET
         url: http://localhost:3335/sync/3
-  - name: "send emails we are starting"
+  - name: "async example"
     description: >
       Send email by given step. Example for an async rest call
     tags:

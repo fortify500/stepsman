@@ -46,7 +46,31 @@ func (db *Sqlite3SqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []st
 	}
 	_, err = tx.Exec(fmt.Sprintf(`update steps
 		set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')
-		where (run_id,"index") in (select run_id, "index" from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval), api.StepPending)
+		where (created_at,run_id,"index") in (select created_at, run_id, "index" from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval), api.StepPending)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (db *Sqlite3SqlxDB) GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []string {
+	result := make([]string, 0)
+	rows, err := tx.Queryx(`select id from runs where complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds')`)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var step api.StepRecord
+		err = rows.StructScan(&step)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
+		}
+		result = append(result, step.UUID)
+	}
+	_, err = tx.Exec(fmt.Sprintf(`update runs
+		set complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')
+		where (created_at,id) in (select created_at, id from runs where complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval))
 	if err != nil {
 		panic(err)
 	}
@@ -72,6 +96,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	                                 status INTEGER NOT NULL,
                                      key TEXT NOT NULL,
                                      tags TEXT NOT NULL,
+                                     complete_by TIMESTAMP NULL,
 	                                 template_title TEXT,
 	                                 template TEXT,
 	                                 PRIMARY KEY (created_at, id)
@@ -83,6 +108,10 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err = tx.Exec(`CREATE INDEX idx_runs_status ON runs (status)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_status: %w", err)
+	}
+	_, err = tx.Exec(`CREATE INDEX idx_runs_complete_by ON runs (complete_by)`)
+	if err != nil {
+		return fmt.Errorf("failed to create index idx_runs_complete_by: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE steps (
     								 created_at TIMESTAMP NOT NULL,
@@ -103,6 +132,10 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
                                      )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
+	}
+	_, err = tx.Exec(`CREATE INDEX idx_steps_complete_by ON steps (complete_by)`)
+	if err != nil {
+		return fmt.Errorf("failed to create index idx_steps_complete_by: %w", err)
 	}
 	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_uuid ON steps (uuid)`)
 	if err != nil {
@@ -127,4 +160,15 @@ func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
 
 func (db *Sqlite3SqlxDB) completeByUpdateStatement(completeBy *int64) string {
 	return fmt.Sprintf(",complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')", *completeBy)
+}
+
+func (db *Sqlite3SqlxDB) CreateRunTx(tx *sqlx.Tx, runRecord interface{}, completeBy int64) {
+	completeByStr := "NULL"
+	if completeBy > 0 {
+		completeByStr = fmt.Sprintf("DATETIME(CURRENT_TIMESTAMP, '+%d seconds')", completeBy)
+	}
+	query := fmt.Sprintf("INSERT INTO runs(id, key, template_version, template_title, status, created_at, complete_by, tags, template) values(:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,%s,:tags,:template)", completeByStr)
+	if _, err := tx.NamedExec(query, runRecord); err != nil {
+		panic(err)
+	}
 }

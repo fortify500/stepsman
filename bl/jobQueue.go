@@ -27,7 +27,17 @@ import (
 	"time"
 )
 
-type doWork string
+type WorkType bool
+
+const (
+	RunWorkType  WorkType = true
+	StepWorkType WorkType = false
+)
+
+type doWork struct {
+	item     string
+	itemType WorkType
+}
 type workCounter int32
 
 func (c *workCounter) inc() int32 {
@@ -88,9 +98,15 @@ func (b *BL) processMsg(msg *doWork) {
 		log.Tracef("processing msg: %#v", msg)
 	}
 	recoverable(func() error {
-		_, _, err := b.doStep(nil, &api.DoStepByUUIDParams{
-			UUID: string(*msg),
-		}, true)
+		var err error
+		switch msg.itemType {
+		case StepWorkType:
+			_, _, err = b.doStep(nil, &api.DoStepByUUIDParams{
+				UUID: msg.item,
+			}, true)
+		case RunWorkType:
+			err = b.doRun(msg.item)
+		}
 		return err
 	})
 }
@@ -113,7 +129,7 @@ func (b *BL) startWorkLoop() {
 	if b.IsPostgreSQL() {
 		go b.startRecoveryListening()
 	}
-	go b.recoveryScheduler()
+	go b.recoveryAndExpirationScheduler()
 	go func() {
 		defer close(b.queue)
 		startExit := false
