@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -43,6 +44,7 @@ Use run <run id>.`,
 			StatusOwner: Parameters.StatusOwner,
 			Force:       Parameters.Force,
 			Changes:     changes,
+			Options:     api.Options{GroupId: Parameters.GroupId},
 		}
 
 		if Parameters.Status != "" {
@@ -67,7 +69,8 @@ Use run <run id>.`,
 			return
 		}
 		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
-			UUIDs: []string{stepUUID},
+			UUIDs:   []uuid.UUID{stepUUID},
+			Options: api.Options{GroupId: Parameters.GroupId},
 		})
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to update step: %w", err)

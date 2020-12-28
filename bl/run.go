@@ -62,18 +62,19 @@ func (b *BL) deleteRunInternal(query *api.DeleteQuery) error {
 
 }
 
-func (b *BL) GetRun(id string) (*api.RunRecord, error) {
+func (b *BL) GetRun(options api.Options, id uuid.UUID) (*api.RunRecord, error) {
 	if dao.IsRemote {
 		runs, err := b.Client.RemoteGetRuns(&api.GetRunsQuery{
-			Ids:              []string{id},
+			Ids:              []uuid.UUID{id},
 			ReturnAttributes: nil,
+			Options:          options,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get run: %w", err)
 		}
 		return &runs[0], nil
 	} else {
-		return b.getRunById(id)
+		return b.getRunById(options, id)
 	}
 }
 
@@ -97,29 +98,30 @@ func (b *BL) getRuns(query *api.GetRunsQuery) ([]api.RunRecord, error) {
 	})
 	return runRecords, tErr
 }
-func (b *BL) UpdateRunStatus(runId string, newStatus api.RunStatusType) error {
+func (b *BL) UpdateRunStatus(options api.Options, runId uuid.UUID, newStatus api.RunStatusType) error {
 	if dao.IsRemote {
 		return b.Client.RemoteUpdateRun(&api.UpdateQueryById{
 			Id: runId,
 			Changes: map[string]interface{}{
 				"status": newStatus.TranslateRunStatus(),
 			},
+			Options: options,
 		})
 	} else {
-		return b.updateRunStatusLocal(runId, newStatus)
+		return b.updateRunStatusLocal(options, runId, newStatus)
 	}
 }
-func (b *BL) updateRunStatusLocal(runId string, newStatus api.RunStatusType) error {
+func (b *BL) updateRunStatusLocal(options api.Options, runId uuid.UUID, newStatus api.RunStatusType) error {
 	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		var err error
-		runRecord, err := GetRunByIdTx(tx, runId)
+		runRecord, err := GetRunByIdTx(tx, options, runId)
 		if err != nil {
 			return fmt.Errorf("failed to update database run status: %w", err)
 		}
 		if newStatus == runRecord.Status {
 			return api.NewError(api.ErrStatusNotChanged, "update run status have not changed")
 		}
-		dao.UpdateRunStatusTx(tx, runRecord.Id, newStatus, nil)
+		dao.UpdateRunStatusTx(tx, options, runRecord.Id, newStatus, nil)
 		return nil
 	})
 	return tErr
@@ -127,7 +129,7 @@ func (b *BL) updateRunStatusLocal(runId string, newStatus api.RunStatusType) err
 
 var emptyContext = make(api.Context)
 
-func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
+func (t *Template) CreateRun(BL *BL, options api.Options, key string) (*api.RunRecord, error) {
 	title := t.Title
 	var runRecord *api.RunRecord
 	tErr := BL.DAO.Transactional(func(tx *sqlx.Tx) error {
@@ -144,7 +146,8 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 				panic(err)
 			}
 			runRecord = &api.RunRecord{
-				Id:              uuid4.String(),
+				GroupId:         options.GroupId,
+				Id:              uuid4,
 				Key:             key,
 				Tags:            t.Tags,
 				CreatedAt:       api.AnyTime{},
@@ -174,9 +177,10 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 			}
 
 			stepRecord := &api.StepRecord{
+				GroupId:     options.GroupId,
 				RunId:       runRecord.Id,
 				Index:       int64(i) + 1,
-				UUID:        uuid4.String(),
+				UUID:        uuid4,
 				Status:      api.StepIdle,
 				StatusOwner: statusOwner.String(),
 				Tags:        step.Tags,
@@ -193,12 +197,13 @@ func (t *Template) CreateRun(BL *BL, key string) (*api.RunRecord, error) {
 	return runRecord, tErr
 }
 
-func (b *BL) getRunById(id string) (*api.RunRecord, error) {
+func (b *BL) getRunById(options api.Options, id uuid.UUID) (*api.RunRecord, error) {
 	var result *api.RunRecord
 	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
-			Ids:              []string{id},
+			Ids:              []uuid.UUID{id},
 			ReturnAttributes: nil,
+			Options:          options,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to get run: %w", err)
@@ -209,10 +214,11 @@ func (b *BL) getRunById(id string) (*api.RunRecord, error) {
 	return result, tErr
 }
 
-func GetRunByIdTx(tx *sqlx.Tx, id string) (*api.RunRecord, error) {
+func GetRunByIdTx(tx *sqlx.Tx, options api.Options, id uuid.UUID) (*api.RunRecord, error) {
 	runs, err := dao.GetRunsTx(tx, &api.GetRunsQuery{
-		Ids:              []string{id},
+		Ids:              []uuid.UUID{id},
 		ReturnAttributes: nil,
+		Options:          options,
 	})
 	if err != nil {
 		return nil, err

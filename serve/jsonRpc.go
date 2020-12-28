@@ -21,10 +21,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/go-playground/validator/v10"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 	"runtime/debug"
 )
+
+var validate = validator.New()
 
 func recoverable(recoverableFunction func() *jsonrpc.Error) (err *jsonrpc.Error) {
 	defer func() {
@@ -65,12 +68,18 @@ func resolveError(err error) *jsonrpc.Error {
 
 func JSONRPCUnmarshal(params []byte, dst interface{}) *jsonrpc.Error {
 	if params == nil {
-		return jsonrpc.ErrInvalidParams()
+		return resolveError(api.NewError(api.ErrInvalidParams, "failed to unmarshal json-rpc"))
 	}
 	decoder := json.NewDecoder(bytes.NewReader(params))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
-		return jsonrpc.ErrInvalidParams()
+		return resolveError(api.NewWrapError(api.ErrInvalidParams, err, "failed to unmarshal json-rpc: %w", err))
+	}
+	if api.TestMode {
+		err := validate.Struct(dst)
+		if err != nil {
+			return resolveError(api.NewWrapError(api.ErrInvalidParams, err, "failed to unmarshal json-rpc: %w", err))
+		}
 	}
 	return nil
 }

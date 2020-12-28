@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
@@ -38,11 +39,11 @@ var listRunsCmd = &cobra.Command{
 		Parameters.CurrentCommand = CommandListRuns
 		syncListRunsParams()
 		defer recoverAndLog("failed to list runs")
-		listRunsInternal("")
+		listRunsInternal(uuid.UUID{})
 	},
 }
 
-func listRunsInternal(runId string) {
+func listRunsInternal(runId uuid.UUID) {
 	var err error
 	t := table.NewWriter()
 	t.SetStyle(NoBordersStyle)
@@ -50,14 +51,9 @@ func listRunsInternal(runId string) {
 	t.AppendHeader(table.Row{"ID", "Key", "Template Title", "Status", "Created At", "Complete By"})
 	var runs []api.RunRecord
 	var runRange *api.RangeResult
-	if runId != "" {
+	if runId != (uuid.UUID{}) {
 		var run *api.RunRecord
-		runId, err = parseRunId(runId)
-		if err != nil {
-			Parameters.Err = fmt.Errorf("failed to list runs: %w", err)
-			return
-		}
-		run, err = getRun(runId)
+		run, err = getRun(api.Options{GroupId: Parameters.GroupId}, runId)
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to list runs: %w", err)
 			return
@@ -77,6 +73,7 @@ func listRunsInternal(runId string) {
 				Order:  Parameters.SortOrder,
 			},
 			Filters: nil,
+			Options: api.Options{GroupId: Parameters.GroupId},
 		}
 		if len(Parameters.Filters) > 0 {
 			var exitErr bool

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"strings"
 )
@@ -47,8 +48,10 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 		}
 
 		{
-			filterQuery := ""
 			var i int
+			i++
+			filterQuery := fmt.Sprintf("group_id = $%d", i)
+			params = append(params, query.Options.GroupId)
 			for _, expression := range query.Filters {
 				i++
 				queryExpression := ""
@@ -334,21 +337,21 @@ func buildRunsReturnAttributesStrAndVet(addPrefix bool, attributes []string) (st
 	return sb.String(), nil
 }
 
-func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runReturnAttributes []string) (api.RunRecord, string, api.Context, error) {
+func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, label string, runReturnAttributes []string) (api.RunRecord, uuid.UUID, api.Context, error) {
 	var result []api.RunRecord
 	var rows *sqlx.Rows
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, runReturnAttributes)
 	if err != nil {
-		return api.RunRecord{}, "", nil, fmt.Errorf("failed to get run transactional: %w", err)
+		return api.RunRecord{}, uuid.UUID{}, nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now, steps.uuid as step_uuid, steps.context FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where runs.id=$1 AND steps.label = $2", attributesStr)
-	rows, err = tx.Queryx(query, runId, label)
+	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now, steps.uuid as step_uuid, steps.context FROM runs inner join steps on (runs.group_id=steps.group_id and runs.created_at=steps.created_at and runs.id=steps.run_id) where runs.group_id=$1 AND runs.id=$2 AND steps.label = $3", attributesStr)
+	rows, err = tx.Queryx(query, options.GroupId, runId, label)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
 	}
 	stepUUIDStruct := struct {
-		StepUUID string      `db:"step_uuid"`
+		StepUUID uuid.UUID   `db:"step_uuid"`
 		Context  api.Context `db:"context"`
 		api.RunRecord
 	}{}
@@ -358,25 +361,25 @@ func GetRunAndStepUUIDByLabelTx(tx *sqlx.Tx, runId string, label string, runRetu
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database runs row - get: %w", err))
 		}
-		if stepUUIDStruct.StepUUID == "" {
+		if stepUUIDStruct.StepUUID == (uuid.UUID{}) {
 			panic(fmt.Errorf("failed to parse step uuid when retrieving runs row"))
 		}
 		result = append(result, stepUUIDStruct.RunRecord)
 	}
 	if result == nil || len(result) != 1 {
-		return api.RunRecord{}, "", nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
+		return api.RunRecord{}, uuid.UUID{}, nil, api.NewError(api.ErrRecordNotFound, "failed to get run record, no record found")
 	}
 	return result[0], stepUUIDStruct.StepUUID, stepUUIDStruct.Context, nil
 }
-func GetRunLabelAndContextByStepUUIDTx(tx *sqlx.Tx, stepUUID string, runReturnAttributes []string) (api.RunRecord, api.Context, string, error) {
+func GetRunLabelAndContextByStepUUIDTx(tx *sqlx.Tx, options api.Options, stepUUID uuid.UUID, runReturnAttributes []string) (api.RunRecord, api.Context, string, error) {
 	var rows *sqlx.Rows
 	var err error
 	attributesStr, err := buildRunsReturnAttributesStrAndVet(true, runReturnAttributes)
 	if err != nil {
 		return api.RunRecord{}, nil, "", fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now, steps.context, steps.label FROM runs inner join steps on (runs.created_at=steps.created_at and runs.id=steps.run_id) where steps.uuid=$1", attributesStr)
-	rows, err = tx.Queryx(query, stepUUID)
+	query := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now, steps.context, steps.label FROM runs inner join steps on (runs.group_id=steps.group_id and runs.created_at=steps.created_at and runs.id=steps.run_id) where runs.group_id=$1 AND steps.uuid=$2", attributesStr)
+	rows, err = tx.Queryx(query, options.GroupId, stepUUID)
 	if err != nil {
 		panic(fmt.Errorf("failed to query database runs table - get: %w", err))
 	}
@@ -409,10 +412,10 @@ func GetRunsTx(tx *sqlx.Tx, getQuery *api.GetRunsQuery) ([]api.RunRecord, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run transactional: %w", err)
 	}
-	queryStr := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM runs where id IN (?)", attributesStr)
+	queryStr := fmt.Sprintf("SELECT %s,CURRENT_TIMESTAMP as now FROM runs where group_id=? AND id IN (?)", attributesStr)
 	var query string
 	var args []interface{}
-	query, args, err = sqlx.In(queryStr, getQuery.Ids)
+	query, args, err = sqlx.In(queryStr, getQuery.Options.GroupId, getQuery.Ids)
 	if err != nil {
 		panic(err)
 	}
@@ -442,7 +445,7 @@ func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
 	var args []interface{}
 
 	if !deleteRunsQuery.Force {
-		query, args, err = sqlx.In("SELECT COUNT(*) FROM RUNS WHERE status<>? AND id IN (?)", api.RunInProgress, deleteRunsQuery.Ids)
+		query, args, err = sqlx.In("SELECT COUNT(*) FROM RUNS WHERE group_id=? AND status<>? AND id IN (?)", deleteRunsQuery.Options.GroupId, api.RunInProgress, deleteRunsQuery.Ids)
 		if err != nil {
 			panic(err)
 		}
@@ -457,7 +460,7 @@ func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
 		}
 	}
 
-	query, args, err = sqlx.In("DELETE FROM steps WHERE run_id IN (?)", deleteRunsQuery.Ids)
+	query, args, err = sqlx.In("DELETE FROM steps WHERE group_id=? AND run_id IN (?)", deleteRunsQuery.Options.GroupId, deleteRunsQuery.Ids)
 	if err != nil {
 		panic(err)
 	}
@@ -467,7 +470,7 @@ func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
 		panic(fmt.Errorf("failed to delete runs from database: %w", err))
 	}
 
-	query, args, err = sqlx.In("DELETE FROM runs where id IN (?)", deleteRunsQuery.Ids)
+	query, args, err = sqlx.In("DELETE FROM runs where group_id=? and id IN (?)", deleteRunsQuery.Options.GroupId, deleteRunsQuery.Ids)
 	if err != nil {
 		panic(err)
 	}
@@ -480,19 +483,19 @@ func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
 	return nil
 }
 
-func UpdateRunStatusTx(tx *sqlx.Tx, id string, newStatus api.RunStatusType, prevStatus *api.RunStatusType) {
+func UpdateRunStatusTx(tx *sqlx.Tx, options api.Options, id uuid.UUID, newStatus api.RunStatusType, prevStatus *api.RunStatusType) {
 	if prevStatus != nil {
-		if _, err := tx.Exec("update runs set status=$1 where id=$2 and status=$3", newStatus, id, *prevStatus); err != nil {
+		if _, err := tx.Exec("update runs set status=$1 where group_id=$2 and id=$3 and status=$4", newStatus, options.GroupId, id, *prevStatus); err != nil {
 			panic(err)
 		}
 	} else {
-		if _, err := tx.Exec("update runs set status=$1 where id=$2", newStatus, id); err != nil {
+		if _, err := tx.Exec("update runs set status=$1 where group_id=$2 and id=$3", newStatus, options.GroupId, id); err != nil {
 			panic(err)
 		}
 	}
 }
 
-func ResetRunCompleteByTx(tx *sqlx.Tx, id string) {
+func ResetRunCompleteByTx(tx *sqlx.Tx, id uuid.UUID) {
 	if _, err := tx.Exec("update runs set complete_by=NULL where id=$1", id); err != nil {
 		panic(err)
 	}

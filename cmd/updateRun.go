@@ -42,12 +42,12 @@ Use run <run id>.`,
 			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
 			return
 		}
-		run, err := getRun(runId)
+		run, err := getRun(api.Options{GroupId: Parameters.GroupId}, runId)
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to update run: %w", err)
 			return
 		}
-		err = BL.UpdateRunStatus(runId, status)
+		err = BL.UpdateRunStatus(api.Options{GroupId: Parameters.GroupId}, runId, status)
 		if err != nil {
 			msg := "failed to update run status"
 			Parameters.Err = &Error{

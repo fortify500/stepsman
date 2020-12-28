@@ -59,6 +59,8 @@ const (
 
 type AllParameters struct {
 	// Flags
+	GroupId             uuid.UUID
+	GroupIdStr          string
 	CfgFile             string
 	DatabaseVendor      string
 	DataSourceName      string
@@ -94,7 +96,7 @@ type AllParameters struct {
 	InitialInput     string
 	CurrentCommand   CommandType
 	CurrentStepIndex string
-	CurrentRunId     string
+	CurrentRunId     uuid.UUID
 	CurrentRun       *api.RunRecord
 	FlagsReInit      []func() error
 	Err              error
@@ -110,7 +112,7 @@ var Parameters = AllParameters{
 	Run:            "",
 	InitialInput:   "",
 	CurrentCommand: CommandUndetermined,
-	CurrentRunId:   "",
+	CurrentRunId:   uuid.UUID{},
 	FlagsReInit:    []func() error{},
 }
 
@@ -252,8 +254,8 @@ func InitConfig() {
 
 }
 
-func getRun(id string) (*api.RunRecord, error) {
-	run, err := BL.GetRun(id)
+func getRun(options api.Options, id uuid.UUID) (*api.RunRecord, error) {
+	run, err := BL.GetRun(options, id)
 	if err != nil {
 		msg := fmt.Sprintf("failed to get run with id: %s", id)
 		return nil, &Error{
@@ -287,27 +289,27 @@ func detectStartsWithGTLTEquals(trimPrefix string, filter string) string {
 	}
 }
 
-func parseStepUUID(idStr string) (string, error) {
+func parseStepUUID(idStr string) (uuid.UUID, error) {
 	uuid4, err := uuid.Parse(idStr)
 	if err != nil {
 		msg := "failed to parse step uuid"
-		return "", &Error{
+		return uuid.UUID{}, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
 	}
-	return strings.ToLower(uuid4.String()), nil
+	return uuid4, nil
 }
-func parseRunId(idStr string) (string, error) {
+func parseRunId(idStr string) (uuid.UUID, error) {
 	uuid4, err := uuid.Parse(idStr)
 	if err != nil {
 		msg := "failed to parse run id"
-		return "", &Error{
+		return uuid.UUID{}, &Error{
 			Technical: fmt.Errorf(msg+": %w", err),
 			Friendly:  msg,
 		}
 	}
-	return strings.ToLower(uuid4.String()), nil
+	return uuid4, nil
 }
 
 func parseIndex(idStr string) (int64, error) {

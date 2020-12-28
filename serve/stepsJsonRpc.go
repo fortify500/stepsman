@@ -20,7 +20,6 @@ import (
 	"context"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/intel-go/fastjson"
 	"github.com/osamingo/jsonrpc"
 )
@@ -68,9 +67,6 @@ func (h GetStepsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawM
 			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 				return errResult
 			}
-		}
-		if err := dao.VetIds(p.UUIDs); err != nil {
-			return resolveError(err)
 		}
 		query := api.GetStepsQuery(p)
 		steps, err := BL.GetSteps(&query)
@@ -136,9 +132,6 @@ func (h DoStepByUUIDHandler) ServeJSONRPC(ctx context.Context, params *fastjson.
 				return errResult
 			}
 		}
-		if err := dao.VetIds([]string{p.UUID}); err != nil {
-			return resolveError(err)
-		}
 		doResult, err := BL.DoStepByUUID(&p, false)
 		if err != nil {
 			return resolveError(err)
@@ -158,9 +151,6 @@ func (h DoStepByLabelHandler) ServeJSONRPC(ctx context.Context, params *fastjson
 			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 				return errResult
 			}
-		}
-		if err := dao.VetIds([]string{p.RunId}); err != nil {
-			return resolveError(err)
 		}
 		if p.Label == "" {
 			return &jsonrpc.Error{

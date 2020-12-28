@@ -11,6 +11,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/valve v0.0.0-20170920024740-9e45288364f4
+	github.com/go-playground/validator/v10 v10.4.1
 	github.com/gobs/args v0.0.0-20180315064131-86002b4df18c
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/google/uuid v1.1.2

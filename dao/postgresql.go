@@ -36,7 +36,8 @@ func (db *PostgreSQLSqlxDB) SQL() *sqlx.DB {
 	return (*sqlx.DB)(db)
 }
 func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE "public"."runs" ( 
+	_, err := tx.Exec(`CREATE TABLE "public"."runs" (
+    "group_id" uuid NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
     "id" uuid NOT NULL,
 	"status" Bigint NOT NULL,
@@ -46,7 +47,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"template_title" Text NOT NULL ,
 	"tags" jsonb NOT NULL,
 	"template" jsonb,
-	PRIMARY KEY ( "created_at", "id" ),
+	PRIMARY KEY ( "group_id", "created_at", "id" ),
 	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
@@ -56,6 +57,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 		return fmt.Errorf("failed to create index index_runs_complete_by: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE "public"."steps" (
+    "group_id" uuid NOT NULL,
     "created_at" timestamp with time zone NOT NULL,
 	"run_id" uuid NOT NULL,
 	"index" Bigint NOT NULL,
@@ -70,8 +72,8 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"status_owner" Text NOT NULL,
 	"context" jsonb NOT NULL, 
 	"state" jsonb,
-	PRIMARY KEY ("created_at", "run_id", "index" ),
-	CONSTRAINT "foreign_key_runs" FOREIGN KEY("created_at","run_id") REFERENCES runs("created_at","id"),
+	PRIMARY KEY ("group_id","created_at", "run_id", "index" ),
+	CONSTRAINT "foreign_key_runs" FOREIGN KEY("group_id","created_at","run_id") REFERENCES runs("group_id","created_at","id"),
     CONSTRAINT "unique_steps_uuid" UNIQUE( "uuid" ),
     CONSTRAINT "unique_steps_label" UNIQUE( "run_id", "label" ) )`)
 	if err != nil {
@@ -101,7 +103,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 }
 
 func (db *PostgreSQLSqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	if _, err := tx.NamedExec("INSERT INTO steps(created_at, run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(CURRENT_TIMESTAMP,:run_id,:index,:label,:uuid,:name,:status,:status_owner,to_timestamp(0),null,:retries_left,:context, :state, :tags)", stepRecord); err != nil {
+	if _, err := tx.NamedExec("INSERT INTO steps(group_id, created_at, run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(:group_id,CURRENT_TIMESTAMP,:run_id,:index,:label,:uuid,:name,:status,:status_owner,to_timestamp(0),null,:retries_left,:context, :state, :tags)", stepRecord); err != nil {
 		panic(err)
 	}
 }
@@ -111,7 +113,7 @@ func (db *PostgreSQLSqlxDB) CreateRunTx(tx *sqlx.Tx, runRecord interface{}, comp
 	if completeBy > 0 {
 		completeByStr = fmt.Sprintf("CURRENT_TIMESTAMP + INTERVAL '%d seconds'", completeBy)
 	}
-	query := fmt.Sprintf("INSERT INTO runs(id, key, template_version, template_title, status, created_at, complete_by, tags, template) values(:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,%s,:tags,:template)", completeByStr)
+	query := fmt.Sprintf("INSERT INTO runs(group_id, id, key, template_version, template_title, status, created_at, complete_by, tags, template) values(:group_id,:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,%s,:tags,:template)", completeByStr)
 	if _, err := tx.NamedExec(query, runRecord); err != nil {
 		panic(err)
 	}
@@ -127,64 +129,64 @@ func (db *PostgreSQLSqlxDB) Notify(tx *sqlx.Tx, channel string, message string) 
 		panic(err)
 	}
 }
-func (db *PostgreSQLSqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string {
-	var result []string
+func (db *PostgreSQLSqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []UUIDAndGroupId {
+	var result []UUIDAndGroupId
 	skipLock := "SKIP LOCKED"
 	if disableSkipLocks {
 		skipLock = ""
 	}
-	query := fmt.Sprintf(`with R as (select created_at, run_id, "index" from steps
+	query := fmt.Sprintf(`with R as (select group_id, created_at, run_id, "index" from steps
 		where  complete_by<(NOW() - interval '10 second')
 		FOR UPDATE %s LIMIT $1)
 
 		update steps
 		set status=$2, heartbeat=CURRENT_TIMESTAMP, complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
 		FROM R
-		where steps.created_at = R.created_at and steps.run_id = R.run_id and steps.index = R.index
-		RETURNING steps.UUID`, skipLock, DAO.CompleteByPendingInterval)
+		where steps.group_id = R.group_id and steps.created_at = R.created_at and steps.run_id = R.run_id and steps.index = R.index
+		RETURNING steps.group_id,steps.UUID`, skipLock, DAO.CompleteByPendingInterval)
 	rows, err := tx.Queryx(query, limit, api.StepPending)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var stepUUID string
-		err = rows.Scan(&stepUUID)
+		var uuidAndGroupId UUIDAndGroupId
+		err = rows.StructScan(&uuidAndGroupId)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database steps row - RecoverSteps: %w", err))
 		}
-		result = append(result, stepUUID)
+		result = append(result, uuidAndGroupId)
 	}
 	return result
 }
 
-func (db *PostgreSQLSqlxDB) GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string {
-	var result []string
+func (db *PostgreSQLSqlxDB) GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []IdAndGroupId {
+	var result []IdAndGroupId
 	skipLock := "SKIP LOCKED"
 	if disableSkipLocks {
 		skipLock = ""
 	}
-	query := fmt.Sprintf(`with R as (select created_at, id from runs
+	query := fmt.Sprintf(`with R as (select group_id, created_at, id from runs
 		where  complete_by<(NOW() - interval '10 second')
 		FOR UPDATE %s LIMIT $1)
 
 		update runs
 		set complete_by=CURRENT_TIMESTAMP + INTERVAL '%d second'
 		FROM R
-		where runs.created_at = R.created_at and runs.id = R.id
-		RETURNING runs.id`, skipLock, DAO.CompleteByPendingInterval)
+		where runs.group_id = R.group_id and runs.created_at = R.created_at and runs.id = R.id
+		RETURNING runs.group_id,runs.id`, skipLock, DAO.CompleteByPendingInterval)
 	rows, err := tx.Queryx(query, limit)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var runId string
-		err = rows.Scan(&runId)
+		var idAndGroupId IdAndGroupId
+		err = rows.StructScan(&idAndGroupId)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database runs row - GetAndUpdateExpiredRuns: %w", err))
 		}
-		result = append(result, runId)
+		result = append(result, idAndGroupId)
 	}
 	return result
 }

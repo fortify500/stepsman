@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -36,14 +37,23 @@ hint: "stepsman prompt" will enter interactive mode`,
 }
 
 func PersistentPreRunE() error {
+	var err error
 	if Parameters.DatabaseVendor == "" {
 		msg := "you must specify a supported db-vendor (-V/--db-vendor) or set in config file"
 		return fmt.Errorf(msg)
 	}
+	Parameters.GroupId, err = uuid.Parse(Parameters.GroupIdStr)
+	if err != nil {
+		msg := "failed to parse group id"
+		return &Error{
+			Technical: fmt.Errorf(msg+": %w", err),
+			Friendly:  msg,
+		}
+	}
 
 	if BL == nil {
 		var newBL *bl.BL
-		newBL, err := bl.New(&dao.ParametersType{
+		newBL, err = bl.New(&dao.ParametersType{
 			DataSourceName:      Parameters.DataSourceName,
 			DatabaseVendor:      Parameters.DatabaseVendor,
 			DatabaseHost:        Parameters.DatabaseHost,
@@ -64,6 +74,7 @@ func PersistentPreRunE() error {
 }
 
 func init() {
+	RootCmd.PersistentFlags().StringVarP(&Parameters.GroupIdStr, "group-id", "G", "00000000-0000-0000-0000-000000000000", "group id provides isolation between workflows and steps")
 	RootCmd.PersistentFlags().StringVarP(&Parameters.DatabaseVendor, "db-vendor", "V", "", "supported database vendors: sqlite, postgresql, remote")
 	RootCmd.PersistentFlags().StringVar(&Parameters.DataSourceName, "db-file-name", ":memory:", "sqlite file location")
 	RootCmd.PersistentFlags().StringVarP(&Parameters.CfgFile, "config", "c", "", "config file (default is $HOME/.stepsman.yaml)")

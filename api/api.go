@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -32,6 +33,8 @@ import (
 	"strings"
 	"time"
 )
+
+var TestMode = false
 
 const (
 	RPCListRuns  = "listRuns"
@@ -81,6 +84,7 @@ type ListQuery struct {
 	Sort             Sort         `json:"sort,omitempty"`
 	Filters          []Expression `json:"filters,omitempty"`
 	ReturnAttributes []string     `json:"return-attributes,omitempty"`
+	Options          Options      `json:"options,omitempty"`
 }
 type ListParams ListQuery
 type ListRunsResult struct {
@@ -89,31 +93,35 @@ type ListRunsResult struct {
 }
 
 type GetRunsQuery struct {
-	Ids              []string `json:"ids,omitempty"`
-	ReturnAttributes []string `json:"return-attributes,omitempty"`
+	Ids              []uuid.UUID `json:"ids,omitempty"`
+	ReturnAttributes []string    `json:"return-attributes,omitempty"`
+	Options          Options     `json:"options,omitempty"`
 }
 type GetRunsResult []RunRecord
 type GetRunsParams GetRunsQuery
 
 type UpdateQueryById struct {
-	Id      string                 `json:"id,omitempty"`
+	Id      uuid.UUID              `json:"id,omitempty"`
 	Force   bool                   `json:"force,omitempty"`
 	Changes map[string]interface{} `json:"changes,omitempty"`
+	Options Options                `json:"options,omitempty"`
 }
 
 type UpdateQueryByUUID struct {
-	UUID        string                 `json:"uuid,omitempty"`
+	UUID        uuid.UUID              `json:"uuid,omitempty"`
 	StatusOwner string                 `json:"status-owner,omitempty"`
 	Force       bool                   `json:"force,omitempty"`
 	Changes     map[string]interface{} `json:"changes,omitempty"`
+	Options     Options                `json:"options,omitempty"`
 }
 
 type UpdateQueryByLabel struct {
-	RunId       string                 `json:"run-id,omitempty"`
+	RunId       uuid.UUID              `json:"run-id,omitempty"`
 	StatusOwner string                 `json:"status-owner,omitempty"`
 	Label       string                 `json:"label,omitempty"`
 	Force       bool                   `json:"force,omitempty"`
 	Changes     map[string]interface{} `json:"changes,omitempty"`
+	Options     Options                `json:"options,omitempty"`
 }
 
 type UpdateRunParams UpdateQueryById
@@ -128,22 +136,20 @@ type CreateRunParams struct {
 	Key          string           `json:"key,omitempty"`
 	Template     TemplateContents `json:"template,omitempty"`
 	TemplateType string           `json:"template-type,omitempty"`
+	Options      Options          `json:"options,omitempty"`
 }
-
-type CreateRunParamsWithTemplateInterface struct {
-	Key          string      `json:"key,omitempty"`
-	Template     interface{} `json:"template,omitempty"`
-	TemplateType string      `json:"template-type,omitempty"`
+type Options struct {
+	GroupId uuid.UUID `json:"group-id,omitempty" validate:"required"`
 }
-
 type ListStepsResult struct {
 	Range RangeResult  `json:"range,omitempty"`
 	Data  []StepRecord `json:"data,omitempty"`
 }
 
 type GetStepsQuery struct {
-	UUIDs            []string `json:"uuids,omitempty"`
-	ReturnAttributes []string `json:"return-attributes,omitempty"`
+	UUIDs            []uuid.UUID `json:"uuids,omitempty"`
+	ReturnAttributes []string    `json:"return-attributes,omitempty"`
+	Options          Options     `json:"options,omitempty"`
 }
 type GetStepsResult []StepRecord
 type GetStepsParams GetStepsQuery
@@ -155,32 +161,36 @@ type UpdateStepByLabelParams UpdateQueryByLabel
 type UpdateStepByLabelResult struct{}
 
 type DoStepByUUIDParams struct {
-	UUID        string  `json:"uuid,omitempty"`
-	Context     Context `json:"context,omitempty"`
-	StatusOwner string  `json:"status-owner,omitempty"`
+	UUID        uuid.UUID `json:"uuid,omitempty"`
+	Context     Context   `json:"context,omitempty"`
+	StatusOwner string    `json:"status-owner,omitempty"`
+	Options     Options   `json:"options,omitempty"`
 }
 type DoStepByUUIDResult struct {
 	StatusOwner string `json:"status-owner,omitempty"`
 }
 
 type DoStepByLabelParams struct {
-	RunId       string  `json:"run-id,omitempty"`
-	Label       string  `json:"label,omitempty"`
-	Context     Context `json:"context,omitempty"`
-	StatusOwner string  `json:"status-owner,omitempty"`
+	RunId       uuid.UUID `json:"run-id,omitempty"`
+	Label       string    `json:"label,omitempty"`
+	Context     Context   `json:"context,omitempty"`
+	StatusOwner string    `json:"status-owner,omitempty"`
+	Options     Options   `json:"options,omitempty"`
 }
 type DoStepByLabelResult struct {
-	UUID        string `json:"uuid,omitempty"`
-	StatusOwner string `json:"status-owner,omitempty"`
+	UUID        uuid.UUID `json:"uuid,omitempty"`
+	StatusOwner string    `json:"status-owner,omitempty"`
 }
 
 type DeleteQuery struct {
-	Ids   []string `json:"id,omitempty"`
-	Force bool     `json:"force,omitempty"`
+	Ids     []uuid.UUID `json:"id,omitempty"`
+	Force   bool        `json:"force,omitempty"`
+	Options Options     `json:"options,omitempty"`
 }
 
 type RunRecord struct {
-	Id              string        `json:"id,omitempty"`
+	GroupId         uuid.UUID     `db:"group_id" json:"group-id,omitempty"`
+	Id              uuid.UUID     `json:"id,omitempty"`
 	Key             string        `json:"key,omitempty"`
 	Tags            Tags          `db:"tags" json:"tags,omitempty"`
 	CreatedAt       AnyTime       `db:"created_at" json:"created-at,omitempty"`
@@ -426,12 +436,13 @@ type State struct {
 }
 type Tags []string
 type StepRecord struct {
+	GroupId     uuid.UUID      `db:"group_id" json:"group-id,omitempty"`
 	CreatedAt   AnyTime        `db:"created_at" json:"created-at,omitempty"`
-	RunId       string         `db:"run_id" json:"run-id,omitempty"`
+	RunId       uuid.UUID      `db:"run_id" json:"run-id,omitempty"`
 	Index       int64          `db:"index" json:"index,omitempty"`
 	Tags        Tags           `db:"tags" json:"tags,omitempty"`
 	Label       string         `json:"label,omitempty"`
-	UUID        string         `json:"uuid,omitempty"`
+	UUID        uuid.UUID      `json:"uuid,omitempty"`
 	Name        string         `json:"name,omitempty"`
 	Status      StepStatusType `json:"status,omitempty"`
 	StatusOwner string         `db:"status_owner" json:"status-owner,omitempty"`

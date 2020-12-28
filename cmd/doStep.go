@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -55,6 +56,7 @@ Use do step <step uuid> or do step <run id> --label <step label>.`,
 				Label:       Parameters.Label,
 				Context:     stepContext,
 				StatusOwner: statusOwner,
+				Options:     api.Options{GroupId: Parameters.GroupId},
 			}, true)
 			if err != nil {
 				msg := "failed to do step"
@@ -72,6 +74,7 @@ Use do step <step uuid> or do step <run id> --label <step label>.`,
 				UUID:        stepUUIDOrRunId,
 				Context:     stepContext,
 				StatusOwner: statusOwner,
+				Options:     api.Options{GroupId: Parameters.GroupId},
 			}, true)
 			if err != nil {
 				msg := "failed to do step"
@@ -84,7 +87,8 @@ Use do step <step uuid> or do step <run id> --label <step label>.`,
 			fmt.Printf("returned status owner: %s\n", doStepResult.StatusOwner)
 		}
 		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
-			UUIDs: []string{stepUUIDOrRunId},
+			UUIDs:   []uuid.UUID{stepUUIDOrRunId},
+			Options: api.Options{GroupId: Parameters.GroupId},
 		})
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to do step: %w", err)
@@ -95,7 +99,7 @@ Use do step <step uuid> or do step <run id> --label <step label>.`,
 			return
 		}
 		stepRecord := stepRecords[0]
-		Parameters.CurrentRun, err = getRun(stepRecord.RunId)
+		Parameters.CurrentRun, err = getRun(api.Options{GroupId: Parameters.GroupId}, stepRecord.RunId)
 		if err != nil {
 			Parameters.Err = err
 			return

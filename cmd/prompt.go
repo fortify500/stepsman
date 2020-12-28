@@ -22,6 +22,7 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/gobs/args"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -83,9 +84,9 @@ func Executor(s string, wasEnter bool) {
 	RootCmd.SetArgs(args.GetArgs(s))
 	wasError := Execute()
 	var describeCurrentStep []string
-	currentRunIdStr := Parameters.CurrentRunId
+	currentRunIdStr := Parameters.CurrentRunId.String()
 	currentStepIndexStr := Parameters.CurrentStepIndex
-	if Parameters.CurrentRunId != "" {
+	if Parameters.CurrentRunId != (uuid.UUID{}) {
 		describeCurrentStep = []string{"describe", "run", currentRunIdStr, "--step", currentStepIndexStr}
 	}
 	runStatus := api.RunInProgress
@@ -162,7 +163,7 @@ func Executor(s string, wasEnter bool) {
 
 func ResetCommandParameters() {
 	Parameters.CurrentCommand = CommandUndetermined
-	Parameters.CurrentRunId = ""
+	Parameters.CurrentRunId = uuid.UUID{}
 	Parameters.CurrentStepIndex = ""
 	Parameters.RunKey = ""
 	Parameters.Err = nil

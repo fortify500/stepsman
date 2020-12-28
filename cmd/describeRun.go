@@ -46,7 +46,7 @@ You can also describe a single step by adding --step <Index>.`,
 			Parameters.Err = err
 			return
 		}
-		run, err := getRun(runId)
+		run, err := getRun(api.Options{GroupId: Parameters.GroupId}, runId)
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to describe run: %w", err)
 			return
@@ -76,6 +76,7 @@ You can also describe a single step by adding --step <Index>.`,
 			},
 			Filters:          expressions,
 			ReturnAttributes: nil,
+			Options:          api.Options{GroupId: Parameters.GroupId},
 		})
 		if err != nil {
 			msg := "failed to describe steps"

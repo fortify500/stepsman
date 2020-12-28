@@ -29,48 +29,48 @@ func (db *Sqlite3SqlxDB) Notify(_ *sqlx.Tx, _ string, _ string) {
 	panic("unsupported operation")
 }
 
-func (db *Sqlite3SqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []string {
-	result := make([]string, 0)
+func (db *Sqlite3SqlxDB) RecoverSteps(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []UUIDAndGroupId {
+	result := make([]UUIDAndGroupId, 0)
 	rows, err := tx.Queryx(`select uuid from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds')`)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var step api.StepRecord
-		err = rows.StructScan(&step)
+		var uuidAndGroupId UUIDAndGroupId
+		err = rows.StructScan(&uuidAndGroupId)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
 		}
-		result = append(result, step.UUID)
+		result = append(result, uuidAndGroupId)
 	}
 	_, err = tx.Exec(fmt.Sprintf(`update steps
 		set status=$1, heartbeat=CURRENT_TIMESTAMP, complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')
-		where (created_at,run_id,"index") in (select created_at, run_id, "index" from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval), api.StepPending)
+		where (group_id,created_at,run_id,"index") in (select group_id, created_at, run_id, "index" from steps where  complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval), api.StepPending)
 	if err != nil {
 		panic(err)
 	}
 	return result
 }
 
-func (db *Sqlite3SqlxDB) GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []string {
-	result := make([]string, 0)
+func (db *Sqlite3SqlxDB) GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, _ int, _ bool) []IdAndGroupId {
+	result := make([]IdAndGroupId, 0)
 	rows, err := tx.Queryx(`select id from runs where complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds')`)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var step api.StepRecord
-		err = rows.StructScan(&step)
+		var idAndGroupId IdAndGroupId
+		err = rows.StructScan(&idAndGroupId)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse database steps row - get: %w", err))
 		}
-		result = append(result, step.UUID)
+		result = append(result, idAndGroupId)
 	}
 	_, err = tx.Exec(fmt.Sprintf(`update runs
 		set complete_by=DATETIME(CURRENT_TIMESTAMP, '+%d seconds')
-		where (created_at,id) in (select created_at, id from runs where complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval))
+		where (group_id,created_at,id) in (select group_id,created_at, id from runs where complete_by<DATETIME(CURRENT_TIMESTAMP, '-10 seconds'))`, DAO.CompleteByPendingInterval))
 	if err != nil {
 		panic(err)
 	}
@@ -90,6 +90,7 @@ func (db *Sqlite3SqlxDB) SQL() *sqlx.DB {
 }
 func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE runs (
+									 group_id VARCHAR(128) NOT NULL,
     							     created_at TIMESTAMP NOT NULL,
                                      id varchar(128) NOT NULL,
                                      template_version INTEGER NOT NULL,
@@ -99,7 +100,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
                                      complete_by TIMESTAMP NULL,
 	                                 template_title TEXT,
 	                                 template TEXT,
-	                                 PRIMARY KEY (created_at, id)
+	                                 PRIMARY KEY (group_id, created_at, id)
                                      )`)
 	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_key ON runs (key)`)
 	if err != nil {
@@ -114,6 +115,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 		return fmt.Errorf("failed to create index idx_runs_complete_by: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE steps (
+    								 group_id VARCHAR(128) NOT NULL,
     								 created_at TIMESTAMP NOT NULL,
                                      run_id varchar(128) NOT NULL,
                                      "index" INTEGER NOT NULL,
@@ -128,7 +130,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 									 tags TEXT NOT NULL,
 									 context TEXT NOT NULL, 
 	                                 state text,
-	                                 PRIMARY KEY (created_at, run_id, "index")
+	                                 PRIMARY KEY (group_id, created_at, run_id, "index")
                                      )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
@@ -152,7 +154,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	return nil
 }
 func (db *Sqlite3SqlxDB) CreateStepTx(tx *sqlx.Tx, stepRecord *api.StepRecord) {
-	query := "INSERT INTO steps(created_at, run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(CURRENT_TIMESTAMP,:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state,:tags)"
+	query := "INSERT INTO steps(group_id,created_at, run_id, \"index\", label, uuid, name, status, status_owner, heartbeat, complete_by, retries_left, context, state, tags) values(:group_id,CURRENT_TIMESTAMP,:run_id,:index,:label,:uuid,:name,:status,:status_owner,0,null,:retries_left,:context,:state,:tags)"
 	if _, err := tx.NamedExec(query, stepRecord); err != nil {
 		panic(err)
 	}
@@ -167,7 +169,7 @@ func (db *Sqlite3SqlxDB) CreateRunTx(tx *sqlx.Tx, runRecord interface{}, complet
 	if completeBy > 0 {
 		completeByStr = fmt.Sprintf("DATETIME(CURRENT_TIMESTAMP, '+%d seconds')", completeBy)
 	}
-	query := fmt.Sprintf("INSERT INTO runs(id, key, template_version, template_title, status, created_at, complete_by, tags, template) values(:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,%s,:tags,:template)", completeByStr)
+	query := fmt.Sprintf("INSERT INTO runs(group_id, id, key, template_version, template_title, status, created_at, complete_by, tags, template) values(:group_id,:id,:key,:template_version,:template_title,:status,CURRENT_TIMESTAMP,%s,:tags,:template)", completeByStr)
 	if _, err := tx.NamedExec(query, runRecord); err != nil {
 		panic(err)
 	}

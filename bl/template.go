@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
@@ -164,9 +165,9 @@ func (do StepDoREST) Describe() string {
 
 var LabelFormat = regexp.MustCompile(`^[a-zA-Z][a-zA-Z_0-9]*`)
 
-func (t *Template) LoadFromBytes(BL *BL, runId string, isYaml bool, yamlDocument []byte) error {
+func (t *Template) LoadFromBytes(BL *BL, runId uuid.UUID, isYaml bool, yamlDocument []byte) error {
 	var err error
-	if runId != "" {
+	if runId != (uuid.UUID{}) {
 		entry, ok := BL.templateCache.Get(runId)
 		if ok {
 			*t = *entry.(*Template)
@@ -206,7 +207,7 @@ func (t *Template) LoadFromBytes(BL *BL, runId string, isYaml bool, yamlDocument
 	return nil
 }
 
-func (t *Template) validate(runId string) error {
+func (t *Template) validate(runId uuid.UUID) error {
 	stepLabelsExist := make(map[string]int)
 	decisionsLabelsExist := make(map[string]int)
 	for i, step := range t.Steps {
@@ -268,7 +269,7 @@ func (t *Template) validate(runId string) error {
 	return nil
 }
 
-func (t *Template) RefreshInput(BL *BL, runId string) {
+func (t *Template) RefreshInput(BL *BL, options api.Options, runId uuid.UUID) {
 	t.rego.inputMutex.RLock()
 	lastStateHeartBeat := t.rego.lastStateHeartBeat
 	lastStateHeartBeatIndices := t.rego.lastStateHeartBeatIndices
@@ -289,6 +290,7 @@ func (t *Template) RefreshInput(BL *BL, runId string) {
 		},
 		},
 		ReturnAttributes: []string{dao.Index, dao.HeartBeat, dao.State},
+		Options:          options,
 	}
 	for _, index := range lastStateHeartBeatIndices {
 		query.Filters = append(query.Filters, api.Expression{
@@ -461,10 +463,10 @@ func regoModuleNameForDecision(decisionLabel string) string {
 	return fmt.Sprintf("decision_%s", decisionLabel)
 }
 
-func (t *Template) LoadAndCreateRun(BL *BL, key string, fileName string, fileType string) (string, error) {
+func (t *Template) LoadAndCreateRun(BL *BL, options api.Options, key string, fileName string, fileType string) (uuid.UUID, error) {
 	yamlDocument, err := ioutil.ReadFile(fileName)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", fileName, err)
+		return uuid.UUID{}, fmt.Errorf("failed to read file %s: %w", fileName, err)
 	}
 	isYaml := true
 	yamlStr := "yaml"
@@ -473,25 +475,26 @@ func (t *Template) LoadAndCreateRun(BL *BL, key string, fileName string, fileTyp
 		yamlStr = "json"
 	}
 	if dao.IsRemote {
-		var runId string
+		var runId uuid.UUID
 		runId, _, _, err = BL.Client.RemoteCreateRun(&api.CreateRunParams{
 			Key:          key,
 			Template:     api.TemplateContents(yamlDocument),
 			TemplateType: yamlStr,
+			Options:      options,
 		})
 		if err != nil {
-			return "", fmt.Errorf("failed to create run remotely for file %s: %w", fileName, err)
+			return uuid.UUID{}, fmt.Errorf("failed to create run remotely for file %s: %w", fileName, err)
 		}
 		return runId, err
 	} else {
-		err = t.LoadFromBytes(BL, "", isYaml, yamlDocument)
+		err = t.LoadFromBytes(BL, uuid.UUID{}, isYaml, yamlDocument)
 		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
+			return uuid.UUID{}, fmt.Errorf("failed to unmarshal file %s: %w", fileName, err)
 		}
 		var runRow *api.RunRecord
-		runRow, err = t.CreateRun(BL, key)
+		runRow, err = t.CreateRun(BL, options, key)
 		if err != nil {
-			return "", fmt.Errorf("failed to start: %w", err)
+			return uuid.UUID{}, fmt.Errorf("failed to start: %w", err)
 		}
 		return runRow.Id, err
 	}

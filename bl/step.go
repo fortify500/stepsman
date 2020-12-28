@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/open-policy-agent/opa/rego"
@@ -84,16 +85,15 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 	wasUpdate := false
 	var changes map[string]interface{}
 	var statusOwner string
+	var options api.Options
 	var force bool
 	if queryByUUID != nil {
-		vetErr := dao.VetIds([]string{queryByUUID.UUID})
-		if vetErr != nil {
-			return fmt.Errorf("failed to update step: %w", vetErr)
-		}
+		options = queryByUUID.Options
 		changes = queryByUUID.Changes
 		statusOwner = queryByUUID.StatusOwner
 		force = queryByUUID.Force
 	} else if queryByLabel != nil {
+		options = queryByLabel.Options
 		changes = queryByLabel.Changes
 		statusOwner = queryByLabel.StatusOwner
 		force = queryByLabel.Force
@@ -138,7 +138,7 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 				}
 				newState = &newStateTmp
 			}
-			var stepUUID string
+			var stepUUID uuid.UUID
 			var run api.RunRecord
 			var label string
 			var currentContext api.Context
@@ -149,14 +149,14 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 			err = b.DAO.Transactional(func(tx *sqlx.Tx) error {
 				var e error
 				if queryByUUID != nil {
-					run, currentContext, label, e = dao.GetRunLabelAndContextByStepUUIDTx(tx, queryByUUID.UUID,
+					run, currentContext, label, e = dao.GetRunLabelAndContextByStepUUIDTx(tx, options, queryByUUID.UUID,
 						[]string{dao.Id, dao.Template})
 					if e != nil {
 						return fmt.Errorf("failed to update step, failed to locate run: %w", e)
 					}
 					stepUUID = queryByUUID.UUID
 				} else if queryByLabel != nil {
-					run, stepUUID, currentContext, err = dao.GetRunAndStepUUIDByLabelTx(tx, queryByLabel.RunId, queryByLabel.Label, []string{dao.Id, dao.Template})
+					run, stepUUID, currentContext, err = dao.GetRunAndStepUUIDByLabelTx(tx, options, queryByLabel.RunId, queryByLabel.Label, []string{dao.Id, dao.Template})
 					if err != nil {
 						return fmt.Errorf("failed to update step by step run-id and label [%s:%s]: %w", queryByLabel.RunId, queryByLabel.Label, err)
 					}
@@ -174,7 +174,7 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
-			_, err = template.TransitionStateAndStatus(b, run.Id, label, stepUUID, nil, newStatus, "", currentContext, newState, force)
+			_, err = template.TransitionStateAndStatus(b, options, run.Id, label, stepUUID, nil, newStatus, "", currentContext, newState, force)
 			if err != nil {
 				return fmt.Errorf("failed to update step: %w", err)
 			}
@@ -184,7 +184,7 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 		}
 	}
 	if !wasUpdate {
-		err := b.DAO.UpdateStepHeartBeat(queryByUUID.UUID, statusOwner)
+		err := b.DAO.UpdateStepHeartBeat(options, queryByUUID.UUID, statusOwner)
 		if err != nil {
 			return fmt.Errorf("failed to update step: %w", err)
 		}
@@ -192,7 +192,7 @@ func (b *BL) updateStep(queryByUUID *api.UpdateQueryByUUID, queryByLabel *api.Up
 	return nil
 }
 
-func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, stepUUID string, prevStatus *api.StepStatusType, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *api.State, force bool) (*api.StepRecord, error) {
+func (t *Template) TransitionStateAndStatus(BL *BL, options api.Options, runId uuid.UUID, label string, stepUUID uuid.UUID, prevStatus *api.StepStatusType, newStatus api.StepStatusType, newStatusOwner string, currentContext api.Context, newState *api.State, force bool) (*api.StepRecord, error) {
 	var updatedStepRecord api.StepRecord
 	var softError error
 	var tErr error
@@ -213,7 +213,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			state: *newState,
 		}
 	}
-	cookie, newStatus, _, softError = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+	cookie, newStatus, _, softError = t.on(nil, BL, options, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 	if newStatus != api.StepDone {
 		uncommitted = nil
 	}
@@ -222,8 +222,9 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			var err error
 			startingStatus := newStatus
 			partialSteps, err := dao.GetStepsTx(tx, &api.GetStepsQuery{
-				UUIDs:            []string{stepUUID},
+				UUIDs:            []uuid.UUID{stepUUID},
 				ReturnAttributes: []string{dao.HeartBeat, dao.StatusOwner, dao.Status, dao.State, dao.Index, dao.RetriesLeft},
+				Options:          options,
 			})
 			if err != nil {
 				panic(err)
@@ -325,7 +326,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				if partialStepRecord.Status != api.StepFailed {
 					var onErr error
 					if startingStatus != newStatus {
-						cookie, newStatus, _, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+						cookie, newStatus, _, onErr = t.on(nil, BL, options, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 						if onErr != nil {
 							newState.Error = fmt.Sprintf("%s: %s", onErr.Error(), newState.Error)
 						}
@@ -334,7 +335,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 						}
 					}
 					if onErr == nil {
-						cookie, _, _, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+						cookie, _, _, onErr = t.on(tx, BL, options, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 						if onErr != nil {
 							newState.Error = fmt.Sprintf("%s: %s", onErr.Error(), newState.Error)
 						}
@@ -342,17 +343,17 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 							uncommitted = nil
 						}
 					}
-					_ = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, statusOwner, nil, nil, stepContext, newState)
+					_ = BL.DAO.UpdateStepPartsTx(tx, options, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, statusOwner, nil, nil, stepContext, newState)
 				}
 				softError = api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status")
 				return nil
 			}
-			run, err = GetRunByIdTx(tx, runId)
+			run, err = GetRunByIdTx(tx, options, runId)
 			if err != nil {
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
 			if run.Status == api.RunIdle {
-				dao.UpdateRunStatusTx(tx, run.Id, api.RunInProgress, nil)
+				dao.UpdateRunStatusTx(tx, options, run.Id, api.RunInProgress, nil)
 			} else if run.Status == api.RunDone {
 				if newStatus == api.StepInProgress || newStatus == api.StepPending {
 					if partialStepRecord.Status == api.StepIdle || partialStepRecord.Status == api.StepDone || partialStepRecord.Status == api.StepFailed {
@@ -381,16 +382,16 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 			}
 
 			if newState == nil {
-				updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, nil).StatusOwner
+				updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, options, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, nil).StatusOwner
 			} else {
-				updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, newState).StatusOwner
+				updatedStepRecord.StatusOwner = BL.DAO.UpdateStepPartsTx(tx, options, partialStepRecord.RunId, partialStepRecord.Index, newStatus, statusOwner, completeBy, retriesLeft, stepContext, newState).StatusOwner
 				updatedStepRecord.State = *newState
 			}
 			updatedStepRecord.Status = newStatus
 			if startingStatus != newStatus {
 				// this part should only be triggered by the run condition from in-progress,pending to idle. so nothing should happen.
 				var onErr error
-				cookie, newStatus, _, onErr = t.on(nil, BL, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+				cookie, newStatus, _, onErr = t.on(nil, BL, options, OnPhasePreTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 				if onErr != nil {
 					panic(onErr) // no place for failure here, it should not occur.
 				}
@@ -399,7 +400,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 				}
 			}
 			var onErr error
-			cookie, newStatus, _, onErr = t.on(tx, BL, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+			cookie, newStatus, _, onErr = t.on(tx, BL, options, OnPhaseInTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 			if onErr != nil {
 				return fmt.Errorf("failed in transaction: %w", onErr)
 			}
@@ -415,12 +416,13 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 		work := doWork{
 			item:     updatedStepRecord.UUID,
 			itemType: StepWorkType,
+			options:  options,
 		}
 		tErr = BL.Enqueue(&work)
 	}
 	if tErr == nil {
 		var onErr error
-		_, _, _, onErr = t.on(nil, BL, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
+		_, _, _, onErr = t.on(nil, BL, options, OnPhasePostTransaction, cookie, runId, label, newStatus, currentContext, newState, uncommitted)
 		if onErr != nil {
 			//there is nothing we can do that haven't been tried, it will be recovered later.
 			_ = api.ResolveErrorAndLog(onErr, true)
@@ -430,13 +432,13 @@ func (t *Template) TransitionStateAndStatus(BL *BL, runId string, label string, 
 		Add(time.Duration(t.Expiration.CompleteBy)*time.Second).
 		Before(time.Time(run.Now)) {
 		recoverable(func() error {
-			return BL.doRun(run.Id)
+			return BL.doRun(options, run.Id)
 		})
 	}
 	return &updatedStepRecord, tErr
 }
 
-func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId string, label string, newStatus api.StepStatusType, currentContext api.Context, newState *api.State, uncommitted *uncommittedResult) (onCookie, api.StepStatusType, bool, error) {
+func (t *Template) on(tx *sqlx.Tx, BL *BL, options api.Options, phase int, cookie onCookie, runId uuid.UUID, label string, newStatus api.StepStatusType, currentContext api.Context, newState *api.State, uncommitted *uncommittedResult) (onCookie, api.StepStatusType, bool, error) {
 	var err error
 	var errPropagation = true
 	switch phase {
@@ -475,7 +477,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 			switch *cookie.newRunStatus {
 			case api.RunDone:
 				prev := api.RunInProgress
-				dao.UpdateRunStatusTx(tx, runId, api.RunDone, &prev)
+				dao.UpdateRunStatusTx(tx, options, runId, api.RunDone, &prev)
 			default:
 				panic(fmt.Errorf("unsupported cookie status type: %s", (*cookie.newRunStatus).TranslateRunStatus()))
 			}
@@ -487,7 +489,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 				var emptyState api.State
 				var propagate bool
 				innerCookie.safetyDepth = cookie.safetyDepth
-				innerCookie, newStatus, propagate, err = t.on(tx, BL, OnPhasePreTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
+				innerCookie, newStatus, propagate, err = t.on(tx, BL, options, OnPhasePreTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
 				if err != nil {
 					if !propagate {
 						_ = api.ResolveErrorAndLog(err, propagate)
@@ -496,10 +498,10 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 					}
 					break BREAKOUT
 				}
-				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, runId, []int64{indexContextAndLabel.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexContextAndLabel.resolvedContext, nil)
+				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, options, runId, []int64{indexContextAndLabel.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexContextAndLabel.resolvedContext, nil)
 				if len(uuids) == 1 {
 					cookie.uuidsToEnqueue = append(cookie.uuidsToEnqueue, uuids[0])
-					innerCookie, newStatus, _, err = t.on(tx, BL, OnPhaseInTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
+					innerCookie, newStatus, _, err = t.on(tx, BL, options, OnPhaseInTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
 					if err != nil {
 						break BREAKOUT
 					}
@@ -513,6 +515,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, phase int, cookie onCookie, runId str
 				work := doWork{
 					item:     item.UUID,
 					itemType: StepWorkType,
+					options:  options,
 				}
 				if eErr := BL.Enqueue(&work); eErr != nil {
 					log.Error(eErr)
@@ -696,10 +699,10 @@ BREAKOUT2:
 	return err, errPropagation, cookie
 }
 
-func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *api.State) (bool, *api.Error) {
+func (b *BL) failStepIfNoRetries(tx *sqlx.Tx, options api.Options, partialStepRecord *api.StepRecord, newStatusOwner string, context api.Context, newState *api.State) (bool, *api.Error) {
 	if partialStepRecord.RetriesLeft < 1 {
 		if partialStepRecord.Status != api.StepFailed {
-			_ = b.DAO.UpdateStepPartsTx(tx, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, newStatusOwner, nil, nil, context, newState)
+			_ = b.DAO.UpdateStepPartsTx(tx, options, partialStepRecord.RunId, partialStepRecord.Index, api.StepFailed, newStatusOwner, nil, nil, context, newState)
 		}
 		return true, api.NewError(api.ErrStepNoRetriesLeft, "failed to change step status")
 	}
@@ -718,8 +721,8 @@ func (s *Step) GetHeartBeatTimeout() time.Duration {
 	}
 	return defaultHeartBeatInterval
 }
-func (t *Template) StartDo(BL *BL, runId string, label string, stepUUID string, newStatusOwner string, currentContext api.Context) (*api.StepRecord, error) {
-	updatedPartialStepRecord, err := t.TransitionStateAndStatus(BL, runId, label, stepUUID, nil, api.StepInProgress, newStatusOwner, currentContext, nil, false)
+func (t *Template) StartDo(BL *BL, options api.Options, runId uuid.UUID, label string, stepUUID uuid.UUID, newStatusOwner string, currentContext api.Context) (*api.StepRecord, error) {
+	updatedPartialStepRecord, err := t.TransitionStateAndStatus(BL, options, runId, label, stepUUID, nil, api.StepInProgress, newStatusOwner, currentContext, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start do: %w", err)
 	}
@@ -739,7 +742,7 @@ func (t *Template) StartDo(BL *BL, runId string, label string, stepUUID string, 
 			return updatedPartialStepRecord, nil
 		}
 	}
-	updatedPartialStepRecord, err = t.TransitionStateAndStatus(BL, runId, label, stepUUID, &updatedPartialStepRecord.Status, newStepStatus, newStatusOwner, currentContext, &newState, false)
+	updatedPartialStepRecord, err = t.TransitionStateAndStatus(BL, options, runId, label, stepUUID, &updatedPartialStepRecord.Status, newStepStatus, newStatusOwner, currentContext, &newState, false)
 	if err != nil {
 		return nil, err
 	}
@@ -763,8 +766,8 @@ func (b *BL) DoStepByLabel(params *api.DoStepByLabelParams, synchronous bool) (a
 		return result, err
 	}
 }
-func (b *BL) doRun(runId string) error {
-	run, err := b.GetRun(runId)
+func (b *BL) doRun(options api.Options, runId uuid.UUID) error {
+	run, err := b.GetRun(options, runId)
 	if err != nil {
 		return fmt.Errorf("failed to do run - failed to get run: %w", err)
 	}
@@ -776,7 +779,7 @@ func (b *BL) doRun(runId string) error {
 	if err != nil {
 		return fmt.Errorf("failed to do run - failed to load template: %w", err)
 	}
-	template.RefreshInput(b, run.Id)
+	template.RefreshInput(b, options, run.Id)
 	if time.Time(run.CreatedAt).
 		Add(time.Duration(template.Expiration.CompleteBy) * time.Second).
 		Before(time.Time(run.Now)) {
@@ -791,14 +794,14 @@ func (b *BL) doRun(runId string) error {
 		})
 		tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 			dao.ResetRunCompleteByTx(tx, runId)
-			cookie, _, _, err = template.on(tx, b, OnPhaseInTransaction, cookie, runId, "", api.StepPending, api.Context{}, nil, nil)
+			cookie, _, _, err = template.on(tx, b, options, OnPhaseInTransaction, cookie, runId, "", api.StepPending, api.Context{}, nil, nil)
 			return err
 		})
 		if tErr != nil {
 			return fmt.Errorf("failed to do run - failed to finish expiration: %w", err)
 		}
 		recoverable(func() error {
-			_, _, _, err = template.on(nil, b, OnPhasePostTransaction, cookie, runId, "", api.StepPending, api.Context{}, nil, nil)
+			_, _, _, err = template.on(nil, b, options, OnPhasePostTransaction, cookie, runId, "", api.StepPending, api.Context{}, nil, nil)
 			return err
 		})
 	}
@@ -806,14 +809,16 @@ func (b *BL) doRun(runId string) error {
 }
 func (b *BL) doStep(byLabelParams *api.DoStepByLabelParams, byUUIDParams *api.DoStepByUUIDParams, synchronous bool) (api.DoStepByUUIDResult, api.DoStepByLabelResult, error) {
 	var run api.RunRecord
-	var stepUUID string
+	var stepUUID uuid.UUID
 	var statusOwner string
+	var options api.Options
 	var currentContext api.Context
 	var label string
 	tErr := b.DAO.Transactional(func(tx *sqlx.Tx) error {
 		if byUUIDParams != nil {
 			var err error
-			run, currentContext, label, err = dao.GetRunLabelAndContextByStepUUIDTx(tx, byUUIDParams.UUID,
+			options = byUUIDParams.Options
+			run, currentContext, label, err = dao.GetRunLabelAndContextByStepUUIDTx(tx, options, byUUIDParams.UUID,
 				[]string{dao.Id, dao.Status, dao.Template})
 			if err != nil {
 				return fmt.Errorf("failed to locate run by step uuid [%s]: %w", byUUIDParams.UUID, err)
@@ -825,7 +830,8 @@ func (b *BL) doStep(byLabelParams *api.DoStepByLabelParams, byUUIDParams *api.Do
 			}
 		} else if byLabelParams != nil {
 			var err error
-			run, stepUUID, currentContext, err = dao.GetRunAndStepUUIDByLabelTx(tx, byLabelParams.RunId, byLabelParams.Label, []string{dao.Id, dao.Status, dao.Template})
+			options = byLabelParams.Options
+			run, stepUUID, currentContext, err = dao.GetRunAndStepUUIDByLabelTx(tx, options, byLabelParams.RunId, byLabelParams.Label, []string{dao.Id, dao.Status, dao.Template})
 			if err != nil {
 				return fmt.Errorf("failed to locate run by step run-id and label [%s:%s]: %w", byLabelParams.RunId, byLabelParams.Label, err)
 			}
@@ -851,13 +857,13 @@ func (b *BL) doStep(byLabelParams *api.DoStepByLabelParams, byUUIDParams *api.Do
 	if err != nil {
 		return api.DoStepByUUIDResult{}, api.DoStepByLabelResult{}, fmt.Errorf("failed to do step, failed to convert step record to step: %w", err)
 	}
-	template.RefreshInput(b, run.Id)
+	template.RefreshInput(b, options, run.Id)
 	var updatedPartialStepRecord *api.StepRecord
 	if synchronous {
-		updatedPartialStepRecord, err = template.StartDo(b, run.Id, label, stepUUID, statusOwner, currentContext)
+		updatedPartialStepRecord, err = template.StartDo(b, options, run.Id, label, stepUUID, statusOwner, currentContext)
 	} else {
 		var prevStatus = api.StepIdle
-		updatedPartialStepRecord, err = template.TransitionStateAndStatus(b, run.Id, label, stepUUID, &prevStatus, api.StepPending, statusOwner, currentContext, nil, false)
+		updatedPartialStepRecord, err = template.TransitionStateAndStatus(b, options, run.Id, label, stepUUID, &prevStatus, api.StepPending, statusOwner, currentContext, nil, false)
 	}
 	if err != nil {
 		return api.DoStepByUUIDResult{}, api.DoStepByLabelResult{}, fmt.Errorf("failed to start do: %w", err)

@@ -17,8 +17,6 @@
 package dao
 
 import (
-	"bytes"
-	"database/sql"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
@@ -56,6 +54,14 @@ const (
 	Tags            = "tags"
 )
 
+type UUIDAndGroupId struct {
+	UUID    uuid.UUID `db:"uuid" json:"uuid,omitempty"`
+	GroupId uuid.UUID `db:"group_id" json:"group-id,omitempty"`
+}
+type IdAndGroupId struct {
+	Id      uuid.UUID `db:"id" json:"id,omitempty"`
+	GroupId uuid.UUID `db:"group_id" json:"group-id,omitempty"`
+}
 type DBI interface {
 	SQL() *sqlx.DB
 	VerifyDBCreation(tx *sqlx.Tx) error
@@ -63,8 +69,8 @@ type DBI interface {
 	CreateRunTx(tx *sqlx.Tx, runRecord interface{}, completeBy int64)
 	Migrate0(tx *sqlx.Tx) error
 	completeByUpdateStatement(completeBy *int64) string
-	RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string
-	GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []string
+	RecoverSteps(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []UUIDAndGroupId
+	GetAndUpdateExpiredRuns(DAO *DAO, tx *sqlx.Tx, limit int, disableSkipLocks bool) []IdAndGroupId
 	Notify(tx *sqlx.Tx, channel string, message string)
 }
 
@@ -254,141 +260,9 @@ func InitLogrus(out io.Writer, level log.Level) {
 	log.SetOutput(out)
 }
 
-func VetIds(ids []string) error {
-	if ids != nil {
-		for _, id := range ids {
-			_, err := uuid.Parse(id)
-			if err != nil {
-				return api.NewWrapError(api.ErrInvalidParams, err, "failed to parse UUID: %s, %w", id, err)
-			}
-		}
-	}
-	return nil
-}
-
 type indicesUUIDs struct {
-	runId string
+	runId uuid.UUID
 	label string
 	index int64
-	uuid  string
-}
-
-func (d *DAO) updateManyStepsPartsTxInternal(tx *sqlx.Tx, indicesUuids []indicesUUIDs, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) []UUIDAndStatusOwner {
-	var result []UUIDAndStatusOwner
-	for _, indexOrUUID := range indicesUuids {
-		var err error
-		var toSet []string
-		var where []string
-		var res sql.Result
-		var params []interface{}
-		statusOwner := newStatusOwner
-		if statusOwner == "" {
-			var uuid4 uuid.UUID
-			uuid4, err = uuid.NewRandom()
-			if err != nil {
-				panic(fmt.Errorf("failed to generate uuid: %w", err))
-			}
-			statusOwner = uuid4.String()
-		}
-		toSet = append(toSet, "status")
-		params = append(params, newStatus)
-		toSet = append(toSet, "status_owner")
-		params = append(params, statusOwner)
-
-		if state != nil {
-			toSet = append(toSet, "state")
-			params = append(params, *state)
-		}
-		if context != nil {
-			toSet = append(toSet, "context")
-			params = append(params, context)
-		}
-		if retriesLeft != nil {
-			toSet = append(toSet, "retries_left")
-			params = append(params, *retriesLeft)
-		}
-
-		if indexOrUUID.runId != "" {
-			where = append(where, "run_id")
-			params = append(params, indexOrUUID.runId)
-		}
-		if indexOrUUID.label != "" {
-			where = append(where, "label")
-			params = append(params, indexOrUUID.label)
-		}
-		if indexOrUUID.index > 0 {
-			where = append(where, "\"index\"")
-			params = append(params, indexOrUUID.index)
-		}
-		if indexOrUUID.uuid != "" {
-			where = append(where, "uuid")
-			params = append(params, indexOrUUID.uuid)
-		}
-
-		if len(prevStatus) == 1 {
-			where = append(where, "status")
-			params = append(params, prevStatus[0])
-		}
-		var buf bytes.Buffer
-		buf.WriteString("update steps set heartbeat=CURRENT_TIMESTAMP")
-		i := 0
-		for _, s := range toSet {
-			i++
-			buf.WriteString(",")
-			buf.WriteString(s)
-			buf.WriteString(fmt.Sprintf("=$%d", i))
-		}
-		if completeBy != nil {
-			buf.WriteString(d.DB.completeByUpdateStatement(completeBy))
-		} else {
-			buf.WriteString(",complete_by=null")
-		}
-		buf.WriteString(" where")
-		for j, s := range where {
-			if j > 0 {
-				buf.WriteString(" AND")
-			}
-			i++
-			buf.WriteString(" ")
-			buf.WriteString(s)
-			buf.WriteString(fmt.Sprintf("=$%d", i))
-		}
-		res, err = tx.Exec(buf.String(), params...)
-		if err != nil {
-			panic(err)
-		}
-		var affected int64
-		affected, err = res.RowsAffected()
-		if err != nil {
-			panic(err)
-		}
-		if affected == 1 {
-			var partialStep api.StepRecord
-			if indexOrUUID.label != "" {
-				partialStep, err = GetStepByLabelTx(tx, indexOrUUID.runId, indexOrUUID.label, []string{UUID})
-				if err != nil {
-					panic(err)
-				}
-				result = append(result, UUIDAndStatusOwner{
-					UUID:        partialStep.UUID,
-					StatusOwner: statusOwner,
-				})
-			} else if indexOrUUID.runId != "" && indexOrUUID.index > 0 {
-				partialStep, err = GetStepTx(tx, indexOrUUID.runId, indexOrUUID.index, []string{UUID})
-				if err != nil {
-					panic(err)
-				}
-				result = append(result, UUIDAndStatusOwner{
-					UUID:        partialStep.UUID,
-					StatusOwner: statusOwner,
-				})
-			} else {
-				result = append(result, UUIDAndStatusOwner{
-					UUID:        indexOrUUID.uuid,
-					StatusOwner: statusOwner,
-				})
-			}
-		}
-	}
-	return result
+	uuid  uuid.UUID
 }

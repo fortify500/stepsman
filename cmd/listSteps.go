@@ -53,7 +53,7 @@ func listStepsInternal() {
 		Parameters.Err = fmt.Errorf("failed to list steps: %w", err)
 		return
 	}
-	run, err := getRun(runId)
+	run, err := getRun(api.Options{GroupId: Parameters.GroupId}, runId)
 	if err != nil {
 		Parameters.Err = fmt.Errorf("failed to list steps: %w", err)
 		return
@@ -87,6 +87,7 @@ func listStepsInternal() {
 			Order:  Parameters.SortOrder,
 		},
 		Filters: nil,
+		Options: api.Options{GroupId: Parameters.GroupId},
 	}
 
 	if len(Parameters.Filters) > 0 {

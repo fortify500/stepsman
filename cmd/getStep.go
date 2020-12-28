@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"os"
 )
@@ -36,7 +37,8 @@ var getStepCmd = &cobra.Command{
 			return
 		}
 		stepRecords, err := BL.GetSteps(&api.GetStepsQuery{
-			UUIDs: []string{stepUUID},
+			UUIDs:   []uuid.UUID{stepUUID},
+			Options: api.Options{GroupId: Parameters.GroupId},
 		})
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
@@ -49,7 +51,7 @@ var getStepCmd = &cobra.Command{
 				Friendly:  msg,
 			}
 		}
-		run, err := getRun(stepRecords[0].RunId)
+		run, err := getRun(api.Options{GroupId: Parameters.GroupId}, stepRecords[0].RunId)
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to get step: %w", err)
 			return

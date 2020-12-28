@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/go-chi/valve"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"runtime/debug"
 	"sync/atomic"
@@ -35,7 +36,8 @@ const (
 )
 
 type doWork struct {
-	item     string
+	item     uuid.UUID
+	options  api.Options
 	itemType WorkType
 }
 type workCounter int32
@@ -102,10 +104,11 @@ func (b *BL) processMsg(msg *doWork) {
 		switch msg.itemType {
 		case StepWorkType:
 			_, _, err = b.doStep(nil, &api.DoStepByUUIDParams{
-				UUID: msg.item,
+				UUID:    msg.item,
+				Options: msg.options,
 			}, true)
 		case RunWorkType:
-			err = b.doRun(msg.item)
+			err = b.doRun(msg.options, msg.item)
 		}
 		return err
 	})

@@ -20,7 +20,6 @@ import (
 	"context"
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
-	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
 	"github.com/intel-go/fastjson"
 	"github.com/osamingo/jsonrpc"
@@ -69,9 +68,6 @@ func (h GetRunsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.RawMe
 				return errResult
 			}
 		}
-		if err := dao.VetIds(p.Ids); err != nil {
-			return resolveError(err)
-		}
 		query := api.GetRunsQuery(p)
 		runs, err := BL.GetRuns(&query)
 		if err != nil {
@@ -93,20 +89,18 @@ func (h UpdateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 				return errResult
 			}
 		}
-		if err := dao.VetIds([]string{p.Id}); err != nil {
-			return resolveError(err)
-		}
 		if len(p.Changes) > 0 {
 			if len(p.Changes) != 1 {
-				return jsonrpc.ErrInvalidParams()
+				return resolveError(api.NewError(api.ErrInvalidParams, "failed to update run, changes length!=1"))
 			}
 			val, ok := p.Changes["status"]
 			if !ok {
-				return jsonrpc.ErrInvalidParams()
+				return resolveError(api.NewError(api.ErrInvalidParams, "failed to update run, changes do not contain status"))
 			}
-			statusStr, ok := val.(string)
+			var statusStr string
+			statusStr, ok = val.(string)
 			if !ok {
-				return jsonrpc.ErrInvalidParams()
+				return resolveError(api.NewError(api.ErrInvalidParams, "failed to update run, status is not of type string"))
 			}
 			newStatus, err := api.TranslateToRunStatus(statusStr)
 			if err != nil {
@@ -115,7 +109,7 @@ func (h UpdateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 					Message: err.Error(),
 				}
 			}
-			err = BL.UpdateRunStatus(p.Id, newStatus)
+			err = BL.UpdateRunStatus(p.Options, p.Id, newStatus)
 			if err != nil {
 				return resolveError(err)
 			}
@@ -136,9 +130,6 @@ func (h DeleteRunsHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Ra
 			if errResult := JSONRPCUnmarshal(*params, &p); errResult != nil {
 				return errResult
 			}
-		}
-		if err := dao.VetIds(p.Ids); err != nil {
-			return resolveError(err)
 		}
 		err := BL.DeleteRuns((*api.DeleteQuery)(&p))
 		if err != nil {
@@ -184,11 +175,11 @@ func (h CreateRunHandler) ServeJSONRPC(ctx context.Context, params *fastjson.Raw
 			}
 		}
 
-		err := template.LoadFromBytes(BL, "", isYaml, []byte(p.Template))
+		err := template.LoadFromBytes(BL, uuid.UUID{}, isYaml, []byte(p.Template))
 		if err != nil {
 			return resolveError(err)
 		}
-		run, err := template.CreateRun(BL, key)
+		run, err := template.CreateRun(BL, p.Options, key)
 		if err != nil {
 			return resolveError(err)
 		}

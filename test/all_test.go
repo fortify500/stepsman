@@ -46,6 +46,7 @@ import (
 )
 
 func setup() {
+	api.TestMode = true
 	cmd.InitConfig()
 }
 func teardown() {
@@ -158,6 +159,14 @@ func TestParsing(t *testing.T) {
 }
 
 func TestLocal(t *testing.T) {
+	var defaultGroupId uuid.UUID
+	{
+		var err error
+		defaultGroupId, err = uuid.Parse("7bc36571-596f-4305-8a19-8d177cfa1142")
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	var createdRunId string
 	var createdRunIdStepUUID string
 	vendors := []string{"postgresql", "sqlite"}
@@ -166,28 +175,28 @@ func TestLocal(t *testing.T) {
 		parseRunId  bool
 		parseStepId bool
 	}{
-		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
-		{"list -V %[1]s runs", false, false},
-		{"list -V %[1]s steps -r %[2]s", false, true},
-		{"describe -V %[1]s run %[2]s", false, false},
-		{`update -V %[1]s run %[2]s -s "In Progress"`, false, false},
-		{"get -V %[1]s run %[2]s", false, false},
-		{"get -V %[1]s run %[2]s --only-template-type json", false, false},
-		{"get -V %[1]s step %[3]s", false, false},
-		{`update -V %[1]s step %[3]s -s "Failed"`, false, false},
-		{`update -V %[1]s step %[3]s -s "Idle"`, false, false},
-		{`do -V %[1]s step %[3]s --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}`, false, false},
-		{"get -V %[1]s step %[3]s", false, false},
-		{"describe -V %[1]s run %[2]s", false, false},
-		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
-		{"list -V %[1]s steps -r %[2]s", false, true},
-		{`delete -V %[1]s run %[2]s`, false, false},
-		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
-		{`update -V %[1]s run %[2]s -s "In Progress"`, false, false},
-		{`delete -V %[1]s run %[2]s -f`, false, false},
-		{"create -V %[1]s -M=true run -f examples/basic.yaml", true, false},
-		{"list -V %[1]s steps -r %[2]s", false, true},
-		{"do -V %[1]s step %[2]s --label starting --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
+		{"create -V %[1]s -G %[4]s -M=true run -f examples/basic.yaml", true, false},
+		{"list -V %[1]s -G %[4]s runs", false, false},
+		{"list -V %[1]s -G %[4]s steps -r %[2]s", false, true},
+		{"describe -V %[1]s -G %[4]s run %[2]s", false, false},
+		{`update -V %[1]s -G %[4]s run %[2]s -s "In Progress"`, false, false},
+		{"get -V %[1]s -G %[4]s run %[2]s", false, false},
+		{"get -V %[1]s -G %[4]s run %[2]s --only-template-type json", false, false},
+		{"get -V %[1]s -G %[4]s step %[3]s", false, false},
+		{`update -V %[1]s -G %[4]s step %[3]s -s "Failed"`, false, false},
+		{`update -V %[1]s -G %[4]s step %[3]s -s "Idle"`, false, false},
+		{`do -V %[1]s -G %[4]s step %[3]s --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}`, false, false},
+		{"get -V %[1]s -G %[4]s step %[3]s", false, false},
+		{"describe -V %[1]s -G %[4]s run %[2]s", false, false},
+		{"create -V %[1]s -G %[4]s -M=true run -f examples/basic.yaml", true, false},
+		{"list -V %[1]s -G %[4]s steps -r %[2]s", false, true},
+		{`delete -V %[1]s -G %[4]s run %[2]s`, false, false},
+		{"create -V %[1]s -G %[4]s -M=true run -f examples/basic.yaml", true, false},
+		{`update -V %[1]s -G %[4]s run %[2]s -s "In Progress"`, false, false},
+		{`delete -V %[1]s -G %[4]s run %[2]s -f`, false, false},
+		{"create -V %[1]s -G %[4]s -M=true run -f examples/basic.yaml", true, false},
+		{"list -V %[1]s -G %[4]s steps -r %[2]s", false, true},
+		{"do -V %[1]s -G %[4]s step %[2]s --label starting --context {\"email-authorization\":\"dXNlcjpwYXNzd29yZA==\"}", false, false},
 	}
 
 	for _, vendor := range vendors {
@@ -200,7 +209,7 @@ func TestLocal(t *testing.T) {
 		cmd.BL = nil
 	BreakOut:
 		for _, tc := range testCases {
-			command := fmt.Sprintf(tc.command, vendor, createdRunId, createdRunIdStepUUID)
+			command := fmt.Sprintf(tc.command, vendor, createdRunId, createdRunIdStepUUID, defaultGroupId.String())
 			t.Run(command, func(t *testing.T) {
 				rescueStdout := os.Stdout
 				r, w, _ := os.Pipe()
@@ -267,6 +276,14 @@ func TestLocal(t *testing.T) {
 }
 
 func TestRemotePostgreSQL(t *testing.T) {
+	var defaultGroupId uuid.UUID
+	{
+		var err error
+		defaultGroupId, err = uuid.Parse("cf257f30-28b0-4d85-831b-047e16d80a6a")
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	testCases := []struct {
 		databaseVendor string
 		command        string
@@ -274,6 +291,8 @@ func TestRemotePostgreSQL(t *testing.T) {
 		{"postgresql", "serve -M -V %s"},
 	}
 	breakOut := false
+	var wasInterrupt = true
+	var wg sync.WaitGroup
 BreakOut:
 	for _, tc := range testCases {
 		waitForQueuesToFinish()
@@ -281,7 +300,6 @@ BreakOut:
 		command := fmt.Sprintf(tc.command, tc.databaseVendor)
 		cmd.ResetCommandParameters()
 		cmd.RootCmd.SetArgs(args.GetArgs(command))
-		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -292,9 +310,9 @@ BreakOut:
 		}()
 
 		time.Sleep(time.Duration(1) * time.Second)
-
+		wasInterrupt = false
 		httpClient := client.New(false, "localhost", 3333)
-		createdRunId := ""
+		createdRunId := uuid.UUID{}
 		{
 			fileName := "examples/basic.yaml"
 			yamlDocument, err := ioutil.ReadFile(fileName)
@@ -308,6 +326,7 @@ BreakOut:
 						Key:          "",
 						Template:     api.TemplateContents(yamlDocument),
 						TemplateType: "yaml",
+						Options:      api.Options{GroupId: defaultGroupId},
 					})
 					if err != nil {
 						t.Error(err)
@@ -326,6 +345,7 @@ BreakOut:
 					Operator:      "=",
 					Value:         createdRunId,
 				}},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -343,6 +363,7 @@ BreakOut:
 					Operator:      "contains",
 					Value:         []string{"31be0615-2659-452a-bce3-5d23fec89dfc", "992dca17-7452-492e-a5bd-fa06a7df9fe6"},
 				}},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -360,6 +381,7 @@ BreakOut:
 					Operator:      "exists",
 					Value:         []string{"31be0615-2659-452a-bce3-5d23fec89dfc", "992dca17-7452-492e-a5bd-fa06a7df9fe6"},
 				}},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -374,6 +396,7 @@ BreakOut:
 			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunDone.TranslateRunStatus()},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -382,8 +405,9 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
 			runs, err := httpClient.RemoteGetRuns(&api.GetRunsQuery{
-				Ids:              []string{createdRunId},
+				Ids:              []uuid.UUID{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -402,6 +426,7 @@ BreakOut:
 			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunIdle.TranslateRunStatus()},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -410,8 +435,9 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
 			runs, err := httpClient.RemoteGetRuns(&api.GetRunsQuery{
-				Ids:              []string{createdRunId},
+				Ids:              []uuid.UUID{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -438,6 +464,7 @@ BreakOut:
 					Value:         []string{"2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c", "ccf295f8-90ff-43ed-87c3-144732d710a8"},
 				}},
 				ReturnAttributes: nil,
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -463,6 +490,7 @@ BreakOut:
 					Value:         []string{"2bab51c3-0f70-44e8-8cc4-4aedbccbbc5c", "ccf295f8-90ff-43ed-87c3-144732d710a8"},
 				}},
 				ReturnAttributes: nil,
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -476,7 +504,7 @@ BreakOut:
 				fmt.Println(fmt.Sprintf("%+v", step))
 			}
 		})
-		var stepUUIDs []string
+		var stepUUIDs []uuid.UUID
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteListSteps"), func(t *testing.T) {
 			steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
 				Sort: api.Sort{
@@ -489,6 +517,7 @@ BreakOut:
 					Value:         createdRunId,
 				}},
 				ReturnAttributes: nil,
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -510,7 +539,8 @@ BreakOut:
 		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUIDs[0]},
+				UUIDs:   []uuid.UUID{stepUUIDs[0]},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -528,6 +558,7 @@ BreakOut:
 			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryByUUID{
 				UUID:    stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepFailed.TranslateStepStatus()},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -536,7 +567,8 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUIDs[0]},
+				UUIDs:   []uuid.UUID{stepUUIDs[0]},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -557,6 +589,7 @@ BreakOut:
 			err := httpClient.RemoteUpdateStepByUUID(&api.UpdateQueryByUUID{
 				UUID:    stepUUIDs[0],
 				Changes: map[string]interface{}{"status": api.StepIdle.TranslateStepStatus()},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -565,7 +598,8 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUIDs[0]},
+				UUIDs:   []uuid.UUID{stepUUIDs[0]},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -588,6 +622,7 @@ BreakOut:
 				UUID:        stepUUIDs[0],
 				Context:     api.Context{"email-authorization": "dXNlcjpwYXNzd29yZA=="},
 				StatusOwner: statusOwner,
+				Options:     api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -601,7 +636,8 @@ BreakOut:
 		waitForQueuesToFinish()
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUIDs[0]},
+				UUIDs:   []uuid.UUID{stepUUIDs[0]},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -620,7 +656,8 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetSteps"), func(t *testing.T) {
 			steps, err := httpClient.RemoteGetSteps(&api.GetStepsQuery{
-				UUIDs: []string{stepUUIDs[1]},
+				UUIDs:   []uuid.UUID{stepUUIDs[1]},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -651,6 +688,7 @@ BreakOut:
 						Key:          "",
 						Template:     api.TemplateContents(yamlDocument),
 						TemplateType: "yaml",
+						Options:      api.Options{GroupId: defaultGroupId},
 					})
 					if err != nil {
 						t.Error(err)
@@ -667,6 +705,7 @@ BreakOut:
 			err := httpClient.RemoteUpdateRun(&api.UpdateQueryById{
 				Id:      createdRunId,
 				Changes: map[string]interface{}{"status": api.RunInProgress.TranslateRunStatus()},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -676,8 +715,9 @@ BreakOut:
 
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDeleteRun done"), func(t *testing.T) {
 			err := httpClient.RemoteDeleteRuns(&api.DeleteQuery{
-				Ids:   []string{createdRunId},
-				Force: false,
+				Ids:     []uuid.UUID{createdRunId},
+				Force:   false,
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				var apiErr *api.Error
@@ -689,8 +729,9 @@ BreakOut:
 		})
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteDeleteRun done"), func(t *testing.T) {
 			err := httpClient.RemoteDeleteRuns(&api.DeleteQuery{
-				Ids:   []string{createdRunId},
-				Force: true,
+				Ids:     []uuid.UUID{createdRunId},
+				Force:   true,
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -710,6 +751,7 @@ BreakOut:
 						Key:          "",
 						Template:     api.TemplateContents(yamlDocument),
 						TemplateType: "yaml",
+						Options:      api.Options{GroupId: defaultGroupId},
 					})
 					if err != nil {
 						t.Error(err)
@@ -728,6 +770,7 @@ BreakOut:
 				Label:       "starting",
 				StatusOwner: statusOwner,
 				Context:     api.Context{"email-authorization": "dXNlcjpwYXNzd29yZA=="},
+				Options:     api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -756,6 +799,7 @@ BreakOut:
 					},
 				},
 				ReturnAttributes: nil,
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -789,19 +833,33 @@ BreakOut:
 						},
 					},
 				},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
 				return
 			}
 		})
+		wasInterrupt = true
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end")
 	}
+	if !wasInterrupt {
+		serve.InterruptServe <- os.Interrupt
+		wg.Wait()
+	}
 }
 
 func TestRemoteApprovalPostgreSQL(t *testing.T) {
+	var defaultGroupId uuid.UUID
+	{
+		var err error
+		defaultGroupId, err = uuid.Parse("41b08d09-f5f7-436c-9027-d0a9d8a9cec7")
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	testCases := []struct {
 		databaseVendor string
 		command        string
@@ -809,6 +867,8 @@ func TestRemoteApprovalPostgreSQL(t *testing.T) {
 		{"postgresql", "serve -M -V %s"},
 	}
 	breakOut := false
+	var wg sync.WaitGroup
+	var wasInterrupt = true
 BreakOut:
 	for _, tc := range testCases {
 		waitForQueuesToFinish()
@@ -816,7 +876,7 @@ BreakOut:
 		command := fmt.Sprintf(tc.command, tc.databaseVendor)
 		cmd.ResetCommandParameters()
 		cmd.RootCmd.SetArgs(args.GetArgs(command))
-		var wg sync.WaitGroup
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -827,9 +887,9 @@ BreakOut:
 		}()
 
 		time.Sleep(time.Duration(1100) * time.Millisecond)
-
+		wasInterrupt = false
 		httpClient := client.New(false, "localhost", 3333)
-		createdRunId := ""
+		createdRunId := uuid.UUID{}
 		{
 			fileName := "examples/approval.yaml"
 			yamlDocument, err := ioutil.ReadFile(fileName)
@@ -843,6 +903,7 @@ BreakOut:
 						Key:          "",
 						Template:     api.TemplateContents(yamlDocument),
 						TemplateType: "yaml",
+						Options:      api.Options{GroupId: defaultGroupId},
 					})
 					if err != nil {
 						t.Error(err)
@@ -861,6 +922,7 @@ BreakOut:
 				Label:       "path_1_step_1_email",
 				StatusOwner: statusOwner,
 				Context:     api.Context{},
+				Options:     api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -872,7 +934,7 @@ BreakOut:
 			}
 		})
 		waitForQueuesToFinish()
-		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepInProgress)
+		breakOut = remoteCheckStepStatus(t, defaultGroupId, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepInProgress)
 		if breakOut {
 			break BreakOut
 		}
@@ -893,6 +955,7 @@ BreakOut:
 						},
 					},
 				},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -900,7 +963,7 @@ BreakOut:
 			}
 		})
 		waitForQueuesToFinish()
-		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepDone)
+		breakOut = remoteCheckStepStatus(t, defaultGroupId, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1_email", api.StepDone)
 		if breakOut {
 			break BreakOut
 		}
@@ -914,6 +977,7 @@ BreakOut:
 					"status": "approved",
 					"roles":  []string{"4e0bccb6-cf8e-4b1c-b102-c657b01be3bf", "b2e7ffb8-4d38-4d34-be80-126c532836b0"},
 				},
+				Options: api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -925,14 +989,15 @@ BreakOut:
 			}
 		})
 		waitForQueuesToFinish()
-		breakOut = remoteCheckStepStatus(t, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1", api.StepDone)
+		breakOut = remoteCheckStepStatus(t, defaultGroupId, "RemoteGetSteps", httpClient, createdRunId, "path_1_step_1", api.StepDone)
 		if breakOut {
 			break BreakOut
 		}
 		t.Run(fmt.Sprintf("%s - %s", command, "RemoteGetRuns done"), func(t *testing.T) {
 			runs, err := httpClient.RemoteGetRuns(&api.GetRunsQuery{
-				Ids:              []string{createdRunId},
+				Ids:              []uuid.UUID{createdRunId},
 				ReturnAttributes: []string{"id", "status"},
+				Options:          api.Options{GroupId: defaultGroupId},
 			})
 			if err != nil {
 				t.Error(err)
@@ -947,14 +1012,19 @@ BreakOut:
 				return
 			}
 		})
+		wasInterrupt = true
 		fmt.Printf("createdRunId: %s\n", createdRunId)
 		serve.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end approval")
 	}
+	if !wasInterrupt {
+		serve.InterruptServe <- os.Interrupt
+		wg.Wait()
+	}
 }
 
-func remoteCheckStepStatus(t *testing.T, call string, httpClient *client.CLI, createdRunId string, label string, status api.StepStatusType) bool {
+func remoteCheckStepStatus(t *testing.T, defaultGroupId uuid.UUID, call string, httpClient *client.CLI, createdRunId uuid.UUID, label string, status api.StepStatusType) bool {
 	var breakOut bool
 	t.Run(fmt.Sprintf("%s:%s:%s", call, label, status.TranslateStepStatus()), func(t *testing.T) {
 		steps, _, err := httpClient.RemoteListSteps(&api.ListQuery{
@@ -973,6 +1043,7 @@ func remoteCheckStepStatus(t *testing.T, call string, httpClient *client.CLI, cr
 				},
 			},
 			ReturnAttributes: nil,
+			Options:          api.Options{GroupId: defaultGroupId},
 		})
 		if err != nil {
 			t.Error(err)

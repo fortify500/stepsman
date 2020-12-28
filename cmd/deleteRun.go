@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -37,8 +38,9 @@ var deleteRunCmd = &cobra.Command{
 			return
 		}
 		err = BL.DeleteRuns(&api.DeleteQuery{
-			Ids:   []string{runId},
-			Force: Parameters.Force,
+			Ids:     []uuid.UUID{runId},
+			Force:   Parameters.Force,
+			Options: api.Options{GroupId: Parameters.GroupId},
 		})
 		if err != nil {
 			Parameters.Err = fmt.Errorf("failed to delete run: %w", err)

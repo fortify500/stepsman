@@ -48,7 +48,7 @@ var getRunCmd = &cobra.Command{
 				return
 			}
 			var run *api.RunRecord
-			run, err = getRun(runId)
+			run, err = getRun(api.Options{GroupId: Parameters.GroupId}, runId)
 			if err != nil {
 				Parameters.Err = fmt.Errorf("failed to get run: %w", err)
 				return

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/google/uuid"
 	"io"
 )
 
@@ -145,8 +146,8 @@ type CreateRunResponse struct {
 	ID      string               `json:"id,omitempty"`
 }
 
-func (c *CLI) RemoteCreateRun(params *api.CreateRunParams) (string, string, api.RunStatusType, error) {
-	var runId string
+func (c *CLI) RemoteCreateRun(params *api.CreateRunParams) (uuid.UUID, string, api.RunStatusType, error) {
+	var runId uuid.UUID
 	key := params.Key
 	var status api.RunStatusType
 	request := NewMarshaledJSONRPCRequest("1", api.RPCCreateRun, params)
@@ -167,7 +168,7 @@ func (c *CLI) RemoteCreateRun(params *api.CreateRunParams) (string, string, api.
 		return nil
 	})
 	if err != nil {
-		return "", "", api.RunIdle, err
+		return uuid.UUID{}, "", api.RunIdle, err
 	}
 	return runId, key, status, nil
 }

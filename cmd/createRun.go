@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/bl"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -46,7 +47,12 @@ var createRunCmd = &cobra.Command{
 			}
 			return
 		}
-		runId, err := t.LoadAndCreateRun(BL, Parameters.RunKey, Parameters.CreateFileName, Parameters.FileType)
+		runId, err := t.LoadAndCreateRun(
+			BL,
+			api.Options{GroupId: Parameters.GroupId},
+			Parameters.RunKey,
+			Parameters.CreateFileName,
+			Parameters.FileType)
 		if err != nil {
 			msg := "failed to create run"
 			Parameters.Err = &Error{

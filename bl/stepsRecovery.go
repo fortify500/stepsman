@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
+	"github.com/fortify500/stepsman/dao"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
@@ -64,8 +65,8 @@ func (b *BL) recoveryAndExpirationScheduler() {
 				shortInterval = false
 			}
 		case <-timer.C:
-			var stepsUUIDs []string
-			var runsIds []string
+			var uuidAndGroupIds []dao.UUIDAndGroupId
+			var idAndGroupIds []dao.IdAndGroupId
 			if b.IsPostgreSQL() && len(b.memoryQueue) >= b.recoveryAllowUnderJobQueueNumberOfItems {
 				shortInterval = true
 				continue
@@ -86,14 +87,14 @@ func (b *BL) recoveryAndExpirationScheduler() {
 				log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 			}
 			tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
-				stepsUUIDs = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
-				runsIds = b.DAO.DB.GetAndUpdateExpiredRuns(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
+				uuidAndGroupIds = b.DAO.DB.RecoverSteps(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
+				idAndGroupIds = b.DAO.DB.GetAndUpdateExpiredRuns(b.DAO, tx, b.recoveryMaxRecoverItemsPassLimit, b.recoveryDisableSkipLocks)
 				return nil
 			})
 			if tErr != nil {
 				log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 			}
-			if tErr != nil || (b.IsPostgreSQL() && (len(stepsUUIDs)+len(runsIds)) >= b.recoveryMaxRecoverItemsPassLimit) {
+			if tErr != nil || (b.IsPostgreSQL() && (len(uuidAndGroupIds)+len(idAndGroupIds)) >= b.recoveryMaxRecoverItemsPassLimit) {
 				tErr = b.DAO.Transactional(func(tx *sqlx.Tx) error {
 					if b.IsPostgreSQL() {
 						shortInterval = true
@@ -112,19 +113,21 @@ func (b *BL) recoveryAndExpirationScheduler() {
 					log.Error(fmt.Errorf("failed to recover steps: %w", tErr))
 				}
 			}
-			for _, item := range stepsUUIDs {
+			for _, item := range uuidAndGroupIds {
 				work := doWork{
-					item:     item,
+					item:     item.UUID,
+					options:  api.Options{GroupId: item.GroupId},
 					itemType: StepWorkType,
 				}
 				if err := b.Enqueue(&work); err != nil {
 					log.Error(fmt.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr))
 				}
 			}
-			for _, item := range runsIds {
+			for _, item := range idAndGroupIds {
 				work := doWork{
-					item:     item,
+					item:     item.Id,
 					itemType: RunWorkType,
+					options:  api.Options{GroupId: item.GroupId},
 				}
 				if err := b.Enqueue(&work); err != nil {
 					log.Error(fmt.Errorf("in runs expiration, failed to enqueue item:%s, with err %w", item, tErr))
