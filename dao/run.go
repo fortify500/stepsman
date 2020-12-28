@@ -483,13 +483,21 @@ func DeleteRunsTx(tx *sqlx.Tx, deleteRunsQuery *api.DeleteQuery) error {
 	return nil
 }
 
-func UpdateRunStatusTx(tx *sqlx.Tx, options api.Options, id uuid.UUID, newStatus api.RunStatusType, prevStatus *api.RunStatusType) {
+func (d *DAO) UpdateRunStatusTx(tx *sqlx.Tx, options api.Options, id uuid.UUID, newStatus api.RunStatusType, prevStatus *api.RunStatusType, completeBy *int64) {
+	completeByStr := ""
+	if completeBy != nil {
+		if *completeBy == -1 {
+			completeByStr = ",complete_by=NULL"
+		} else {
+			completeByStr = d.DB.completeByUpdateStatement(completeBy)
+		}
+	}
 	if prevStatus != nil {
-		if _, err := tx.Exec("update runs set status=$1 where group_id=$2 and id=$3 and status=$4", newStatus, options.GroupId, id, *prevStatus); err != nil {
+		if _, err := tx.Exec(fmt.Sprintf("update runs set status=$1%s where group_id=$2 and id=$3 and status=$4", completeByStr), newStatus, options.GroupId, id, *prevStatus); err != nil {
 			panic(err)
 		}
 	} else {
-		if _, err := tx.Exec("update runs set status=$1 where group_id=$2 and id=$3", newStatus, options.GroupId, id); err != nil {
+		if _, err := tx.Exec(fmt.Sprintf("update runs set status=$1%s where group_id=$2 and id=$3", completeByStr), newStatus, options.GroupId, id); err != nil {
 			panic(err)
 		}
 	}

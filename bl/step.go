@@ -353,7 +353,7 @@ func (t *Template) TransitionStateAndStatus(BL *BL, options api.Options, runId u
 				return fmt.Errorf("failed to update database stepRecord row: %w", err)
 			}
 			if run.Status == api.RunIdle {
-				dao.UpdateRunStatusTx(tx, options, run.Id, api.RunInProgress, nil)
+				BL.DAO.UpdateRunStatusTx(tx, options, run.Id, api.RunInProgress, nil, nil)
 			} else if run.Status == api.RunDone {
 				if newStatus == api.StepInProgress || newStatus == api.StepPending {
 					if partialStepRecord.Status == api.StepIdle || partialStepRecord.Status == api.StepDone || partialStepRecord.Status == api.StepFailed {
@@ -477,7 +477,8 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, options api.Options, phase int, cooki
 			switch *cookie.newRunStatus {
 			case api.RunDone:
 				prev := api.RunInProgress
-				dao.UpdateRunStatusTx(tx, options, runId, api.RunDone, &prev)
+				var completeBy int64 = -1
+				BL.DAO.UpdateRunStatusTx(tx, options, runId, api.RunDone, &prev, &completeBy)
 			default:
 				panic(fmt.Errorf("unsupported cookie status type: %s", (*cookie.newRunStatus).TranslateRunStatus()))
 			}
