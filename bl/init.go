@@ -34,6 +34,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -56,7 +57,14 @@ func TranslateToJOBQueueType(status string) (JOBQueueType, error) {
 	}
 }
 
+var TESTSLock sync.Mutex
+
 type BL struct {
+	TLSEnable                               bool
+	TLSEnableClientCertificateCheck         bool
+	TLSCertFile                             string
+	TLSKeyFile                              string
+	TLSCAFile                               string
 	InterruptServe                          chan os.Signal
 	ServerReady                             bool
 	stopping                                workCounter
@@ -113,6 +121,8 @@ func (b *BL) IsSqlite() bool {
 	return false
 }
 func New(daoParameters *dao.ParametersType) (*BL, error) {
+	TESTSLock.Lock()
+	defer TESTSLock.Unlock()
 	var newBL BL
 	uuid4, err := uuid.NewRandom()
 	if err != nil {
@@ -125,6 +135,8 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	if ok {
 		log.WithField("build-info", bi).Info()
 	}
+	newBL.TLSEnable = false
+	newBL.TLSEnableClientCertificateCheck = false
 	newBL.rabbitMQJobQueueName = "stepsman_tasks"
 	newBL.rabbitMQURIConnectionString = "amqp://guest:guest@localhost:5672/"
 	newBL.rabbitMQReconnectDelay = 5 * time.Second
@@ -144,6 +156,22 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	newBL.recoveryMaxRecoverItemsPassLimit = newBL.jobQueueMemoryQueueLimit / 2
 	newBL.recoveryAllowUnderJobQueueNumberOfItems = newBL.jobQueueMemoryQueueLimit / 2
 	newBL.recoveryReschedule = make(chan RecoveryMessage)
+
+	if viper.IsSet("TLS_ENABLE") {
+		newBL.TLSEnable = viper.GetBool("TLS_ENABLE")
+	}
+	if viper.IsSet("TLS_ENABLE_CLIENT_CERTIFICATE_CHECK") {
+		newBL.TLSEnableClientCertificateCheck = viper.GetBool("TLS_ENABLE_CLIENT_CERTIFICATE_CHECK")
+	}
+	if viper.IsSet("TLS_CA_FILE") {
+		newBL.TLSCAFile = viper.GetString("TLS_CA_FILE")
+	}
+	if viper.IsSet("TLS_CERT_FILE") {
+		newBL.TLSCertFile = viper.GetString("TLS_CERT_FILE")
+	}
+	if viper.IsSet("TLS_KEY_FILE") {
+		newBL.TLSKeyFile = viper.GetString("TLS_KEY_FILE")
+	}
 	if viper.IsSet("JOB_QUEUE_NUMBER_OF_WORKERS") {
 		newBL.jobQueueNumberOfWorkers = viper.GetInt("JOB_QUEUE_NUMBER_OF_WORKERS")
 	}
@@ -242,7 +270,7 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 		}
 		newBL.initQueue()
 	} else {
-		newBL.Client = client.New(newBL.DAO.Parameters.DatabaseSSLMode, newBL.DAO.Parameters.DatabaseHost, newBL.DAO.Parameters.DatabasePort)
+		newBL.Client = client.New(newBL.DAO.Parameters.DatabaseSSLMode, newBL.DAO.Parameters.DatabaseHost, newBL.DAO.Parameters.DatabasePort, nil)
 	}
 
 	return &newBL, nil

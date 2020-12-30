@@ -19,6 +19,8 @@ package test
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -310,7 +312,11 @@ BreakOut:
 
 		time.Sleep(time.Duration(2) * time.Second)
 		wasInterrupt = false
-		httpClient := client.New(false, "localhost", 3333)
+		bl.TESTSLock.Lock()
+		caFile := cmd.BL.TLSCAFile
+		tlsEnable := cmd.BL.TLSEnable
+		bl.TESTSLock.Unlock()
+		httpClient := client.New(tlsEnable, "localhost", 3333, getTLSConfig(caFile))
 		createdRunId := uuid.UUID{}
 		{
 			fileName := "examples/basic.yaml"
@@ -850,6 +856,28 @@ BreakOut:
 	}
 }
 
+func getTLSConfig(localCertFile string) *tls.Config {
+	if localCertFile == "" {
+		return nil
+	}
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+
+	certs, err := ioutil.ReadFile(localCertFile)
+	if err != nil {
+		log.Fatalf("failed to append %q to RootCAs: %v", localCertFile, err)
+	}
+
+	if ok := rootCAs.AppendCertsFromPEM(certs); !ok {
+		log.Fatalf("no certs appended, using system certs only")
+	}
+
+	return &tls.Config{
+		RootCAs: rootCAs,
+	}
+}
 func TestRemoteApprovalPostgreSQL(t *testing.T) {
 	var defaultGroupId uuid.UUID
 	{
@@ -887,7 +915,11 @@ BreakOut:
 
 		time.Sleep(time.Duration(3) * time.Second)
 		wasInterrupt = false
-		httpClient := client.New(false, "localhost", 3333)
+		bl.TESTSLock.Lock()
+		caFile := cmd.BL.TLSCAFile
+		tlsEnable := cmd.BL.TLSEnable
+		bl.TESTSLock.Unlock()
+		httpClient := client.New(tlsEnable, "localhost", 3333, getTLSConfig(caFile))
 		createdRunId := uuid.UUID{}
 		{
 			fileName := "examples/approval.yaml"

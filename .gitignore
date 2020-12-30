@@ -19,6 +19,6 @@
 .excludes/
 stepsman
 /stepsman_hello.world
-
+stepsman_tests_*
 .DS_Store
 roadmap/.DS_Store

@@ -18,6 +18,8 @@ package serve
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"github.com/InVisionApp/go-health/v2"
 	"github.com/chi-middleware/logrus-logger"
@@ -28,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"sync"
@@ -58,6 +61,40 @@ func InitLogrus(out io.Writer, level log.Level) {
 	log.SetOutput(out)
 	output = out
 }
+
+func createTLSServerConfig(BL *bl.BL) (*tls.Config, error) {
+	if BL.TLSEnableClientCertificateCheck {
+		caCertPEM, err := ioutil.ReadFile(BL.TLSCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA file:%w", err)
+		}
+
+		roots := x509.NewCertPool()
+		ok := roots.AppendCertsFromPEM(caCertPEM)
+		if !ok {
+			return nil, fmt.Errorf("failed to load CA:%w", err)
+		}
+
+		cert, err := tls.LoadX509KeyPair(BL.TLSCertFile, BL.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load X509 key pair:%w", err)
+		}
+		return &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    roots,
+		}, nil
+	} else {
+		cert, err := tls.LoadX509KeyPair(BL.TLSCertFile, BL.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load X509 key pair: %w", err)
+		}
+		return &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}, nil
+	}
+}
+
 func Serve(BL *bl.BL, port int64, healthPort int64) {
 	newLog := log.New()
 	newLog.SetFormatter(&log.JSONFormatter{})
@@ -147,9 +184,26 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 			log.Fatal(api.NewLocalizedError("failed to start serving health checks: %w", errHealth))
 		}
 	}()
-	l, err := net.Listen("tcp", srv.Addr)
-	if err != nil {
-		log.Fatal(fmt.Errorf("failed to start listening: %w", err))
+	var err error
+	var l net.Listener
+	bl.TESTSLock.Lock()
+	tlsEnable := BL.TLSEnable
+	bl.TESTSLock.Unlock()
+	if tlsEnable {
+		var config *tls.Config
+		config, err = createTLSServerConfig(BL)
+		if err != nil {
+			log.Fatal(fmt.Errorf("failed to configure for listening - tls: %w", err))
+		}
+		l, err = tls.Listen("tcp", srv.Addr, config)
+		if err != nil {
+			log.Fatal(fmt.Errorf("failed to start listening - tls: %w", err))
+		}
+	} else {
+		l, err = net.Listen("tcp", srv.Addr)
+		if err != nil {
+			log.Fatal(fmt.Errorf("failed to start listening: %w", err))
+		}
 	}
 	BL.ServerReady = true
 	err = srv.Serve(l)

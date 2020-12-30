@@ -18,6 +18,7 @@ package client
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
@@ -54,7 +55,7 @@ func NewMarshaledJSONRPCRequest(id string, method string, params interface{}) []
 	return marshal
 }
 
-func New(ssl bool, host string, port int64) *CLI {
+func New(ssl bool, host string, port int64, tlsConfig *tls.Config) *CLI {
 	protocol := "http"
 	if ssl {
 		protocol += "s"
@@ -63,6 +64,9 @@ func New(ssl bool, host string, port int64) *CLI {
 	var transport = http.Transport{
 		MaxResponseHeaderBytes: 128 * 1024,
 		IdleConnTimeout:        10 * time.Minute,
+	}
+	if tlsConfig != nil {
+		transport.TLSClientConfig = tlsConfig
 	}
 	var c = &http.Client{
 		Timeout:   time.Second * 60,
