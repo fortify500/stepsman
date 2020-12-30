@@ -25,7 +25,7 @@ import (
 type PostgreSQLSqlxDB sqlx.DB
 
 func (db *PostgreSQLSqlxDB) VerifyDBCreation(tx *sqlx.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS "public"."migration" ( 
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS "migration" ( 
 	"id" Bigint NOT NULL,
 	"version" Bigint NOT NULL,
 	PRIMARY KEY ( "id" ) );`)
@@ -36,7 +36,7 @@ func (db *PostgreSQLSqlxDB) SQL() *sqlx.DB {
 	return (*sqlx.DB)(db)
 }
 func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE "public"."runs" (
+	_, err := tx.Exec(`CREATE TABLE "runs" (
     "group_id" uuid NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
     "id" uuid NOT NULL,
@@ -47,16 +47,23 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"template_title" Text NOT NULL ,
 	"tags" jsonb NOT NULL,
 	"template" jsonb,
-	PRIMARY KEY ( "group_id", "created_at", "id" ),
-	CONSTRAINT "unique_runs_key" UNIQUE( "key" ) )`)
+	PRIMARY KEY ( "group_id", "created_at", "id" ))`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_runs_complete_by" ON "public"."runs" USING btree( "complete_by" Asc NULLS Last )`)
+	_, err = tx.Exec(`CREATE INDEX "index_runs_complete_by" ON "runs" USING btree( "complete_by" Asc NULLS Last )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_complete_by: %w", err)
 	}
-	_, err = tx.Exec(`CREATE TABLE "public"."steps" (
+	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_runs_key" ON "runs" USING btree( "group_id" , "key" Asc )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_runs_key: %w", err)
+	}
+	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_runs_id" ON "runs" USING btree( "id"  )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_runs_id: %w", err)
+	}
+	_, err = tx.Exec(`CREATE TABLE "steps" (
     "group_id" uuid NOT NULL,
     "created_at" timestamp with time zone NOT NULL,
 	"run_id" uuid NOT NULL,
@@ -73,29 +80,36 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"context" jsonb NOT NULL, 
 	"state" jsonb,
 	PRIMARY KEY ("group_id","created_at", "run_id", "index" ),
-	CONSTRAINT "foreign_key_runs" FOREIGN KEY("group_id","created_at","run_id") REFERENCES runs("group_id","created_at","id"),
-    CONSTRAINT "unique_steps_uuid" UNIQUE( "uuid" ),
-    CONSTRAINT "unique_steps_label" UNIQUE( "run_id", "label" ) )`)
+	CONSTRAINT "foreign_key_runs" FOREIGN KEY("group_id","created_at","run_id") REFERENCES runs("group_id","created_at","id") )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_runs_status" ON "public"."runs" USING btree( "group_id" Asc, "status" Asc NULLS Last )`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_steps_uuid" ON "steps" USING btree( "uuid" )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_steps_uuid: %w", err)
+	}
+	// Note we need group_id, run_id index, and we are reusing this one. Please do not remove group_id here.
+	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_steps_label" ON "steps" USING btree( "group_id", "run_id", "label" Asc )`)
+	if err != nil {
+		return fmt.Errorf("failed to create index index_steps_label: %w", err)
+	}
+	_, err = tx.Exec(`CREATE INDEX "index_runs_status" ON "runs" USING btree( "group_id" , "status" Asc )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_status: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_complete_by" ON "public"."steps" USING btree( "complete_by" Asc NULLS Last )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_complete_by" ON "steps" USING btree( "complete_by" Asc )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_complete_by: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "public"."steps" USING btree( "group_id" Asc, "run_id" Asc, "status" Asc, "heartbeat" Asc )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "steps" USING btree( "run_id" , "status" Asc , "heartbeat" Asc )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_runs_tags" ON "public"."runs" USING gin( "tags" )`)
+	_, err = tx.Exec(`CREATE INDEX "index_runs_tags" ON "runs" USING gin( "tags" )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_tags: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_tags" ON "public"."steps" USING gin( "tags" )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_tags" ON "steps" USING gin( "tags" )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_tags: %w", err)
 	}

@@ -102,9 +102,16 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	                                 template TEXT,
 	                                 PRIMARY KEY (group_id, created_at, id)
                                      )`)
-	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_key ON runs (key)`)
+	if err != nil {
+		return fmt.Errorf("failed to create runs table: %w", err)
+	}
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_key ON runs (group_id, key)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_key: %w", err)
+	}
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_id ON runs (id)`)
+	if err != nil {
+		return fmt.Errorf("failed to create index idx_runs_id: %w", err)
 	}
 	_, err = tx.Exec(`CREATE INDEX idx_runs_status ON runs (group_id, status)`)
 	if err != nil {
@@ -143,11 +150,12 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_uuid: %w", err)
 	}
-	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_run_id_label ON steps (run_id, label)`)
+	// Note we need group_id, run_id index, and we are reusing this one. Please do not remove group_id here.
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_run_id_label ON steps (group_id, run_id, label)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_run_id_label: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (group_id,run_id, status, heartbeat)`)
+	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (run_id, status, heartbeat)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}
