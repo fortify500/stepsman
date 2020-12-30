@@ -51,7 +51,7 @@ func (b *BL) recoveryAndExpirationScheduler() {
 		}
 		resetTimer(timer, interval)
 		select {
-		case <-b.stop:
+		case <-b.stopRecovery:
 			log.Info("leaving postgresql listener, server is shutting down")
 			return
 		case <-b.ValveCtx.Done():
@@ -115,9 +115,9 @@ func (b *BL) recoveryAndExpirationScheduler() {
 			}
 			for _, item := range uuidAndGroupIds {
 				work := doWork{
-					item:     item.UUID,
-					options:  api.Options{GroupId: item.GroupId},
-					itemType: StepWorkType,
+					Item:     item.UUID,
+					Options:  api.Options{GroupId: item.GroupId},
+					ItemType: StepWorkType,
 				}
 				if err := b.Enqueue(&work); err != nil {
 					log.Error(fmt.Errorf("in recover steps, failed to enqueue item:%s, with err %w", item, tErr))
@@ -125,9 +125,9 @@ func (b *BL) recoveryAndExpirationScheduler() {
 			}
 			for _, item := range idAndGroupIds {
 				work := doWork{
-					item:     item.Id,
-					itemType: RunWorkType,
-					options:  api.Options{GroupId: item.GroupId},
+					Item:     item.Id,
+					ItemType: RunWorkType,
+					Options:  api.Options{GroupId: item.GroupId},
 				}
 				if err := b.Enqueue(&work); err != nil {
 					log.Error(fmt.Errorf("in runs expiration, failed to enqueue item:%s, with err %w", item, tErr))
@@ -167,7 +167,7 @@ func (b *BL) startRecoveryListening() {
 		for {
 			msg = nil
 			select {
-			case <-b.stop:
+			case <-b.stopRecoveryNotifications1:
 				return api.NewError(api.ErrShuttingDown, "leaving postgresql listener, server is shutting down")
 			case <-b.ValveCtx.Done():
 				return api.NewError(api.ErrShuttingDown, "leaving postgresql listener, server is shutting down")
@@ -211,7 +211,7 @@ func (b *BL) startRecoveryListening() {
 	}
 	for {
 		select {
-		case <-b.stop:
+		case <-b.stopRecoveryNotifications2:
 			log.Info("leaving postgresql listener, shutting down")
 			return
 		case <-b.ValveCtx.Done():

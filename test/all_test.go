@@ -27,7 +27,6 @@ import (
 	"github.com/fortify500/stepsman/client"
 	"github.com/fortify500/stepsman/cmd"
 	"github.com/fortify500/stepsman/dao"
-	"github.com/fortify500/stepsman/serve"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/gobs/args"
@@ -309,7 +308,7 @@ BreakOut:
 			}
 		}()
 
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(time.Duration(2) * time.Second)
 		wasInterrupt = false
 		httpClient := client.New(false, "localhost", 3333)
 		createdRunId := uuid.UUID{}
@@ -841,12 +840,12 @@ BreakOut:
 			}
 		})
 		wasInterrupt = true
-		serve.InterruptServe <- os.Interrupt
+		cmd.BL.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end")
 	}
 	if !wasInterrupt {
-		serve.InterruptServe <- os.Interrupt
+		cmd.BL.InterruptServe <- os.Interrupt
 		wg.Wait()
 	}
 }
@@ -886,7 +885,7 @@ BreakOut:
 			}
 		}()
 
-		time.Sleep(time.Duration(1100) * time.Millisecond)
+		time.Sleep(time.Duration(3) * time.Second)
 		wasInterrupt = false
 		httpClient := client.New(false, "localhost", 3333)
 		createdRunId := uuid.UUID{}
@@ -1014,12 +1013,12 @@ BreakOut:
 		})
 		wasInterrupt = true
 		fmt.Printf("createdRunId: %s\n", createdRunId)
-		serve.InterruptServe <- os.Interrupt
+		cmd.BL.InterruptServe <- os.Interrupt
 		wg.Wait()
 		fmt.Println("end approval")
 	}
 	if !wasInterrupt {
-		serve.InterruptServe <- os.Interrupt
+		cmd.BL.InterruptServe <- os.Interrupt
 		wg.Wait()
 	}
 }
@@ -1135,11 +1134,16 @@ func mockServer() http.Server {
 
 func waitForQueuesToFinish() {
 	i := 0
-	for !cmd.BL.QueuesIdle() {
-		i++
-		time.Sleep(1 * time.Second)
-		if i > 60 {
-			break
+	if cmd.BL != nil {
+		if cmd.BL.JobQueueType == bl.JobQueueTypeRabbitMQ {
+			time.Sleep(1 * time.Second)
+		}
+		for !cmd.BL.QueuesIdle() {
+			i++
+			time.Sleep(1 * time.Second)
+			if i > 60 {
+				break
+			}
 		}
 	}
 }

@@ -414,9 +414,9 @@ func (t *Template) TransitionStateAndStatus(BL *BL, options api.Options, runId u
 		tErr = softError
 	} else if tErr == nil && toEnqueue {
 		work := doWork{
-			item:     updatedStepRecord.UUID,
-			itemType: StepWorkType,
-			options:  options,
+			Item:     updatedStepRecord.UUID,
+			ItemType: StepWorkType,
+			Options:  options,
 		}
 		tErr = BL.Enqueue(&work)
 	}
@@ -514,9 +514,9 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, options api.Options, phase int, cooki
 		if len(cookie.uuidsToEnqueue) > 0 {
 			for _, item := range cookie.uuidsToEnqueue {
 				work := doWork{
-					item:     item.UUID,
-					itemType: StepWorkType,
-					options:  options,
+					Item:     item.UUID,
+					ItemType: StepWorkType,
+					Options:  options,
 				}
 				if eErr := BL.Enqueue(&work); eErr != nil {
 					log.Error(eErr)

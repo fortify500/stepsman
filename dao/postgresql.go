@@ -79,7 +79,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_runs_status" ON "public"."runs" USING btree( "status" Asc NULLS Last )`)
+	_, err = tx.Exec(`CREATE INDEX "index_runs_status" ON "public"."runs" USING btree( "group_id" Asc, "status" Asc NULLS Last )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_status: %w", err)
 	}
@@ -87,7 +87,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_complete_by: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "public"."steps" USING btree( "run_id" Asc, "status" Asc, "heartbeat" Asc )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "public"."steps" USING btree( "group_id" Asc, "run_id" Asc, "status" Asc, "heartbeat" Asc )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}

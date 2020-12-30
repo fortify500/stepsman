@@ -28,15 +28,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
+	"net"
 	"net/http"
-	"os"
-	"os/signal"
 	"sync"
 	"syscall"
 	"time"
 )
-
-var InterruptServe chan os.Signal
 
 type dbHealthCheck struct {
 	BL *bl.BL
@@ -66,9 +63,6 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 	newLog.SetFormatter(&log.JSONFormatter{})
 	newLog.SetLevel(log.GetLevel())
 	newLog.SetOutput(output)
-	InterruptServe = make(chan os.Signal, 1)
-	signal.Notify(InterruptServe, os.Interrupt, syscall.SIGTERM)
-
 	rHealth := chi.NewRouter()
 	rHealth.Use(middleware.AllowContentType("application/json"))
 	rHealth.Use(middleware.RequestID)
@@ -98,7 +92,6 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 	healthServerAddress := fmt.Sprintf(":%v", healthPort)
 	log.Info(fmt.Sprintf("using server address: %s", healthServerAddress))
 	srvHealth := http.Server{Addr: healthServerAddress, Handler: chi.ServerBaseContext(context.Background(), rHealth)}
-
 	r := chi.NewRouter()
 	r.Use(middleware.AllowContentType("application/json"))
 	r.Use(middleware.RequestID)
@@ -117,7 +110,7 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 	exit := make(chan int, 1)
 	go func() {
 		viper.SetDefault("SHUTDOWN_INTERVAL", time.Duration(20)*time.Minute)
-		<-InterruptServe
+		<-BL.InterruptServe
 		shutdownInterval := viper.GetDuration("SHUTDOWN_INTERVAL")
 		log.Info("shutting down..")
 		// create context with timeout
@@ -154,15 +147,16 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 			log.Fatal(api.NewLocalizedError("failed to start serving health checks: %w", errHealth))
 		}
 	}()
-
-	err := srv.ListenAndServe()
-	if err == http.ErrServerClosed {
-		err = nil
-	}
+	l, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		log.Error(fmt.Errorf("failed to start listening and serving: %w", err))
+		log.Fatal(fmt.Errorf("failed to start listening: %w", err))
+	}
+	BL.ServerReady = true
+	err = srv.Serve(l)
+	if err != nil {
+		log.Error(fmt.Errorf("failed to start serving: %w", err))
 		go func() {
-			InterruptServe <- syscall.SIGINT
+			BL.InterruptServe <- syscall.SIGINT
 		}()
 	}
 	{

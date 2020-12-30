@@ -31,21 +31,56 @@ import (
 	"github.com/spf13/viper"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
+	"time"
 )
 
+type JOBQueueType int
+
+const (
+	JobQueueTypeMemoryQueue JOBQueueType = 0
+	JobQueueTypeRabbitMQ    JOBQueueType = 10
+)
+
+func TranslateToJOBQueueType(status string) (JOBQueueType, error) {
+	switch status {
+	case "rabbitmq":
+		return JobQueueTypeRabbitMQ, nil
+	case "memory":
+		return JobQueueTypeMemoryQueue, nil
+	default:
+		return JobQueueTypeMemoryQueue, api.NewError(api.ErrInvalidParams, "failed to translate to job queue type: %s", status)
+	}
+}
+
 type BL struct {
+	InterruptServe                          chan os.Signal
+	ServerReady                             bool
+	stopping                                workCounter
 	netTransport                            *http.Transport
 	ValveCtx                                context.Context
 	ShutdownValve                           *valve.Valve
 	CancelValveCtx                          context.CancelFunc
 	memoryQueue                             chan *doWork
-	queue                                   chan *doWork
-	stop                                    <-chan struct{}
+	queue                                   chan *workerDoItem
+	stopMemoryJobQueue                      chan struct{}
+	stopRabbitMQJobQueue                    chan struct{}
+	stopRecovery                            chan struct{}
+	stopRecoveryNotifications1              chan struct{}
+	stopRecoveryNotifications2              chan struct{}
 	workCounter                             workCounter
 	completeByInProgressInterval            int64
 	jobQueueNumberOfWorkers                 int
 	jobQueueMemoryQueueLimit                int
+	JobQueueType                            JOBQueueType
+	rabbitMQJobQueueName                    string
+	rabbitMQURIConnectionString             string
+	rabbitMQReconnectDelay                  time.Duration
+	rabbitMQReInitDelay                     time.Duration
+	rabbitMQResendDelay                     time.Duration
 	PendingRecursionDepthLimit              int
 	recoveryDisableSkipLocks                bool
 	recoveryMaxRecoverItemsPassLimit        int
@@ -90,6 +125,14 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	if ok {
 		log.WithField("build-info", bi).Info()
 	}
+	newBL.rabbitMQJobQueueName = "stepsman_tasks"
+	newBL.rabbitMQURIConnectionString = "amqp://guest:guest@localhost:5672/"
+	newBL.rabbitMQReconnectDelay = 5 * time.Second
+	newBL.rabbitMQReInitDelay = 2 * time.Second
+	newBL.rabbitMQResendDelay = 5 * time.Second
+	newBL.JobQueueType = JobQueueTypeMemoryQueue
+	newBL.InterruptServe = make(chan os.Signal, 1)
+	signal.Notify(newBL.InterruptServe, os.Interrupt, syscall.SIGTERM)
 	newBL.maxRegoEvaluationTimeoutSeconds = 3
 	newBL.completeByInProgressInterval = 3600
 	newBL.jobQueueNumberOfWorkers = 5000
@@ -106,6 +149,27 @@ func New(daoParameters *dao.ParametersType) (*BL, error) {
 	}
 	if viper.IsSet("JOB_QUEUE_MEMORY_QUEUE_LIMIT") {
 		newBL.jobQueueMemoryQueueLimit = viper.GetInt("JOB_QUEUE_MEMORY_QUEUE_LIMIT")
+	}
+	if viper.IsSet("JOB_QUEUE_TYPE") {
+		newBL.JobQueueType, err = TranslateToJOBQueueType(viper.GetString("JOB_QUEUE_TYPE"))
+		if err != nil {
+			log.Fatal(api.NewLocalizedError("failed to get job queue type: %w", err))
+		}
+	}
+	if viper.IsSet("RABBITMQ_JOB_QUEUE_NAME") {
+		newBL.rabbitMQJobQueueName = viper.GetString("RABBITMQ_JOB_QUEUE_NAME")
+	}
+	if viper.IsSet("RABBITMQ_URI_CONNECTION_STRING") {
+		newBL.rabbitMQURIConnectionString = viper.GetString("RABBITMQ_URI_CONNECTION_STRING")
+	}
+	if viper.IsSet("RABBITMQ_RECONNECT_DELAY") {
+		newBL.rabbitMQReconnectDelay = time.Duration(viper.GetInt("RABBITMQ_RECONNECT_DELAY")) * time.Second
+	}
+	if viper.IsSet("RABBITMQ_RE_INIT_DELAY") {
+		newBL.rabbitMQReInitDelay = time.Duration(viper.GetInt("RABBITMQ_RE_INIT_DELAY")) * time.Second
+	}
+	if viper.IsSet("RABBITMQ_RE_SEND_DELAY") {
+		newBL.rabbitMQResendDelay = time.Duration(viper.GetInt("RABBITMQ_RE_SEND_DELAY")) * time.Second
 	}
 	if viper.IsSet("PENDING_RECURSION_DEPTH_LIMIT") {
 		newBL.PendingRecursionDepthLimit = viper.GetInt("PENDING_RECURSION_DEPTH_LIMIT")

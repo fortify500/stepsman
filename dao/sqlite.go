@@ -106,7 +106,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_key: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX idx_runs_status ON runs (status)`)
+	_, err = tx.Exec(`CREATE INDEX idx_runs_status ON runs (group_id, status)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_status: %w", err)
 	}
@@ -147,7 +147,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_run_id_label: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (run_id, status, heartbeat)`)
+	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (group_id,run_id, status, heartbeat)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}
