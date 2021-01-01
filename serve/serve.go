@@ -95,7 +95,7 @@ func createTLSServerConfig(BL *bl.BL) (*tls.Config, error) {
 	}
 }
 
-func Serve(BL *bl.BL, port int64, healthPort int64) {
+func Serve(BL *bl.BL, address string, port int64, healthPort int64) {
 	newLog := log.New()
 	newLog.SetFormatter(&log.JSONFormatter{})
 	newLog.SetLevel(log.GetLevel())
@@ -140,7 +140,7 @@ func Serve(BL *bl.BL, port int64, healthPort int64) {
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Post("/v0/json-rpc", GetJsonRpcHandler().ServeHTTP)
 
-	serverAddress := fmt.Sprintf(":%v", port)
+	serverAddress := fmt.Sprintf("%s:%v", address, port)
 	log.Info(fmt.Sprintf("using server address: %s", serverAddress))
 	baseContext := context.WithValue(BL.ValveCtx, "BL", BL)
 	srv := http.Server{Addr: serverAddress, Handler: chi.ServerBaseContext(baseContext, r)}

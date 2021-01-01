@@ -37,7 +37,7 @@ var ServeCmd = &cobra.Command{
 			}
 			return
 		}
-		serveServe.Serve(BL, Parameters.ServerPort, Parameters.ServerHealthPort)
+		serveServe.Serve(BL, Parameters.ServerAddress, Parameters.ServerPort, Parameters.ServerHealthPort)
 	},
 }
 
@@ -45,10 +45,12 @@ var serveParams AllParameters
 
 func syncServeParams() {
 	Parameters.ServerPort = serveParams.ServerPort
+	Parameters.ServerAddress = serveParams.ServerAddress
 	Parameters.ServerHealthPort = serveParams.ServerHealthPort
 }
 func init() {
 	ServeCmd.Flags().Int64VarP(&serveParams.ServerPort, "serve-port", "p", 3333, "server port number")
+	ServeCmd.Flags().StringVarP(&serveParams.ServerAddress, "serve-bind-address", "s", "", "server address - leave empty for all")
 	ServeCmd.Flags().Int64VarP(&serveParams.ServerHealthPort, "serve-health-port", "t", 3334, "server health port number")
 	RootCmd.AddCommand(ServeCmd)
 }
