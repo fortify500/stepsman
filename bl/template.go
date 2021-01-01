@@ -52,20 +52,20 @@ type Rego struct {
 	preparedModuleQueries     map[string]rego.PreparedEvalQuery
 	input                     map[string]interface{}
 	lastStateHeartBeat        time.Time
-	lastStateHeartBeatIndices []int64
+	lastStateHeartBeatIndices []int
 	inputMutex                sync.RWMutex
 }
 
 type Template struct {
 	Title           string         `json:"title,omitempty"`
-	Version         int64          `json:"version,omitempty"`
+	Version         int            `json:"version,omitempty"`
 	Expiration      Expiration     `json:"expiration,omitempty"`
 	Steps           []Step         `json:"steps,omitempty"`
 	Tags            api.Tags       `json:"tags,omitempty"`
 	Decisions       []Decision     `json:"decisions,omitempty"`
 	Parameters      api.Parameters `json:"parameters,omitempty"`
-	labelsToIndices map[string]int64
-	indicesToLabels map[int64]string
+	labelsToIndices map[string]int
+	indicesToLabels map[int]string
 	rego            *Rego
 }
 type Expiration struct {
@@ -190,11 +190,11 @@ func (t *Template) LoadFromBytes(BL *BL, runId uuid.UUID, isYaml bool, yamlDocum
 	if err != nil {
 		return fmt.Errorf("failed to load from bytes: %w", err)
 	}
-	t.labelsToIndices = make(map[string]int64)
-	t.indicesToLabels = make(map[int64]string)
+	t.labelsToIndices = make(map[string]int)
+	t.indicesToLabels = make(map[int]string)
 	t.rego = &Rego{}
 	for i := range t.Steps {
-		err = (&t.Steps[i]).AdjustUnmarshalStep(t, int64(i)+1)
+		err = (&t.Steps[i]).AdjustUnmarshalStep(t, i+1)
 		if err != nil {
 			return fmt.Errorf("failed to load from bytes: %w", err)
 		}
@@ -305,13 +305,13 @@ func (t *Template) RefreshInput(BL *BL, options api.Options, runId uuid.UUID) {
 	}
 	if len(stepRecords) > 0 {
 		var maxHeartBeat time.Time
-		var maxHeartBeatIndices []int64
+		var maxHeartBeatIndices []int
 		t.rego.inputMutex.Lock()
 		labels := t.rego.input["labels"].(map[string]interface{})
 		for _, record := range stepRecords {
 			if time.Time(record.Heartbeat).After(maxHeartBeat) {
 				maxHeartBeat = time.Time(record.Heartbeat)
-				maxHeartBeatIndices = []int64{}
+				maxHeartBeatIndices = []int{}
 			}
 			if time.Time(record.Heartbeat).Equal(maxHeartBeat) {
 				maxHeartBeatIndices = append(maxHeartBeatIndices, record.Index)
@@ -501,7 +501,7 @@ func (t *Template) LoadAndCreateRun(BL *BL, options api.Options, key string, fil
 
 }
 
-func (s *Step) AdjustUnmarshalStep(t *Template, index int64) error {
+func (s *Step) AdjustUnmarshalStep(t *Template, index int) error {
 	_, ok := t.labelsToIndices[s.Label]
 	if ok {
 		return api.NewError(api.ErrInvalidParams, "label must be unique among steps: %s", s.Label)

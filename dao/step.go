@@ -163,8 +163,8 @@ func (d *DAO) UpdateStepHeartBeat(options api.Options, stepUUID uuid.UUID, statu
 	}
 	return nil
 }
-func (d *DAO) UpdateStepPartsTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, index int64, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) UUIDAndStatusOwner {
-	updated := d.UpdateManyStepsPartsBeatTx(tx, options, runId, []int64{index}, newStatus, newStatusOwner, nil, completeBy, retriesLeft, context, state)
+func (d *DAO) UpdateStepPartsTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, index int, newStatus api.StepStatusType, newStatusOwner string, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) UUIDAndStatusOwner {
+	updated := d.UpdateManyStepsPartsBeatTx(tx, options, runId, []int{index}, newStatus, newStatusOwner, nil, completeBy, retriesLeft, context, state)
 	if len(updated) != 1 {
 		panic(fmt.Errorf("illegal state, 1 updated record expected for runId:%s and index:%d", runId, index))
 	}
@@ -244,7 +244,7 @@ func GetStepByLabelTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, label s
 	return result, nil
 }
 
-func GetStepTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, index int64, attributes []string) (api.StepRecord, error) {
+func GetStepTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, index int, attributes []string) (api.StepRecord, error) {
 	var result api.StepRecord
 	attributesStr, err := buildStepsReturnAttributesStrAndVet(attributes)
 	if err != nil {
@@ -325,7 +325,7 @@ func (d *DAO) UpdateManyStatusAndHeartBeatByUUIDTx(tx *sqlx.Tx, options api.Opti
 	}
 	return d.updateManyStepsPartsTxInternal(tx, options, indicesUuids, newStatus, newStatusOwner, prevStatus, completeBy, nil, context, nil)
 }
-func (d *DAO) UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, indices []int64, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) []UUIDAndStatusOwner {
+func (d *DAO) UpdateManyStepsPartsBeatTx(tx *sqlx.Tx, options api.Options, runId uuid.UUID, indices []int, newStatus api.StepStatusType, newStatusOwner string, prevStatus []api.StepStatusType, completeBy *int64, retriesLeft *int, context api.Context, state *api.State) []UUIDAndStatusOwner {
 	var indicesUuids []indicesUUIDs
 	for _, index := range indices {
 		indicesUuids = append(indicesUuids, indicesUUIDs{

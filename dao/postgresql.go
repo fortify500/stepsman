@@ -20,14 +20,15 @@ import (
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 )
 
 type PostgreSQLSqlxDB sqlx.DB
 
 func (db *PostgreSQLSqlxDB) VerifyDBCreation(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS "migration" ( 
-	"id" Bigint NOT NULL,
-	"version" Bigint NOT NULL,
+	"id" integer NOT NULL,
+	"version" integer NOT NULL,
 	PRIMARY KEY ( "id" ) );`)
 	return err
 }
@@ -37,17 +38,17 @@ func (db *PostgreSQLSqlxDB) SQL() *sqlx.DB {
 }
 func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	_, err := tx.Exec(`CREATE TABLE "runs" (
+    "created_at" timestamp with time zone NOT NULL,
     "group_id" uuid NOT NULL,
-	"created_at" timestamp with time zone NOT NULL,
     "id" uuid NOT NULL,
-	"status" Bigint NOT NULL,
-	"template_version" BIGINT NOT NULL,
+	"status" integer NOT NULL,
+	"template_version" integer NOT NULL,
 	"complete_by" timestamp with time zone NULL,
 	"key" Text NOT NULL,
 	"template_title" Text NOT NULL ,
 	"tags" jsonb NOT NULL,
 	"template" jsonb,
-	PRIMARY KEY ( "group_id", "created_at", "id" ))`)
+	PRIMARY KEY ( "created_at", "group_id",  "id" ))`)
 	if err != nil {
 		return fmt.Errorf("failed to create database runs table: %w", err)
 	}
@@ -59,17 +60,17 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_key: %w", err)
 	}
-	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_runs_id" ON "runs" USING btree( "id"  )`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_runs_id" ON "runs" USING btree( "group_id","id"  )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_runs_id: %w", err)
 	}
 	_, err = tx.Exec(`CREATE TABLE "steps" (
-    "group_id" uuid NOT NULL,
     "created_at" timestamp with time zone NOT NULL,
+    "group_id" uuid NOT NULL,
 	"run_id" uuid NOT NULL,
-	"index" Bigint NOT NULL,
+	"index" integer NOT NULL,
 	"uuid" uuid NOT NULL,
-	"status" Bigint NOT NULL,
+	"status" integer NOT NULL,
 	"label" Text NOT NULL,
 	"tags" jsonb NOT NULL,
 	"name" Text,
@@ -79,12 +80,12 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"status_owner" Text NOT NULL,
 	"context" jsonb NOT NULL, 
 	"state" jsonb,
-	PRIMARY KEY ("group_id","created_at", "run_id", "index" ),
-	CONSTRAINT "foreign_key_runs" FOREIGN KEY("group_id","created_at","run_id") REFERENCES runs("group_id","created_at","id") )`)
+	PRIMARY KEY ("created_at","group_id", "run_id", "index" ),
+	CONSTRAINT "foreign_key_runs" FOREIGN KEY("created_at","group_id","run_id") REFERENCES runs("created_at","group_id","id") )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
 	}
-	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_steps_uuid" ON "steps" USING btree( "uuid" )`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX "index_steps_uuid" ON "steps" USING btree( "group_id","uuid" )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_uuid: %w", err)
 	}
@@ -101,17 +102,20 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_complete_by: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "steps" USING btree( "run_id" , "status" Asc , "heartbeat" Asc )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_run_id_status_heartbeat" ON "steps" USING btree( "group_id", "run_id" , "status" Asc , "heartbeat" Asc )`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_runs_tags" ON "runs" USING gin( "tags" )`)
+	// Requires GIN and possibly CREATE EXTENSION btree_gin; as a SUPERUSER. This is just a default index, it should be replaced for real world.
+	_, err = tx.Exec(`CREATE INDEX "index_runs_tags" ON "runs" USING gin( "group_id","status","tags" )`)
 	if err != nil {
-		return fmt.Errorf("failed to create index index_runs_tags: %w", err)
+		log.Warn(fmt.Errorf("failed to create index index_runs_tags: %w", err))
+		err = nil
 	}
-	_, err = tx.Exec(`CREATE INDEX "index_steps_tags" ON "steps" USING gin( "tags" )`)
+	_, err = tx.Exec(`CREATE INDEX "index_steps_tags" ON "steps" USING gin( "group_id","status","tags" )`)
 	if err != nil {
-		return fmt.Errorf("failed to create index index_steps_tags: %w", err)
+		log.Warn(fmt.Errorf("failed to create index index_steps_tags: %w", err))
+		err = nil
 	}
 	return nil
 }

@@ -263,6 +263,6 @@ func InitLogrus(out io.Writer, level log.Level) {
 type indicesUUIDs struct {
 	runId uuid.UUID
 	label string
-	index int64
+	index int
 	uuid  uuid.UUID
 }

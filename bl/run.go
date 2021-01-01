@@ -179,7 +179,7 @@ func (t *Template) CreateRun(BL *BL, options api.Options, key string) (*api.RunR
 			stepRecord := &api.StepRecord{
 				GroupId:     options.GroupId,
 				RunId:       runRecord.Id,
-				Index:       int64(i) + 1,
+				Index:       i + 1,
 				UUID:        uuid4,
 				Status:      api.StepIdle,
 				StatusOwner: statusOwner.String(),

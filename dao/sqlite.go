@@ -100,7 +100,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
                                      complete_by TIMESTAMP NULL,
 	                                 template_title TEXT,
 	                                 template TEXT,
-	                                 PRIMARY KEY (group_id, created_at, id)
+	                                 PRIMARY KEY (created_at,group_id,id)
                                      )`)
 	if err != nil {
 		return fmt.Errorf("failed to create runs table: %w", err)
@@ -109,7 +109,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_key: %w", err)
 	}
-	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_id ON runs (id)`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_runs_id ON runs (group_id, id)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_runs_id: %w", err)
 	}
@@ -137,7 +137,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 									 tags TEXT NOT NULL,
 									 context TEXT NOT NULL, 
 	                                 state text,
-	                                 PRIMARY KEY (group_id, created_at, run_id, "index")
+	                                 PRIMARY KEY (created_at,group_id, run_id, "index")
                                      )`)
 	if err != nil {
 		return fmt.Errorf("failed to create database steps table: %w", err)
@@ -146,7 +146,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_complete_by: %w", err)
 	}
-	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_uuid ON steps (uuid)`)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_steps_uuid ON steps (group_id,uuid)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_uuid: %w", err)
 	}
@@ -155,7 +155,7 @@ func (db *Sqlite3SqlxDB) Migrate0(tx *sqlx.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index idx_steps_run_id_label: %w", err)
 	}
-	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (run_id, status, heartbeat)`)
+	_, err = tx.Exec(`CREATE INDEX index_steps_run_id_status_heartbeat ON steps (group_id,run_id, status, heartbeat)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index index_steps_run_id_status_heartbeat: %w", err)
 	}

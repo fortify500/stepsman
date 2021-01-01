@@ -196,13 +196,13 @@ type RunRecord struct {
 	CreatedAt       AnyTime       `db:"created_at" json:"created-at,omitempty"`
 	CompleteBy      *AnyTime      `db:"complete_by" json:"complete-by,omitempty"`
 	Now             AnyTime       `db:"now" json:"now,omitempty"`
-	TemplateVersion int64         `db:"template_version" json:"template-version,omitempty"`
+	TemplateVersion int           `db:"template_version" json:"template-version,omitempty"`
 	TemplateTitle   string        `db:"template_title" json:"template-title,omitempty"`
 	Status          RunStatusType `json:"status,omitempty"`
 	Template        string        `json:"template,omitempty"`
 }
 
-type RunStatusType int64
+type RunStatusType int
 
 func (r RunStatusType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
@@ -316,7 +316,7 @@ func TranslateToRunStatus(status string) (RunStatusType, error) {
 	}
 }
 
-type StepStatusType int64
+type StepStatusType int
 
 func (s StepStatusType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
@@ -439,7 +439,7 @@ type StepRecord struct {
 	GroupId     uuid.UUID      `db:"group_id" json:"group-id,omitempty"`
 	CreatedAt   AnyTime        `db:"created_at" json:"created-at,omitempty"`
 	RunId       uuid.UUID      `db:"run_id" json:"run-id,omitempty"`
-	Index       int64          `db:"index" json:"index,omitempty"`
+	Index       int            `db:"index" json:"index,omitempty"`
 	Tags        Tags           `db:"tags" json:"tags,omitempty"`
 	Label       string         `json:"label,omitempty"`
 	UUID        uuid.UUID      `json:"uuid,omitempty"`

@@ -39,7 +39,7 @@ const (
 )
 
 type onCookieContext struct {
-	index           int64
+	index           int
 	context         string
 	label           string
 	resolvedContext api.Context
@@ -444,7 +444,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, options api.Options, phase int, cooki
 	switch phase {
 	case OnPhasePreTransaction:
 		safetyDepth := cookie.safetyDepth
-		zeroIndex := int(t.labelsToIndices[label] - 1)
+		zeroIndex := t.labelsToIndices[label] - 1
 		step := t.Steps[zeroIndex]
 		cookie = onCookie{
 			safetyDepth: safetyDepth,
@@ -499,7 +499,7 @@ func (t *Template) on(tx *sqlx.Tx, BL *BL, options api.Options, phase int, cooki
 					}
 					break BREAKOUT
 				}
-				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, options, runId, []int64{indexContextAndLabel.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexContextAndLabel.resolvedContext, nil)
+				uuids := BL.DAO.UpdateManyStepsPartsBeatTx(tx, options, runId, []int{indexContextAndLabel.index}, api.StepPending, "", []api.StepStatusType{api.StepIdle}, &BL.DAO.CompleteByPendingInterval, nil, indexContextAndLabel.resolvedContext, nil)
 				if len(uuids) == 1 {
 					cookie.uuidsToEnqueue = append(cookie.uuidsToEnqueue, uuids[0])
 					innerCookie, newStatus, _, err = t.on(tx, BL, options, OnPhaseInTransaction, innerCookie, runId, indexContextAndLabel.label, api.StepPending, indexContextAndLabel.resolvedContext, &emptyState, uncommitted)
