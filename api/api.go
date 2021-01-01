@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/osamingo/jsonrpc"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -189,17 +190,17 @@ type DeleteQuery struct {
 }
 
 type RunRecord struct {
-	GroupId         uuid.UUID     `db:"group_id" json:"group-id,omitempty"`
-	Id              uuid.UUID     `json:"id,omitempty"`
-	Key             string        `json:"key,omitempty"`
-	Tags            Tags          `db:"tags" json:"tags,omitempty"`
-	CreatedAt       AnyTime       `db:"created_at" json:"created-at,omitempty"`
-	CompleteBy      *AnyTime      `db:"complete_by" json:"complete-by,omitempty"`
-	Now             AnyTime       `db:"now" json:"now,omitempty"`
-	TemplateVersion int           `db:"template_version" json:"template-version,omitempty"`
-	TemplateTitle   string        `db:"template_title" json:"template-title,omitempty"`
-	Status          RunStatusType `json:"status,omitempty"`
-	Template        string        `json:"template,omitempty"`
+	GroupId         uuid.UUID      `db:"group_id" json:"group-id,omitempty"`
+	Id              uuid.UUID      `json:"id,omitempty"`
+	Key             string         `json:"key,omitempty"`
+	Tags            pq.StringArray `db:"tags" json:"tags,omitempty"`
+	CreatedAt       AnyTime        `db:"created_at" json:"created-at,omitempty"`
+	CompleteBy      *AnyTime       `db:"complete_by" json:"complete-by,omitempty"`
+	Now             AnyTime        `db:"now" json:"now,omitempty"`
+	TemplateVersion int            `db:"template_version" json:"template-version,omitempty"`
+	TemplateTitle   string         `db:"template_title" json:"template-title,omitempty"`
+	Status          RunStatusType  `json:"status,omitempty"`
+	Template        string         `json:"template,omitempty"`
 }
 
 type RunStatusType int
@@ -356,20 +357,6 @@ func (a *AnyTime) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (t Tags) Value() (driver.Value, error) {
-	if marshal, err := json.Marshal(t); err != nil {
-		return nil, err
-	} else {
-		return marshal, nil
-	}
-}
-func (t *Tags) Scan(src interface{}) error {
-	if err := json.Unmarshal(src.([]byte), t); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (c Context) Value() (driver.Value, error) {
 	if marshal, err := json.Marshal(c); err != nil {
 		return nil, err
@@ -434,13 +421,12 @@ type State struct {
 	Result interface{} `json:"result,omitempty" mapstructure:"result" yaml:"result"`
 	Error  string      `json:"error,omitempty" mapstructure:"error" yaml:"error,omitempty"`
 }
-type Tags []string
 type StepRecord struct {
 	GroupId     uuid.UUID      `db:"group_id" json:"group-id,omitempty"`
 	CreatedAt   AnyTime        `db:"created_at" json:"created-at,omitempty"`
 	RunId       uuid.UUID      `db:"run_id" json:"run-id,omitempty"`
 	Index       int            `db:"index" json:"index,omitempty"`
-	Tags        Tags           `db:"tags" json:"tags,omitempty"`
+	Tags        pq.StringArray `db:"tags" json:"tags,omitempty"`
 	Label       string         `json:"label,omitempty"`
 	UUID        uuid.UUID      `json:"uuid,omitempty"`
 	Name        string         `json:"name,omitempty"`
@@ -703,7 +689,7 @@ func ResolveErrorAndLog(err error, propagate bool) *Error {
 		}
 		if stack := apiErr.Stack(); stack != nil && len(stack) > 0 {
 			caller := apiErr.Caller()
-			defer log.
+			log.
 				WithField("input", inputJson).
 				WithField("propagate", propagate).
 				WithField("code", apiErr.Code().Code).

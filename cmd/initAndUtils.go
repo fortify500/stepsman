@@ -161,7 +161,7 @@ func recoverAndLog(msg string) {
 				Friendly:  msg,
 			}
 		}
-		defer log.WithField("stack", string(debug.Stack())).Error(err)
+		log.WithField("stack", string(debug.Stack())).Error(err)
 	}
 }
 

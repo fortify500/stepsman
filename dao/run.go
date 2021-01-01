@@ -17,7 +17,6 @@
 package dao
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/fortify500/stepsman/api"
 	"github.com/google/uuid"
@@ -136,7 +135,18 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 						if len(tags) == 0 {
 							return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
 						}
-						queryExpression += fmt.Sprintf(" @> $%d::jsonb", i)
+						var sb strings.Builder
+						sb.WriteString(" @> array[")
+						for j := range tags {
+							if j > 0 {
+								i++
+								sb.WriteString(fmt.Sprintf(",$%d", i))
+							} else {
+								sb.WriteString(fmt.Sprintf("$%d", i))
+							}
+						}
+						sb.WriteString("]")
+						queryExpression += sb.String()
 					default:
 						queryExpression += fmt.Sprintf(" LIKE '%%' || $%d || '%%'", i)
 					}
@@ -167,7 +177,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 						return nil, nil, api.NewError(api.ErrInvalidParams, "invalid tags attribute value in filter: %s - %s", expression.AttributeName, expression.Value)
 					}
 					var sb strings.Builder
-					sb.WriteString(" ?| array[")
+					sb.WriteString(" && array[")
 					for j := range tags {
 						if j > 0 {
 							i++
@@ -185,12 +195,7 @@ func ListRunsTx(tx *sqlx.Tx, query *api.ListQuery) ([]api.RunRecord, *api.RangeR
 				case Tags:
 					switch expression.Operator {
 					case "contains":
-						var tagsJson []byte
-						tagsJson, err = json.Marshal(expression.Value)
-						if err != nil {
-							panic(err)
-						}
-						params = append(params, tagsJson)
+						fallthrough
 					case "exists":
 						params = append(params, expression.Value.([]interface{})...)
 					default:

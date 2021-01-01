@@ -88,9 +88,9 @@ func recoverable(recoverableFunction func() error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if _, ok := p.(error); ok {
-				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to process: %w", p.(error)))
+				log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to process: %w", p.(error)))
 			} else {
-				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to process: %v", p))
+				log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to process: %v", p))
 			}
 		} else if err != nil {
 			_ = api.ResolveErrorAndLog(err, true)

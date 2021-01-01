@@ -145,6 +145,10 @@ func (t *Template) CreateRun(BL *BL, options api.Options, key string) (*api.RunR
 			if err != nil {
 				panic(err)
 			}
+			runTags := t.Tags
+			if runTags == nil {
+				runTags = []string{}
+			}
 			runRecord = &api.RunRecord{
 				GroupId:         options.GroupId,
 				Id:              uuid4,
@@ -175,7 +179,10 @@ func (t *Template) CreateRun(BL *BL, options api.Options, key string) (*api.RunR
 			if retriesLeft < 1 {
 				retriesLeft = 1
 			}
-
+			stepTags := step.Tags
+			if stepTags == nil {
+				stepTags = []string{}
+			}
 			stepRecord := &api.StepRecord{
 				GroupId:     options.GroupId,
 				RunId:       runRecord.Id,
@@ -183,7 +190,7 @@ func (t *Template) CreateRun(BL *BL, options api.Options, key string) (*api.RunR
 				UUID:        uuid4,
 				Status:      api.StepIdle,
 				StatusOwner: statusOwner.String(),
-				Tags:        step.Tags,
+				Tags:        stepTags,
 				Label:       step.Label,
 				Name:        step.Name,
 				State:       api.State{},

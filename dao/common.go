@@ -236,7 +236,7 @@ func (d *DAO) Transactional(transactionalFunction func(tx *sqlx.Tx) error) (err 
 		if p := recover(); p != nil {
 			err2 := tx.Rollback()
 			if err2 != nil {
-				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to rollback: %w", err2))
+				log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to rollback: %w", err2))
 			}
 			panic(p)
 		} else if err != nil {

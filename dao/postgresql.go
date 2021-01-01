@@ -46,7 +46,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"complete_by" timestamp with time zone NULL,
 	"key" Text NOT NULL,
 	"template_title" Text NOT NULL ,
-	"tags" jsonb NOT NULL,
+	"tags" text[] NOT NULL,
 	"template" jsonb,
 	PRIMARY KEY ( "created_at", "group_id",  "id" ))`)
 	if err != nil {
@@ -72,7 +72,7 @@ func (db *PostgreSQLSqlxDB) Migrate0(tx *sqlx.Tx) error {
 	"uuid" uuid NOT NULL,
 	"status" integer NOT NULL,
 	"label" Text NOT NULL,
-	"tags" jsonb NOT NULL,
+	"tags" text[] NOT NULL,
 	"name" Text,
 	"complete_by" timestamp with time zone NULL,
 	"heartbeat" timestamp with time zone NOT NULL,

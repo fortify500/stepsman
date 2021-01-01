@@ -34,10 +34,10 @@ func recoverable(recoverableFunction func() *jsonrpc.Error) (err *jsonrpc.Error)
 		if p := recover(); p != nil {
 			var msg string
 			if _, ok := p.(error); ok {
-				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to serve: %w", p.(error)))
+				log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to serve: %w", p.(error)))
 				msg = p.(error).Error()
 			} else {
-				defer log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to serve: %v", p))
+				log.WithField("stack", string(debug.Stack())).Error(fmt.Errorf("failed to serve: %v", p))
 				msg = fmt.Sprintf("%v", p)
 			}
 			err = &jsonrpc.Error{
@@ -45,7 +45,7 @@ func recoverable(recoverableFunction func() *jsonrpc.Error) (err *jsonrpc.Error)
 				Message: msg,
 			}
 		} else if err != nil {
-			defer log.Debug(fmt.Errorf("failed to serve: %w", err))
+			log.Debug(fmt.Errorf("failed to serve: %w", err))
 		}
 	}()
 	err = recoverableFunction()

@@ -24,6 +24,7 @@ import (
 	"github.com/fortify500/stepsman/api"
 	"github.com/fortify500/stepsman/dao"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/mitchellh/mapstructure"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
@@ -61,7 +62,7 @@ type Template struct {
 	Version         int            `json:"version,omitempty"`
 	Expiration      Expiration     `json:"expiration,omitempty"`
 	Steps           []Step         `json:"steps,omitempty"`
-	Tags            api.Tags       `json:"tags,omitempty"`
+	Tags            pq.StringArray `json:"tags,omitempty"`
 	Decisions       []Decision     `json:"decisions,omitempty"`
 	Parameters      api.Parameters `json:"parameters,omitempty"`
 	labelsToIndices map[string]int
@@ -113,7 +114,7 @@ type On struct {
 }
 type Step struct {
 	Name        string         `json:"name,omitempty"`
-	Tags        api.Tags       `json:"tags,omitempty"`
+	Tags        pq.StringArray `json:"tags,omitempty"`
 	Label       string         `json:"label,omitempty"`
 	Description string         `json:"description,omitempty"`
 	Parameters  api.Parameters `json:"parameters,omitempty"`
