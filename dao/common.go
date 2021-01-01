@@ -171,7 +171,7 @@ type DAO struct {
 func New(parameters *ParametersType) (*DAO, error) {
 	var newDAO DAO
 	newDAO.CompleteByPendingInterval = 600 // 10 minutes for it to be started, otherwise it will be enqueued again when recovered.
-	newDAO.MaxOpenConnections = 700
+	newDAO.MaxOpenConnections = 50
 	if viper.IsSet("COMPLETE_BY_PENDING_INTERVAL_SECS") {
 		newDAO.CompleteByPendingInterval = viper.GetInt64("COMPLETE_BY_PENDING_INTERVAL_SECS")
 	}
